@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GSMT Ver 7.0 - Deployment Ready</title>
+    <meta name="description" content="Clean architecture deployment guide">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { 'inter': ['Inter', 'sans-serif'] },
+                    colors: {
+                        primary: { 50: '#eff6ff', 100: '#dbeafe', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8', 900: '#1e3a8a' },
+                        success: { 500: '#10b981' },
+                        danger: { 500: '#ef4444' }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="font-inter bg-gray-50 min-h-screen">
+    
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <div class="text-center">
+                <h1 class="text-4xl font-bold text-primary-900">
+                    <i class="fas fa-rocket mr-3 text-primary-600"></i>
+                    GSMT Ver 7.0
+                </h1>
+                <p class="text-xl text-gray-600 mt-2">Clean Architecture • Deployment Ready</p>
+                <div class="flex justify-center space-x-4 mt-4">
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-success-100 text-success-800">
+                        <i class="fas fa-check-circle mr-2"></i>Backend Ready
+                    </span>
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-success-100 text-success-800">
+                        <i class="fas fa-check-circle mr-2"></i>Frontend Ready
+                    </span>
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-success-100 text-success-800">
+                        <i class="fas fa-check-circle mr-2"></i>Deployment Ready
+                    </span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <!-- Quick Start -->
+        <section class="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mb-8">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">
+                <i class="fas fa-play-circle mr-2 text-primary-600"></i>Quick Deployment
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="text-center p-6 bg-gray-50 rounded-lg">
+                    <div class="w-12 h-12 bg-gray-900 rounded-lg flex items-center justify-center mx-auto mb-4">
+                        <i class="fab fa-github text-white text-xl"></i>
+                    </div>
+                    <h3 class="font-semibold text-gray-900 mb-2">1. GitHub</h3>
+                    <p class="text-sm text-gray-600">Push project to GitHub repository</p>
+                    <code class="text-xs bg-gray-200 px-2 py-1 rounded mt-2 block">git push origin main</code>
+                </div>
+                
+                <div class="text-center p-6 bg-gray-50 rounded-lg">
+                    <div class="w-12 h-12 bg-purple-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-train text-white text-xl"></i>
+                    </div>
+                    <h3 class="font-semibold text-gray-900 mb-2">2. Railway</h3>
+                    <p class="text-sm text-gray-600">Deploy backend automatically</p>
+                    <code class="text-xs bg-gray-200 px-2 py-1 rounded mt-2 block">railway.app</code>
+                </div>
+                
+                <div class="text-center p-6 bg-gray-50 rounded-lg">
+                    <div class="w-12 h-12 bg-teal-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-globe text-white text-xl"></i>
+                    </div>
+                    <h3 class="font-semibold text-gray-900 mb-2">3. Netlify</h3>
+                    <p class="text-sm text-gray-600">Deploy frontend with CDN</p>
+                    <code class="text-xs bg-gray-200 px-2 py-1 rounded mt-2 block">netlify.com</code>
+                </div>
+            </div>
+            
+            <div class="mt-8 text-center">
+                <a href="docs/DEPLOYMENT.md" class="inline-flex items-center px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors">
+                    <i class="fas fa-book mr-2"></i>
+                    Complete Deployment Guide
+                </a>
+            </div>
+        </section>
+
+        <!-- Project Structure -->
+        <section class="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mb-8">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">
+                <i class="fas fa-folder-tree mr-2 text-primary-600"></i>Project Structure
+            </h2>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">📂 Clean Architecture</h3>
+                    <div class="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-sm">
+                        <div>GSMT Ver 7.0/</div>
+                        <div>├── 📂 backend/</div>
+                        <div>│   ├── app.py</div>
+                        <div>│   └── requirements.txt</div>
+                        <div>├── 📂 frontend/</div>
+                        <div>│   ├── index.html</div>
+                        <div>│   ├── js/app.js</div>
+                        <div>│   └── assets/style.css</div>
+                        <div>├── 📋 railway.toml</div>
+                        <div>├── 📋 netlify.toml</div>
+                        <div>└── 📚 docs/</div>
+                        <div>    └── DEPLOYMENT.md</div>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">✨ Key Features</h3>
+                    <ul class="space-y-3">
+                        <li class="flex items-center">
+                            <i class="fas fa-check-circle text-success-500 mr-3"></i>
+                            <span>FastAPI backend with auto-docs</span>
+                        </li>
+                        <li class="flex items-center">
+                            <i class="fas fa-check-circle text-success-500 mr-3"></i>
+                            <span>Modern JavaScript SPA frontend</span>
+                        </li>
+                        <li class="flex items-center">
+                            <i class="fas fa-check-circle text-success-500 mr-3"></i>
+                            <span>Percentage-based analysis engine</span>
+                        </li>
+                        <li class="flex items-center">
+                            <i class="fas fa-check-circle text-success-500 mr-3"></i>
+                            <span>Global market coverage (30+ symbols)</span>
+                        </li>
+                        <li class="flex items-center">
+                            <i class="fas fa-check-circle text-success-500 mr-3"></i>
+                            <span>Professional deployment configs</span>
+                        </li>
+                        <li class="flex items-center">
+                            <i class="fas fa-check-circle text-success-500 mr-3"></i>
+                            <span>Responsive design + dark mode ready</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Live Demo -->
+        <section class="bg-white rounded-xl shadow-sm border border-gray-200 p-8 mb-8">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">
+                <i class="fas fa-desktop mr-2 text-primary-600"></i>Live Application
+            </h2>
+            
+            <div class="text-center">
+                <p class="text-gray-600 mb-6">Experience the full application with clean architecture and modern design</p>
+                <div class="space-y-4">
+                    <a href="frontend/index.html" class="inline-flex items-center px-8 py-4 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-lg font-medium">
+                        <i class="fas fa-external-link-alt mr-3"></i>
+                        Launch GSMT Ver 7.0
+                    </a>
+                    <div class="text-sm text-gray-500">
+                        <p>• Interactive charts with ECharts</p>
+                        <p>• Real-time symbol search</p>
+                        <p>• Percentage-based analysis</p>
+                        <p>• Demo mode with fallback data</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Technical Stack -->
+        <section class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">
+                <i class="fas fa-code mr-2 text-primary-600"></i>Technical Stack & Architecture
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">🚀 Backend (Railway)</h3>
+                    <ul class="space-y-2 text-gray-600">
+                        <li><strong>Framework:</strong> FastAPI 0.104+ with async/await</li>
+                        <li><strong>Data:</strong> YFinance with intelligent fallbacks</li>
+                        <li><strong>Validation:</strong> Pydantic models with auto-docs</li>
+                        <li><strong>Performance:</strong> Built-in caching & optimization</li>
+                        <li><strong>Monitoring:</strong> Health checks & error tracking</li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">🎨 Frontend (Netlify)</h3>
+                    <ul class="space-y-2 text-gray-600">
+                        <li><strong>Architecture:</strong> Clean SPA with modular design</li>
+                        <li><strong>Styling:</strong> Tailwind CSS for responsive design</li>
+                        <li><strong>Charts:</strong> ECharts for professional visualization</li>
+                        <li><strong>State:</strong> Clean state management without frameworks</li>
+                        <li><strong>Performance:</strong> Lazy loading & efficient rendering</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 mt-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="text-center">
+                <p class="text-gray-600">
+                    <strong>GSMT Ver 7.0</strong> - Built with modern web technologies for professional financial analysis
+                </p>
+                <p class="text-sm text-gray-500 mt-2">
+                    Clean Architecture • Seamless Deployment • Professional Results
+                </p>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>

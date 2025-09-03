@@ -1,0 +1,42 @@
+/* Basic overrides and utilities */
+:root {
+  --color-asx200: #8b5cf6;    /* purple */
+  --color-asx300: #7c3aed;    /* violet */
+  --color-asx50: #a855f7;     /* light purple */
+  --color-asx100: #6d28d9;    /* dark purple */
+  --color-asx-small: #c084fc; /* light violet */
+  --color-nikkei: #2563eb;    /* blue */
+  --color-hsi: #f97316;       /* orange */
+  --color-sse: #16a34a;       /* green */
+  --color-nifty: #9333ea;     /* purple */
+  --color-ftse: #ef4444;      /* red */
+  --color-dax: #0891b2;       /* teal */
+  --color-cac: #a16207;       /* amber */
+  --color-sp500: #0ea5e9;     /* sky */
+  --color-djia: #10b981;      /* emerald */
+  --color-nasdaq: #e11d48;    /* rose */
+}
+
+html, body {
+  font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji';
+}
+
+#chart {
+  width: 100%;
+}
+
+/* Legend badges */
+.legend-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 9999px;
+}
+
+/* API key visibility toggle (optional) */
+#apiKeyWrap { display:none; }
+#providerSelect[value="twelvedata"] ~ #apiKeyWrap { display:block; }

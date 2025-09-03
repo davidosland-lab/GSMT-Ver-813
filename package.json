@@ -1,0 +1,13 @@
+{
+  "name": "gsmt-frontend",
+  "version": "7.0.0",
+  "description": "GSMT Ver 7.0 Frontend - Global Stock Market Tracker",
+  "scripts": {
+    "build": "echo 'No build required - static frontend'",
+    "dev": "echo 'Open frontend/index.html in browser'",
+    "deploy": "echo 'Deploy frontend/ directory to Netlify'"
+  },
+  "keywords": ["stock-market", "trading", "financial-analysis", "global-markets"],
+  "dependencies": {},
+  "devDependencies": {}
+}
