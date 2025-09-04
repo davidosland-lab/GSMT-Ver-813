@@ -1,25 +1,18 @@
 [build]
   publish = "frontend"
-  command = "cd frontend && chmod +x build.sh && ./build.sh"
+  command = "echo 'GSMT Ver 7.0 Enhanced - Static frontend deployment'"
 
 [build.environment]
   NODE_VERSION = "18"
-  PYTHON_VERSION = ""
-
-# Force static site deployment (ignore Python files in root)
-[build.processing]
-  skip_processing = false
 
 [[headers]]
   for = "/*"
   [headers.values]
     X-Frame-Options = "DENY"
-    X-XSS-Protection = "1; mode=block" 
+    X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Cache-Control = "public, max-age=31536000"
 
-# Redirect all requests to index.html for SPA behavior
 [[redirects]]
   from = "/*"
   to = "/index.html"
@@ -27,12 +20,6 @@
 
 [context.production]
   publish = "frontend"
-  command = "echo 'Production: Static frontend only'"
 
 [context.deploy-preview]
-  publish = "frontend" 
-  command = "echo 'Preview: Static frontend only'"
-
-# Ignore backend files for Netlify deployment
-[build.ignore]
-  command = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF frontend/"
+  publish = "frontend"
