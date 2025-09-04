@@ -1,14 +1,15 @@
+# GSMT Ver 7.0 Enhanced - Railway Deployment Configuration
+# Pure Python FastAPI backend deployment
+
 [phases.setup]
-nixPkgs = ["python311", "python311Packages.pip", "bash"]
+nixPkgs = ["python311", "python311Packages.pip"]
 
 [phases.install]
-cmd = "python3 -m pip install --upgrade pip && python3 -m pip install -r requirements.txt"
-
-[phases.build] 
-cmd = "echo 'Python FastAPI backend - no build step required'"
+cmd = "pip install -r requirements.txt"
 
 [start]
-cmd = "python3 app.py"
+cmd = "python app.py"
 
 [variables]
 PORT = "8000"
+PYTHONPATH = "/app"
