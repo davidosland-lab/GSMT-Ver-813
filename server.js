@@ -80,36 +80,125 @@ class SydneyTimezoneHandler {
 
 const sydneyHandler = new SydneyTimezoneHandler();
 
-// Mock data generator
-function generateMockMarketData(symbol, hours = 24) {
+// Mock data generator for trading hours only
+function generateMockMarketData(symbol, tradingHoursOnly = true) {
     const data = [];
     const basePrice = Math.random() * 20000 + 5000;
     let currentPrice = basePrice;
     
-    const period = sydneyHandler.get24HourPeriod();
+    // Get market for symbol
+    const market = getMarketForSymbol(symbol);
     
-    for (let hour = 0; hour < hours; hour++) {
-        const timestamp = new Date(period.start);
-        timestamp.setHours(period.start.getHours() + hour);
+    // Trading hours for each market (in their local time)
+    const tradingSchedule = {
+        'Australia': { start: 10, duration: 6, timezone: 'Australia/Sydney' },    // 10am-4pm AEST
+        'Japan': { start: 9, duration: 6, timezone: 'Asia/Tokyo' },               // 9am-3pm JST
+        'Hong Kong': { start: 9, duration: 7, timezone: 'Asia/Hong_Kong' },       // 9am-4pm HKT
+        'China': { start: 9, duration: 6, timezone: 'Asia/Shanghai' },            // 9am-3pm CST
+        'UK': { start: 8, duration: 8, timezone: 'Europe/London' },               // 8am-4pm GMT
+        'Germany': { start: 9, duration: 8, timezone: 'Europe/Berlin' },          // 9am-5pm CET
+        'France': { start: 9, duration: 8, timezone: 'Europe/Paris' },            // 9am-5pm CET
+        'US': { start: 9, duration: 7, timezone: 'America/New_York' }             // 9:30am-4pm EST (simplified)
+    };
+    
+    const schedule = tradingSchedule[market] || tradingSchedule['Australia'];
+    
+    if (tradingHoursOnly) {
+        // Generate data for trading hours only
+        const today = new Date();
         
-        const change = (Math.random() - 0.5) * 0.03; // 3% max change
-        currentPrice *= (1 + change);
+        // Create trading session start time in market's timezone
+        let sessionStart;
+        try {
+            const marketToday = new Date(today.toLocaleString("en-US", {timeZone: schedule.timezone}));
+            sessionStart = new Date(marketToday);
+            sessionStart.setHours(schedule.start, 0, 0, 0);
+        } catch (error) {
+            // Fallback to Sydney time
+            sessionStart = new Date(today);
+            sessionStart.setHours(schedule.start, 0, 0, 0);
+        }
         
-        const percentageChange = ((currentPrice - basePrice) / basePrice) * 100;
+        // Generate minute-by-minute data for the trading session
+        const intervalMinutes = 15; // 15-minute intervals
+        const totalIntervals = (schedule.duration * 60) / intervalMinutes;
         
-        data.push({
-            timestamp: timestamp.toISOString(),
-            timestamp_ms: timestamp.getTime(),
-            open: Math.round(currentPrice * 0.99 * 100) / 100,
-            high: Math.round(currentPrice * 1.02 * 100) / 100,
-            low: Math.round(currentPrice * 0.98 * 100) / 100,
-            close: Math.round(currentPrice * 100) / 100,
-            volume: Math.floor(Math.random() * 10000000),
-            percentage_change: Math.round(percentageChange * 100) / 100
-        });
+        for (let interval = 0; interval < totalIntervals; interval++) {
+            const timestamp = new Date(sessionStart);
+            timestamp.setMinutes(sessionStart.getMinutes() + (interval * intervalMinutes));
+            
+            // More realistic price movement during trading hours
+            const volatility = 0.008; // 0.8% volatility per 15-min interval
+            const change = (Math.random() - 0.5) * volatility;
+            currentPrice *= (1 + change);
+            
+            // Ensure price doesn't drift too far from base
+            const maxDrift = 0.15; // 15% max drift from base price
+            if (Math.abs((currentPrice - basePrice) / basePrice) > maxDrift) {
+                currentPrice = basePrice * (1 + (Math.random() - 0.5) * maxDrift);
+            }
+            
+            const percentageChange = ((currentPrice - basePrice) / basePrice) * 100;
+            
+            // Higher volume at market open/close
+            let volumeMultiplier = 1;
+            if (interval < 4 || interval > totalIntervals - 4) { // First/last hour
+                volumeMultiplier = 2;
+            }
+            
+            data.push({
+                timestamp: timestamp.toISOString(),
+                timestamp_ms: timestamp.getTime(),
+                open: Math.round(currentPrice * 0.998 * 100) / 100,
+                high: Math.round(currentPrice * 1.005 * 100) / 100,
+                low: Math.round(currentPrice * 0.995 * 100) / 100,
+                close: Math.round(currentPrice * 100) / 100,
+                volume: Math.floor(Math.random() * 5000000 * volumeMultiplier),
+                percentage_change: Math.round(percentageChange * 100) / 100,
+                market: market,
+                trading_session: true
+            });
+        }
+    } else {
+        // Original 24-hour generation (fallback)
+        const period = sydneyHandler.get24HourPeriod();
+        
+        for (let hour = 0; hour < 24; hour++) {
+            const timestamp = new Date(period.start);
+            timestamp.setHours(period.start.getHours() + hour);
+            
+            const change = (Math.random() - 0.5) * 0.03;
+            currentPrice *= (1 + change);
+            
+            const percentageChange = ((currentPrice - basePrice) / basePrice) * 100;
+            
+            data.push({
+                timestamp: timestamp.toISOString(),
+                timestamp_ms: timestamp.getTime(),
+                open: Math.round(currentPrice * 0.99 * 100) / 100,
+                high: Math.round(currentPrice * 1.02 * 100) / 100,
+                low: Math.round(currentPrice * 0.98 * 100) / 100,
+                close: Math.round(currentPrice * 100) / 100,
+                volume: Math.floor(Math.random() * 10000000),
+                percentage_change: Math.round(percentageChange * 100) / 100,
+                market: market,
+                trading_session: false
+            });
+        }
     }
     
     return data;
+}
+
+// Helper function to get market for symbol
+function getMarketForSymbol(symbol) {
+    if (symbol === '^AXJO') return 'Australia';
+    if (symbol === '^N225') return 'Japan';
+    if (symbol === '^HSI') return 'Hong Kong';
+    if (symbol === '^FTSE') return 'UK';
+    if (symbol === '^GSPC' || symbol === '^IXIC') return 'US';
+    if (symbol.includes('.AX')) return 'Australia';
+    return 'US'; // Default
 }
 
 // API Routes
@@ -190,7 +279,7 @@ app.get('/search/:query', (req, res) => {
     });
 });
 
-// Analysis endpoint with Sydney timezone support
+// Analysis endpoint with trading hours focus
 app.post('/analyze', (req, res) => {
     const { symbols, period, chart_type, sydney_start = true, reference_time } = req.body;
     
@@ -199,25 +288,56 @@ app.post('/analyze', (req, res) => {
     }
     
     const sydneyNow = sydneyHandler.getSydneyNow();
-    const periodData = sydneyHandler.get24HourPeriod();
     
     const data = {};
     const metadata = {};
+    const marketSessions = [];
     
     symbols.forEach(symbol => {
-        data[symbol] = generateMockMarketData(symbol, period === '24h' ? 24 : 48);
+        // Generate trading hours data only
+        data[symbol] = generateMockMarketData(symbol, true);
+        
+        const market = getMarketForSymbol(symbol);
         metadata[symbol] = {
             symbol,
             name: symbol === '^AXJO' ? 'ASX 200' : 
                   symbol === '^N225' ? 'Nikkei 225' :
                   symbol === '^FTSE' ? 'FTSE 100' : 
                   symbol === '^GSPC' ? 'S&P 500' : symbol,
-            market: symbol === '^AXJO' ? 'Australia' : 
-                   symbol === '^N225' ? 'Japan' :
-                   symbol === '^FTSE' ? 'UK' : 
-                   symbol === '^GSPC' ? 'US' : 'Unknown',
+            market: market,
             category: 'Index'
         };
+        
+        // Add market session info
+        if (!marketSessions.find(s => s.market === market)) {
+            const tradingHours = {
+                'Australia': { start: 10, duration: 6 },
+                'Japan': { start: 9, duration: 6 },
+                'UK': { start: 8, duration: 8 },
+                'US': { start: 9, duration: 7 }
+            };
+            
+            const hours = tradingHours[market] || { start: 10, duration: 6 };
+            const sessionStart = new Date();
+            sessionStart.setHours(hours.start, 0, 0, 0);
+            const sessionEnd = new Date(sessionStart);
+            sessionEnd.setHours(sessionStart.getHours() + hours.duration);
+            
+            marketSessions.push({
+                market,
+                display_name: market === 'Australia' ? '🇦🇺 Sydney' :
+                             market === 'Japan' ? '🇯🇵 Tokyo' :
+                             market === 'UK' ? '🇬🇧 London' :
+                             market === 'US' ? '🇺🇸 New York' : market,
+                trading_hours: `${hours.duration}h session`,
+                session_start: sessionStart.toISOString(),
+                session_end: sessionEnd.toISOString(),
+                is_active: sydneyHandler.getMarketStatus()[market]?.active || false,
+                color: market === 'Australia' ? '#10b981' : 
+                       market === 'Japan' ? '#3b82f6' :
+                       market === 'UK' ? '#f59e0b' : '#ef4444'
+            });
+        }
     });
     
     res.json({
@@ -230,68 +350,74 @@ app.post('/analyze', (req, res) => {
         sydney_timestamp: sydneyHandler.formatSydneyTime(sydneyNow),
         total_symbols: symbols.length,
         successful_symbols: symbols.length,
-        period_start: sydneyHandler.formatSydneyTime(periodData.start),
-        period_end: sydneyHandler.formatSydneyTime(periodData.end),
-        market_sessions: sydney_start ? {
-            start_time: periodData.start,
-            end_time: periodData.end,
-            market_sessions: [
-                {
-                    market: 'Australia',
-                    display_name: '🇦🇺 Sydney',
-                    open_sydney: periodData.start,
-                    close_sydney: new Date(periodData.start.getTime() + 6 * 60 * 60 * 1000),
-                    is_active: sydneyHandler.getMarketStatus()['Australia'].active,
-                    color: '#10b981'
-                }
-            ]
-        } : null
+        market_sessions: marketSessions,
+        display_mode: 'trading_hours_only',
+        note: 'Chart displays trading hours only (6-8h per market)'
     });
 });
 
-// Sydney markets endpoint
+// Sydney markets endpoint with trading hours focus
 app.get('/sydney-markets', (req, res) => {
     const defaultSymbols = ['^AXJO', '^N225', '^FTSE', '^GSPC'];
     const sydneyNow = sydneyHandler.getSydneyNow();
-    const period = sydneyHandler.get24HourPeriod();
     
     const data = {};
+    const marketSessions = [];
+    
     defaultSymbols.forEach(symbol => {
-        data[symbol] = generateMockMarketData(symbol);
+        // Generate trading hours data only
+        data[symbol] = generateMockMarketData(symbol, true);
+        
+        const market = getMarketForSymbol(symbol);
+        
+        // Add unique market sessions
+        if (!marketSessions.find(s => s.market === market)) {
+            const tradingHours = {
+                'Australia': { start: 10, duration: 6, timezone: 'Australia/Sydney' },
+                'Japan': { start: 9, duration: 6, timezone: 'Asia/Tokyo' },
+                'UK': { start: 8, duration: 8, timezone: 'Europe/London' },
+                'US': { start: 9, duration: 7, timezone: 'America/New_York' }
+            };
+            
+            const hours = tradingHours[market] || tradingHours['Australia'];
+            
+            marketSessions.push({
+                market,
+                display_name: market === 'Australia' ? '🇦🇺 Sydney (ASX)' :
+                             market === 'Japan' ? '🇯🇵 Tokyo (Nikkei)' :
+                             market === 'UK' ? '🇬🇧 London (FTSE)' :
+                             market === 'US' ? '🇺🇸 New York (S&P)' : market,
+                trading_hours: `${hours.duration}h session (${hours.start}:00-${hours.start + hours.duration}:00 local)`,
+                duration_hours: hours.duration,
+                local_start: `${hours.start}:00`,
+                local_end: `${hours.start + hours.duration}:00`,
+                timezone: hours.timezone,
+                is_active: sydneyHandler.getMarketStatus()[market]?.active || false,
+                color: market === 'Australia' ? '#10b981' : 
+                       market === 'Japan' ? '#3b82f6' :
+                       market === 'UK' ? '#f59e0b' : '#ef4444'
+            });
+        }
     });
     
     res.json({
         success: true,
         data,
-        market_sessions: [
-            {
-                market: 'Australia',
-                display_name: '🇦🇺 Sydney',
-                open_sydney: period.start,
-                close_sydney: new Date(period.start.getTime() + 6 * 60 * 60 * 1000),
-                is_active: sydneyHandler.getMarketStatus()['Australia'].active,
-                color: '#10b981'
-            }
-        ],
-        timeline: Array.from({length: 24}, (_, hour) => ({
-            hour,
-            sydneyTime: sydneyHandler.formatSydneyTime(new Date(period.start.getTime() + hour * 60 * 60 * 1000), false),
-            activeMarkets: hour >= 10 && hour <= 16 ? ['Australia'] : []
-        })),
+        market_sessions: marketSessions,
         sydney_context: {
             current_sydney_time: sydneyHandler.formatSydneyTime(sydneyNow),
             sydney_market_status: sydneyHandler.getMarketStatus()['Australia'].active,
             market_day_phase: sydneyNow.getHours() >= 10 && sydneyNow.getHours() <= 16 ? 
-                'Sydney market hours' : 'After hours'
+                'Sydney market hours (10am-4pm)' : 'After Sydney market hours',
+            display_note: 'Charts show trading hours only - no overnight periods'
         },
         refresh_schedule: {
-            primary_refresh: 300,
-            secondary_refresh: 600,
-            chart_refresh: 300
+            primary_refresh: 180,  // 3 minutes during trading
+            secondary_refresh: 300,
+            chart_refresh: 180
         },
         timestamp: sydneyHandler.formatSydneyTime(sydneyNow),
-        period_start: sydneyHandler.formatSydneyTime(period.start),
-        period_end: sydneyHandler.formatSydneyTime(period.end)
+        display_mode: 'trading_hours_only'
     });
 });
 

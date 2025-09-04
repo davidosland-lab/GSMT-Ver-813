@@ -720,59 +720,127 @@ class GSMTApp {
     }
     
     /**
-     * Generate demo Sydney markets data
+     * Generate demo trading hours data (not 24h)
      */
     generateDemoSydneyData() {
         const defaultSymbols = ['^AXJO', '^N225', '^FTSE', '^GSPC'];
         const data = {};
-        
-        // Generate Sydney 24-hour period data
-        const period = this.state.sydneyTimeUtils ? 
-            this.state.sydneyTimeUtils.get24HourPeriodFromSydney10am() :
-            { start: new Date(), end: new Date(Date.now() + 24 * 60 * 60 * 1000) };
+        const marketSessions = [];
         
         defaultSymbols.forEach(symbol => {
-            const points = [];
-            let basePrice = symbol.startsWith('^') ? 
-                Math.random() * 30000 + 5000 : 
-                Math.random() * 400 + 50;
+            const market = this.getMarketForSymbol(symbol);
+            const tradingData = this.generateTradingHoursData(symbol, market);
+            data[symbol] = tradingData;
             
-            // Generate 24 hours of hourly data
-            for (let hour = 0; hour < 24; hour++) {
-                const timestamp = new Date(period.start);
-                timestamp.setHours(period.start.getHours() + hour);
+            // Add unique market sessions
+            if (!marketSessions.find(s => s.market === market)) {
+                const tradingHours = {
+                    'Australia': { duration: 6, start: '10:00', end: '16:00' },
+                    'Japan': { duration: 6, start: '09:00', end: '15:00' },
+                    'UK': { duration: 8, start: '08:00', end: '16:00' },
+                    'US': { duration: 7, start: '09:30', end: '16:00' }
+                };
                 
-                const change = (Math.random() - 0.5) * 0.03; // 3% max change
-                basePrice *= (1 + change);
+                const hours = tradingHours[market] || tradingHours['Australia'];
                 
-                const percentageChange = ((basePrice - (basePrice / Math.pow(1 + change, hour + 1))) / (basePrice / Math.pow(1 + change, hour + 1))) * 100;
-                
-                points.push({
-                    timestamp: timestamp.toISOString(),
-                    timestamp_ms: timestamp.getTime(),
-                    open: basePrice * 0.99,
-                    high: basePrice * 1.02,
-                    low: basePrice * 0.98,
-                    close: basePrice,
-                    volume: Math.floor(Math.random() * 10000000),
-                    percentage_change: percentageChange
+                marketSessions.push({
+                    market,
+                    display_name: market === 'Australia' ? '🇦🇺 Sydney (ASX)' :
+                                 market === 'Japan' ? '🇯🇵 Tokyo (Nikkei)' :
+                                 market === 'UK' ? '🇬🇧 London (FTSE)' :
+                                 market === 'US' ? '🇺🇸 New York (S&P)' : market,
+                    trading_hours: `${hours.duration}h session (${hours.start}-${hours.end} local)`,
+                    duration_hours: hours.duration,
+                    color: this.getMarketColor(market)
                 });
             }
-            
-            data[symbol] = points;
         });
         
         return {
             success: true,
             data,
-            market_sessions: [],
-            timeline: [],
+            market_sessions: marketSessions,
             sydney_context: {
                 current_sydney_time: new Date().toISOString(),
-                sydney_market_status: true
+                sydney_market_status: true,
+                display_note: 'Charts show trading hours only - no overnight periods'
             },
-            refresh_schedule: { primary_refresh: 300 }
+            refresh_schedule: { 
+                primary_refresh: 180,
+                chart_refresh: 180
+            },
+            display_mode: 'trading_hours_only'
         };
+    }
+    
+    /**
+     * Generate realistic trading hours data for a symbol
+     */
+    generateTradingHoursData(symbol, market) {
+        const points = [];
+        let basePrice = symbol.startsWith('^') ? 
+            Math.random() * 20000 + 5000 : 
+            Math.random() * 400 + 50;
+        let currentPrice = basePrice;
+        
+        // Trading session parameters
+        const tradingHours = {
+            'Australia': { start: 10, duration: 6 },   // 10am-4pm
+            'Japan': { start: 9, duration: 6 },        // 9am-3pm
+            'UK': { start: 8, duration: 8 },           // 8am-4pm  
+            'US': { start: 9, duration: 7 }            // 9:30am-4pm (simplified)
+        };
+        
+        const schedule = tradingHours[market] || tradingHours['Australia'];
+        
+        // Create session start time (today in market timezone)
+        const sessionStart = new Date();
+        sessionStart.setHours(schedule.start, 0, 0, 0);
+        
+        // Generate 15-minute interval data during trading hours
+        const intervalMinutes = 15;
+        const totalIntervals = (schedule.duration * 60) / intervalMinutes;
+        
+        for (let interval = 0; interval < totalIntervals; interval++) {
+            const timestamp = new Date(sessionStart);
+            timestamp.setMinutes(sessionStart.getMinutes() + (interval * intervalMinutes));
+            
+            // Realistic price movement during trading
+            const volatility = 0.008; // 0.8% per 15-min interval
+            const change = (Math.random() - 0.5) * volatility;
+            currentPrice *= (1 + change);
+            
+            // Prevent excessive drift
+            const maxDrift = 0.12; // 12% max drift from base
+            if (Math.abs((currentPrice - basePrice) / basePrice) > maxDrift) {
+                currentPrice = basePrice * (1 + (Math.random() - 0.5) * maxDrift);
+            }
+            
+            const percentageChange = ((currentPrice - basePrice) / basePrice) * 100;
+            
+            // Volume patterns - higher at open/close
+            let volumeMultiplier = 1;
+            if (interval < 4 || interval > totalIntervals - 4) {
+                volumeMultiplier = 2.5; // First/last hour
+            } else if (interval > totalIntervals / 2 - 2 && interval < totalIntervals / 2 + 2) {
+                volumeMultiplier = 1.5; // Mid-session
+            }
+            
+            points.push({
+                timestamp: timestamp.toISOString(),
+                timestamp_ms: timestamp.getTime(),
+                open: Math.round(currentPrice * 0.998 * 100) / 100,
+                high: Math.round(currentPrice * 1.004 * 100) / 100,
+                low: Math.round(currentPrice * 0.996 * 100) / 100,
+                close: Math.round(currentPrice * 100) / 100,
+                volume: Math.floor(Math.random() * 3000000 * volumeMultiplier),
+                percentage_change: Math.round(percentageChange * 100) / 100,
+                market: market,
+                interval: `${intervalMinutes}min`
+            });
+        }
+        
+        return points;
     }
     
     /**
@@ -993,7 +1061,7 @@ class GSMTApp {
     }
     
     /**
-     * Generate Sydney-focused chart option with market sessions
+     * Generate market-specific chart option showing only trading hours
      */
     generateSydneyChartOption() {
         const colors = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#f97316'];
@@ -1001,16 +1069,32 @@ class GSMTApp {
         const markAreas = [];
         let colorIndex = 0;
         
-        // Create series for each market with Sydney context
+        // Group data by market and show only trading hours
+        const marketGroups = new Map();
+        
         for (const [symbol, data] of this.state.chartData.entries()) {
             const market = this.getMarketForSymbol(symbol);
             const displayName = this.getMarketDisplayName(market);
             
+            // Filter data to show only market trading hours (6-7 hours per market)
+            const tradingHoursData = this.filterToTradingHours(data, market);
+            
+            if (tradingHoursData.length === 0) continue;
+            
+            if (!marketGroups.has(market)) {
+                marketGroups.set(market, []);
+            }
+            
+            marketGroups.get(market).push({
+                symbol,
+                data: tradingHoursData,
+                displayName
+            });
+            
             series.push({
                 name: `${symbol} ${displayName}`,
                 type: 'line',
-                data: data.map(point => {
-                    // Convert timestamps to Sydney timezone for display
+                data: tradingHoursData.map(point => {
                     const timestamp = this.state.sydneyTimeUtils ? 
                         this.state.sydneyTimeUtils.formatTimestampForChart(point.timestamp_ms) :
                         { timestamp: point.timestamp_ms };
@@ -1019,7 +1103,7 @@ class GSMTApp {
                 }),
                 smooth: true,
                 symbol: 'none',
-                lineStyle: { width: market === 'Australia' ? 4 : 3 }, // Emphasize Australian markets
+                lineStyle: { width: market === 'Australia' ? 4 : 3 },
                 color: colors[colorIndex % colors.length],
                 emphasis: {
                     lineStyle: { width: market === 'Australia' ? 5 : 4 }
@@ -1029,13 +1113,16 @@ class GSMTApp {
             colorIndex++;
         }
         
-        // Add Sydney-based market session indicators
-        this.addSydneyMarketSessions(markAreas);
+        // Add market session indicators for trading hours only
+        this.addTradingHoursMarketSessions(markAreas, marketGroups);
+        
+        // Calculate time range for all active trading periods
+        const timeRange = this.calculateTradingTimeRange(marketGroups);
         
         return {
             title: {
-                text: 'Sydney Markets - Live 24H Flow from 10am AEST/AEDT',
-                subtext: this.getSydneyChartSubtext(),
+                text: 'Live Market Data - Trading Hours Only',
+                subtext: this.getTradingHoursSubtext(marketGroups),
                 left: 'center',
                 textStyle: { fontSize: 18, fontWeight: 'bold', color: '#374151' },
                 subtextStyle: { fontSize: 12, color: '#6b7280' }
@@ -1049,13 +1136,12 @@ class GSMTApp {
                 formatter: (params) => {
                     const timestamp = params[0].axisValue;
                     
-                    // Format time in Sydney timezone
                     let timeDisplay = 'Time';
                     if (this.state.sydneyTimeUtils) {
                         const sydneyTime = this.state.sydneyTimeUtils.formatTimestampForChart(timestamp);
                         timeDisplay = `${sydneyTime.display} AEST/AEDT`;
                     } else {
-                        timeDisplay = new Date(timestamp).toLocaleTimeString();
+                        timeDisplay = new Date(timestamp).toLocaleString();
                     }
                     
                     let html = `<div style="font-weight: bold; margin-bottom: 5px; color: #10b981;">${timeDisplay}</div>`;
@@ -1091,18 +1177,27 @@ class GSMTApp {
                 axisLabel: { 
                     color: '#6b7280',
                     formatter: (value) => {
-                        // Show Sydney time on axis
                         if (this.state.sydneyTimeUtils) {
                             const sydneyTime = this.state.sydneyTimeUtils.formatTimestampForChart(value);
-                            return sydneyTime.display.split(' ')[1] || new Date(value).getHours() + ':00';
+                            const timePart = sydneyTime.display.split(' ')[1] || '';
+                            return timePart.replace(':00', '');
                         }
-                        return new Date(value).getHours() + ':00';
-                    }
+                        return new Date(value).toLocaleTimeString('en-US', { 
+                            hour: 'numeric', 
+                            minute: '2-digit',
+                            hour12: true 
+                        });
+                    },
+                    interval: 0,
+                    rotate: 45
                 },
                 splitLine: { 
                     show: true,
                     lineStyle: { color: '#f3f4f6', type: 'dashed' }
-                }
+                },
+                // Set min/max to show only trading hours range
+                min: timeRange.start,
+                max: timeRange.end
             },
             yAxis: {
                 type: 'value',
@@ -1114,13 +1209,13 @@ class GSMTApp {
                 splitLine: { lineStyle: { color: '#f3f4f6' } }
             },
             series: series.concat(markAreas.length > 0 ? {
-                name: 'Sydney Market Sessions',
+                name: 'Trading Sessions',
                 type: 'line',
                 data: [],
                 markArea: {
                     silent: true,
                     itemStyle: {
-                        opacity: 0.2
+                        opacity: 0.15
                     },
                     data: markAreas
                 }
@@ -1128,6 +1223,172 @@ class GSMTApp {
             animation: true,
             animationDuration: 1500
         };
+    }
+    
+    /**
+     * Filter data to show only trading hours for a specific market
+     */
+    filterToTradingHours(data, market) {
+        if (!data || data.length === 0) return [];
+        
+        // Market trading hours in local time (simplified)
+        const tradingHours = {
+            'Australia': { start: 10, end: 16, duration: 6 }, // 10am-4pm AEST
+            'Japan': { start: 9, end: 15, duration: 6 },      // 9am-3pm JST  
+            'Hong Kong': { start: 9, end: 16, duration: 7 },  // 9am-4pm HKT
+            'China': { start: 9, end: 15, duration: 6 },      // 9am-3pm CST
+            'UK': { start: 8, end: 16, duration: 8 },         // 8am-4pm GMT
+            'Germany': { start: 9, end: 17, duration: 8 },    // 9am-5pm CET
+            'France': { start: 9, end: 17, duration: 8 },     // 9am-5pm CET
+            'US': { start: 9, end: 16, duration: 7 }          // 9am-4pm EST
+        };
+        
+        const marketHours = tradingHours[market];
+        if (!marketHours) return data; // Return all data if market unknown
+        
+        // Filter to show only the market's trading hours
+        return data.filter(point => {
+            const timestamp = new Date(point.timestamp_ms);
+            
+            // Convert to market's local time for filtering
+            let localTime;
+            try {
+                const marketTimezone = this.getMarketTimezone(market);
+                localTime = new Date(timestamp.toLocaleString("en-US", {timeZone: marketTimezone}));
+            } catch (error) {
+                // Fallback to Sydney time
+                localTime = timestamp;
+            }
+            
+            const hour = localTime.getHours();
+            return hour >= marketHours.start && hour <= marketHours.end;
+        });
+    }
+    
+    /**
+     * Get timezone string for market
+     */
+    getMarketTimezone(market) {
+        const timezones = {
+            'Australia': 'Australia/Sydney',
+            'Japan': 'Asia/Tokyo',
+            'Hong Kong': 'Asia/Hong_Kong',
+            'China': 'Asia/Shanghai',
+            'UK': 'Europe/London',
+            'Germany': 'Europe/Berlin',
+            'France': 'Europe/Paris',
+            'US': 'America/New_York'
+        };
+        return timezones[market] || 'Australia/Sydney';
+    }
+    
+    /**
+     * Calculate the time range covering all active trading periods
+     */
+    calculateTradingTimeRange(marketGroups) {
+        let minTime = Infinity;
+        let maxTime = -Infinity;
+        
+        for (const [market, symbols] of marketGroups.entries()) {
+            symbols.forEach(symbolData => {
+                symbolData.data.forEach(point => {
+                    minTime = Math.min(minTime, point.timestamp_ms);
+                    maxTime = Math.max(maxTime, point.timestamp_ms);
+                });
+            });
+        }
+        
+        // Add some padding (30 minutes before and after)
+        const padding = 30 * 60 * 1000; // 30 minutes in ms
+        
+        return {
+            start: minTime === Infinity ? Date.now() - 8 * 60 * 60 * 1000 : minTime - padding,
+            end: maxTime === -Infinity ? Date.now() : maxTime + padding
+        };
+    }
+    
+    /**
+     * Add market session indicators for trading hours only
+     */
+    addTradingHoursMarketSessions(markAreas, marketGroups) {
+        const sessionColors = {
+            "Australia": "rgba(16, 185, 129, 0.15)",  // emerald
+            "Japan": "rgba(59, 130, 246, 0.15)",      // blue  
+            "Hong Kong": "rgba(139, 92, 246, 0.15)",  // purple
+            "China": "rgba(239, 68, 68, 0.15)",       // red
+            "UK": "rgba(245, 158, 11, 0.15)",         // amber
+            "Germany": "rgba(249, 115, 22, 0.15)",    // orange
+            "France": "rgba(99, 102, 241, 0.15)",     // indigo
+            "US": "rgba(6, 182, 212, 0.15)"           // cyan
+        };
+        
+        for (const [market, symbols] of marketGroups.entries()) {
+            if (symbols.length === 0) continue;
+            
+            // Find the time range for this market's data
+            let marketStart = Infinity;
+            let marketEnd = -Infinity;
+            
+            symbols.forEach(symbolData => {
+                symbolData.data.forEach(point => {
+                    marketStart = Math.min(marketStart, point.timestamp_ms);
+                    marketEnd = Math.max(marketEnd, point.timestamp_ms);
+                });
+            });
+            
+            if (marketStart !== Infinity && marketEnd !== -Infinity) {
+                markAreas.push([
+                    { 
+                        xAxis: marketStart,
+                        itemStyle: { 
+                            color: sessionColors[market] || 'rgba(128, 128, 128, 0.1)',
+                            borderColor: sessionColors[market]?.replace('0.15', '0.3') || 'rgba(128, 128, 128, 0.3)'
+                        }
+                    },
+                    { 
+                        xAxis: marketEnd,
+                        itemStyle: { 
+                            color: sessionColors[market] || 'rgba(128, 128, 128, 0.1)',
+                            borderColor: sessionColors[market]?.replace('0.15', '0.3') || 'rgba(128, 128, 128, 0.3)'
+                        }
+                    }
+                ]);
+            }
+        }
+    }
+    
+    /**
+     * Get subtitle showing active trading periods
+     */
+    getTradingHoursSubtext(marketGroups) {
+        const activeMarkets = Array.from(marketGroups.keys());
+        
+        if (activeMarkets.length === 0) {
+            return 'No active trading sessions';
+        } else if (activeMarkets.length === 1) {
+            const market = activeMarkets[0];
+            const duration = this.getTradingDuration(market);
+            return `${this.getMarketDisplayName(market)} Trading Session (${duration}h)`;
+        } else {
+            return `${activeMarkets.length} Active Markets: ${activeMarkets.map(m => this.getMarketDisplayName(m)).join(', ')}`;
+        }
+    }
+    
+    /**
+     * Get trading duration for market
+     */
+    getTradingDuration(market) {
+        const durations = {
+            'Australia': 6,   // 10am-4pm
+            'Japan': 6,       // 9am-3pm
+            'Hong Kong': 7,   // 9am-4pm
+            'China': 6,       // 9am-3pm
+            'UK': 8,          // 8am-4pm
+            'Germany': 8,     // 9am-5pm
+            'France': 8,      // 9am-5pm
+            'US': 7           // 9:30am-4pm (simplified to 7h)
+        };
+        return durations[market] || 6;
     }
     
     /**
