@@ -1,15 +1,9 @@
 {
-  "name": "gsmt-frontend",
+  "name": "gsmt-frontend", 
   "version": "7.0.1",
-  "description": "GSMT Ver 7.0 Enhanced - Static Frontend for Netlify",
-  "main": "index.html",
+  "description": "GSMT Ver 7.0 Enhanced - Static Frontend",
   "scripts": {
-    "build": "echo 'No build step - static HTML/JS/CSS'",
-    "start": "echo 'Open index.html in browser'"
-  },
-  "keywords": ["stock-market", "ftse", "sp500", "asx200", "nikkei", "trading"],
-  "engines": {
-    "node": ">=18.0.0"
+    "build": "echo 'Static deployment - no build required'"
   },
   "dependencies": {},
   "devDependencies": {}

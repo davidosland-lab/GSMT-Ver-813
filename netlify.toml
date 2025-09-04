@@ -1,25 +1,8 @@
 [build]
   publish = "frontend"
-  command = "echo 'GSMT Ver 7.0 Enhanced - Static frontend deployment'"
-
-[build.environment]
-  NODE_VERSION = "18"
-
-[[headers]]
-  for = "/*"
-  [headers.values]
-    X-Frame-Options = "DENY"
-    X-XSS-Protection = "1; mode=block"
-    X-Content-Type-Options = "nosniff"
-    Referrer-Policy = "strict-origin-when-cross-origin"
+  command = "echo 'Static deployment - no build required'"
 
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
-
-[context.production]
-  publish = "frontend"
-
-[context.deploy-preview]
-  publish = "frontend"

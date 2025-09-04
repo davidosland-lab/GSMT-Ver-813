@@ -1,0 +1,49 @@
+# Netlify deployment - Static frontend only (ignore backend files)
+
+# Python backend files (deploy to Railway, not Netlify)
+app.py
+app_*.py
+*.py
+requirements.txt
+runtime.txt
+Procfile*
+start.py
+start.sh
+test_python.py
+nixpacks.toml
+
+# Backend directories
+backend/
+api/
+
+# Documentation files
+docs/
+*.md
+!frontend/README.md
+
+# Deployment configs for other platforms
+railway.json
+.railwayignore
+
+# Python cache and virtual environments
+__pycache__/
+*.pyc
+*.pyo
+.python-version
+.venv/
+venv/
+env/
+
+# Development files
+.vscode/
+.idea/
+*.log
+
+# Git
+.git/
+.gitignore
+
+# Other build artifacts
+node_modules/
+dist/
+build/
