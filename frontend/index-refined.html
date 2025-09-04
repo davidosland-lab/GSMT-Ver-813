@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GSMT Global 24H Timeline - Sydney Reference</title>
+    <meta name="description" content="Four core indices across 24-hour Sydney timeline - Live global market flow">
+    
+    <!-- External Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    
+    <!-- Tailwind Configuration -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { 'inter': ['Inter', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="font-inter bg-gray-50 min-h-screen">
+    
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b border-gray-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <h1 class="text-2xl font-bold text-gray-900">
+                        <i class="fas fa-globe text-blue-600 mr-2"></i>
+                        Global 24H Timeline
+                    </h1>
+                    <div class="hidden md:block ml-6">
+                        <span class="text-sm text-gray-600">Sydney Time Reference</span>
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-4">
+                    <div id="api-status" class="flex items-center space-x-2">
+                        <div class="w-2 h-2 bg-gray-400 rounded-full"></div>
+                        <span class="text-xs text-gray-500">Connecting...</span>
+                    </div>
+                    <div class="sydney-time-indicator flex items-center space-x-2">
+                        <i class="fas fa-clock text-emerald-500"></i>
+                        <span class="text-xs text-gray-600">Sydney: </span>
+                        <span class="sydney-time-value text-xs font-medium text-emerald-600"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Application -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        
+        <!-- Global Timeline Info -->
+        <section class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-clock text-blue-500 text-lg"></i>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-blue-800">🌍 24-Hour Global Market Flow</h3>
+                    <div class="mt-1 text-sm text-blue-700">
+                        <span class="font-bold">Nikkei</span> (09:00-15:00) → 
+                        <span class="font-bold">ASX 200</span> (10:00-16:00) → 
+                        <span class="font-bold">FTSE</span> (18:00-00:00) → 
+                        <span class="font-bold">S&P 500</span> (00:30-07:30+1) • 
+                        <span class="text-blue-600">Continuous timeline in Sydney timezone reference</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- Simple Controls -->
+        <section class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-gray-900">
+                        <i class="fas fa-chart-line mr-2"></i>Four Core Indices - Live Timeline
+                    </h2>
+                    <p class="text-sm text-gray-600 mt-1">24-hour x-axis showing global market windows in Sydney time</p>
+                </div>
+                
+                <div class="flex items-center space-x-3">
+                    <div id="loading-indicator" class="hidden flex items-center space-x-2">
+                        <div class="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                        <span class="text-sm text-gray-600">Loading...</span>
+                    </div>
+                    <button id="analyze-btn" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                        <i class="fas fa-globe mr-2"></i>Load Timeline
+                    </button>
+                    <button id="clear-btn" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors">
+                        <i class="fas fa-trash mr-2"></i>Clear
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Chart Section -->
+        <section class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-semibold text-gray-900">
+                    <i class="fas fa-chart-area mr-2"></i>Global Market Timeline
+                </h2>
+                <button id="fullscreen-btn" class="p-2 text-gray-400 hover:text-gray-600 transition-colors">
+                    <i class="fas fa-expand"></i>
+                </button>
+            </div>
+            
+            <div id="main-chart" class="w-full" style="height: 600px;">
+                <div class="flex items-center justify-center h-full text-gray-400">
+                    <div class="text-center">
+                        <i class="fas fa-globe text-6xl mb-4 text-gray-300"></i>
+                        <p class="text-lg font-medium">24-Hour Global Timeline</p>
+                        <p class="text-sm mt-2">Four core indices across Sydney timezone</p>
+                        <button onclick="window.refinedApp?.loadGlobalTimelineData()" class="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700">
+                            Load Global Timeline
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Market Windows Display -->
+        <section id="market-sessions" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                <i class="fas fa-clock mr-2"></i>Market Trading Windows - Sydney Time
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Market session cards will be populated here -->
+            </div>
+            <div class="mt-4 text-xs text-gray-500">
+                <i class="fas fa-info-circle mr-1"></i>Trading windows shown in Sydney timezone. Markets appear only during their sessions.
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2">
+        <!-- Toasts will be inserted here -->
+    </div>
+
+    <!-- JavaScript Application -->
+    <script src="js/refined-app.js"></script>
+</body>
+</html>

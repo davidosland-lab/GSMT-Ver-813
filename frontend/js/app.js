@@ -16,6 +16,7 @@ class GSMTApp {
             isLoading: false,
             refreshTimer: null,
             sydneyTimeUtils: window.sydneyTimeUtils,
+            globalTimelineManager: window.GlobalTimelineManager ? new window.GlobalTimelineManager() : null,
             currentSydneyTime: null,
             marketSessions: new Map(),
             liveDataEnabled: true

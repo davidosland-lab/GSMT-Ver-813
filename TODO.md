@@ -45,10 +45,31 @@
 - [x] **Live data verification** - Confirm Sydney timezone operation
 - [x] **Commit and push changes** - Save implementation to repository
 
-## ✅ IMPLEMENTATION COMPLETE
+## ✅ REFINEMENT COMPLETE - 24H Global Timeline
 
-All phases successfully implemented and tested!
-Branch: `blackboxai-sydney-live-data` 
+### **Core Concept Implemented**
+- **24-hour x-axis timeline** starting from 10am Sydney time
+- **Four indices only**: Nikkei 225, ASX 200, FTSE 100, S&P 500
+- **Sydney timezone market windows**:
+  - **Nikkei 225**: 09:00-15:00 Sydney time (6 hours)
+  - **ASX 200**: 10:00-16:00 Sydney time (6 hours) 
+  - **FTSE 100**: 18:00-00:00 Sydney time (6 hours)
+  - **S&P 500**: 00:30-07:30 Sydney time (7 hours)
+
+### **Key Refinements Made**
+- ✅ **Removed candlestick options** - Percentage change only
+- ✅ **24-hour continuous x-axis** - Shows full Sydney day cycle
+- ✅ **Market windows only** - Data appears only during trading hours
+- ✅ **No overnight data** - Charts show gaps between sessions
+- ✅ **Sydney timeline reference** - 10am start as reference point
+
+### **Files Updated**
+- `timeline-server.js` - Refined server with 24H concept
+- `frontend/js/refined-app.js` - Simplified app for global timeline
+- `frontend/index-refined.html` - Clean UI focused on timeline
+- `package.json` - Updated for timeline server
+
+Branch: `blackboxai-sydney-live-data`
 Pull Request: https://github.com/davidosland-lab/GSMT-Ver-813/pull/new/blackboxai-sydney-live-data
 
 ## Notes
