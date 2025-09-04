@@ -14,7 +14,11 @@ class GSMTApp {
             chartInstance: null,
             settings: this.loadSettings(),
             isLoading: false,
-            refreshTimer: null
+            refreshTimer: null,
+            sydneyTimeUtils: window.sydneyTimeUtils,
+            currentSydneyTime: null,
+            marketSessions: new Map(),
+            liveDataEnabled: true
         };
         
         // Initialize application
@@ -22,11 +26,14 @@ class GSMTApp {
     }
     
     /**
-     * Initialize the application
+     * Initialize the application with Sydney timezone support
      */
     async init() {
         try {
-            console.log('🚀 Initializing GSMT Ver 7.0');
+            console.log('🚀 Initializing GSMT Ver 7.0 - Sydney Edition');
+            
+            // Initialize Sydney timezone utilities
+            this.initializeSydneyTime();
             
             // Setup event listeners
             this.setupEventListeners();
@@ -34,26 +41,187 @@ class GSMTApp {
             // Initialize chart
             this.initializeChart();
             
-            // Check API connection
+            // Check API connection and Sydney timezone info
             await this.checkApiConnection();
             
             // Load symbols database
             await this.loadSymbolsDatabase();
             
-             // Auto-select default indices (FTSE, S&P 500, ASX 200, Nikkei 225)
+            // Load Sydney market sessions
+            await this.loadMarketSessions();
+            
+            // Auto-select default indices with Sydney focus
             await this.autoSelectDefaultIndices();
+            
+            // Setup live data refresh
+            this.setupLiveDataRefresh();
             
             // Apply settings
             this.applySettings();
             
-            console.log('✅ GSMT Ver 7.0 Enhanced ready');
-            this.showToast('GSMT Ver 7.0 Enhanced: Default indices auto-selected', 'success');
+            console.log('✅ GSMT Ver 7.0 Sydney Edition ready');
+            this.showToast('GSMT Ver 7.0 Sydney Edition: Live data from 10am AEST/AEDT', 'success');
             
         } catch (error) {
             console.error('❌ Initialization failed:', error);
             this.updateApiStatus('error', 'Connection failed - Configure API URL in settings');
             this.showToast('Please configure your Railway API URL in Settings', 'warning');
         }
+    }
+    
+    /**
+     * Initialize Sydney timezone functionality
+     */
+    initializeSydneyTime() {
+        if (!this.state.sydneyTimeUtils) {
+            console.warn('Sydney timezone utilities not available - some features may be limited');
+            return;
+        }
+        
+        // Update Sydney time display
+        this.updateSydneyTimeDisplay();
+        
+        // Set up Sydney time updates every minute
+        setInterval(() => {
+            this.updateSydneyTimeDisplay();
+        }, 60000);
+        
+        console.log('🕒 Sydney timezone utilities initialized');
+    }
+    
+    /**
+     * Update Sydney time display in UI
+     */
+    updateSydneyTimeDisplay() {
+        if (!this.state.sydneyTimeUtils) return;
+        
+        const sydneyNow = this.state.sydneyTimeUtils.getSydneyNow();
+        this.state.currentSydneyTime = sydneyNow;
+        
+        // Update API status with Sydney time
+        const statusElement = document.getElementById('api-status');
+        if (statusElement) {
+            const existingText = statusElement.querySelector('span').textContent;
+            if (!existingText.includes('Sydney:')) {
+                const sydneyTime = this.state.sydneyTimeUtils.formatSydneyTime(sydneyNow, {
+                    showDate: false,
+                    showTime: true,
+                    showTimezone: true
+                });
+                statusElement.querySelector('span').textContent = `${existingText} • Sydney: ${sydneyTime}`;
+            }
+        }
+        
+        // Update any Sydney time indicators
+        const indicators = document.querySelectorAll('.sydney-time-value');
+        indicators.forEach(indicator => {
+            const formatted = this.state.sydneyTimeUtils.formatSydneyTime(sydneyNow, {
+                showDate: false,
+                showTime: true,
+                showTimezone: true
+            });
+            indicator.textContent = formatted;
+        });
+    }
+    
+    /**
+     * Load market sessions from API
+     */
+    async loadMarketSessions() {
+        if (!this.state.apiBaseUrl) {
+            console.warn('API URL not configured - using fallback market sessions');
+            this.loadFallbackMarketSessions();
+            return;
+        }
+        
+        try {
+            const response = await fetch(`${this.state.apiBaseUrl}/market-sessions`);
+            if (response.ok) {
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Store market sessions
+                    data.sessions.forEach(session => {
+                        this.state.marketSessions.set(session.market, session);
+                    });
+                    
+                    console.log(`📊 Loaded ${data.sessions.length} market sessions`);
+                    this.updateMarketSessionsDisplay(data.sessions);
+                }
+            } else {
+                throw new Error('Failed to load market sessions');
+            }
+        } catch (error) {
+            console.warn('Failed to load market sessions from API:', error);
+            this.loadFallbackMarketSessions();
+        }
+    }
+    
+    /**
+     * Load fallback market sessions
+     */
+    loadFallbackMarketSessions() {
+        if (!this.state.sydneyTimeUtils) return;
+        
+        const marketStatus = this.state.sydneyTimeUtils.getGlobalMarketStatus();
+        
+        Object.entries(marketStatus).forEach(([market, status]) => {
+            this.state.marketSessions.set(market, {
+                market,
+                display_name: status.displayName,
+                is_active: status.isOpen,
+                local_time: status.localTime,
+                color: this.getMarketColor(market)
+            });
+        });
+        
+        console.log('📊 Loaded fallback market sessions');
+    }
+    
+    /**
+     * Get color for market visualization
+     */
+    getMarketColor(market) {
+        const colors = {
+            'Australia': '#10b981',
+            'Japan': '#3b82f6',
+            'Hong Kong': '#8b5cf6',
+            'China': '#ef4444',
+            'UK': '#f59e0b',
+            'Germany': '#f97316',
+            'France': '#6366f1',
+            'US': '#06b6d4'
+        };
+        return colors[market] || '#6b7280';
+    }
+    
+    /**
+     * Setup live data refresh based on market activity
+     */
+    setupLiveDataRefresh() {
+        if (!this.state.liveDataEnabled) return;
+        
+        // Get recommended refresh interval
+        let refreshInterval = 300000; // 5 minutes default
+        
+        if (this.state.sydneyTimeUtils) {
+            refreshInterval = this.state.sydneyTimeUtils.getRecommendedRefreshInterval() * 1000;
+        }
+        
+        // Clear existing timer
+        if (this.state.refreshTimer) {
+            clearInterval(this.state.refreshTimer);
+        }
+        
+        // Set up new timer
+        this.state.refreshTimer = setInterval(() => {
+            if (this.state.selectedSymbols.size > 0) {
+                console.log('🔄 Auto-refreshing live data...');
+                this.handleAnalyze(true); // Silent refresh
+            }
+        }, refreshInterval);
+        
+        console.log(`🔄 Live data refresh set to ${refreshInterval / 1000} seconds`);
     }
     
     /**
@@ -416,20 +584,20 @@ class GSMTApp {
     }
     
     /**
-     * Handle analyze button
+     * Handle analyze button with Sydney timezone support
      */
-    async handleAnalyze() {
+    async handleAnalyze(silent = false) {
         const analysisMode = document.getElementById('analysis-mode').value;
         
         // Check if Global 24H mode is selected
         if (analysisMode === 'global-24h') {
-            await this.handleGlobal24HAnalysis();
+            await this.handleSydneyMarketsAnalysis(silent);
             return;
         }
         
         // Standard analysis mode
         if (this.state.selectedSymbols.size === 0) {
-            this.showToast('Please select at least one symbol', 'warning');
+            if (!silent) this.showToast('Please select at least one symbol', 'warning');
             return;
         }
         
@@ -443,15 +611,23 @@ class GSMTApp {
             let analysisData;
             
             if (this.state.apiBaseUrl) {
-                // Try API analysis
+                // API analysis with Sydney timezone support
+                const requestBody = {
+                    symbols: symbols,
+                    period: period,
+                    chart_type: chartType,
+                    sydney_start: period === '24h' // Enable Sydney 10am start for 24h periods
+                };
+                
+                // Add current Sydney time as reference if available
+                if (this.state.currentSydneyTime) {
+                    requestBody.reference_time = this.state.currentSydneyTime.toISOString();
+                }
+                
                 const response = await fetch(`${this.state.apiBaseUrl}/analyze`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        symbols: symbols,
-                        period: period,
-                        chart_type: chartType
-                    })
+                    body: JSON.stringify(requestBody)
                 });
                 
                 if (response.ok) {
@@ -460,7 +636,7 @@ class GSMTApp {
                     throw new Error(`API error: ${response.status}`);
                 }
             } else {
-                // Generate demo data
+                // Generate demo data with Sydney timezone
                 analysisData = this.generateDemoAnalysis(symbols, period);
             }
             
@@ -470,17 +646,133 @@ class GSMTApp {
                 this.state.chartData.set(symbol, data);
             }
             
+            // Store market sessions if provided
+            if (analysisData.market_sessions) {
+                this.state.marketSessionsData = analysisData.market_sessions;
+            }
+            
             this.updateChart();
             this.updatePerformanceSummary();
             
-            this.showToast(`Analysis complete: ${symbols.length} symbols processed`, 'success');
+            if (!silent) {
+                const message = analysisData.sydney_timestamp ? 
+                    `Analysis complete (${analysisData.sydney_timestamp}): ${symbols.length} symbols` :
+                    `Analysis complete: ${symbols.length} symbols processed`;
+                this.showToast(message, 'success');
+            }
             
         } catch (error) {
             console.error('Analysis failed:', error);
-            this.showToast('Analysis failed. Please check your API connection.', 'error');
+            if (!silent) this.showToast('Analysis failed. Please check your API connection.', 'error');
         } finally {
             this.setLoading(false);
         }
+    }
+    
+    /**
+     * Handle Sydney-focused market analysis (replaces Global 24H)
+     */
+    async handleSydneyMarketsAnalysis(silent = false) {
+        this.setLoading(true);
+        
+        try {
+            let analysisData;
+            
+            if (this.state.apiBaseUrl) {
+                // Try Sydney markets API endpoint
+                const response = await fetch(`${this.state.apiBaseUrl}/sydney-markets`);
+                
+                if (response.ok) {
+                    analysisData = await response.json();
+                } else {
+                    throw new Error(`API error: ${response.status}`);
+                }
+            } else {
+                // Generate demo Sydney markets data
+                analysisData = this.generateDemoSydneyData();
+            }
+            
+            // Store and display data
+            this.state.chartData.clear();
+            for (const [symbol, data] of Object.entries(analysisData.data)) {
+                this.state.chartData.set(symbol, data);
+            }
+            
+            // Store Sydney-specific data
+            this.state.marketSessionsData = analysisData.market_sessions;
+            this.state.sydneyContext = analysisData.sydney_context;
+            this.state.refreshSchedule = analysisData.refresh_schedule;
+            
+            this.updateSydneyChart();
+            this.updateMarketSessions();
+            this.updatePerformanceSummary();
+            
+            if (!silent) {
+                this.showToast('Sydney Markets analysis complete - Live data from 10am AEST/AEDT', 'success');
+            }
+            
+        } catch (error) {
+            console.error('Sydney Markets analysis failed:', error);
+            if (!silent) this.showToast('Sydney Markets analysis failed. Please check your API connection.', 'error');
+        } finally {
+            this.setLoading(false);
+        }
+    }
+    
+    /**
+     * Generate demo Sydney markets data
+     */
+    generateDemoSydneyData() {
+        const defaultSymbols = ['^AXJO', '^N225', '^FTSE', '^GSPC'];
+        const data = {};
+        
+        // Generate Sydney 24-hour period data
+        const period = this.state.sydneyTimeUtils ? 
+            this.state.sydneyTimeUtils.get24HourPeriodFromSydney10am() :
+            { start: new Date(), end: new Date(Date.now() + 24 * 60 * 60 * 1000) };
+        
+        defaultSymbols.forEach(symbol => {
+            const points = [];
+            let basePrice = symbol.startsWith('^') ? 
+                Math.random() * 30000 + 5000 : 
+                Math.random() * 400 + 50;
+            
+            // Generate 24 hours of hourly data
+            for (let hour = 0; hour < 24; hour++) {
+                const timestamp = new Date(period.start);
+                timestamp.setHours(period.start.getHours() + hour);
+                
+                const change = (Math.random() - 0.5) * 0.03; // 3% max change
+                basePrice *= (1 + change);
+                
+                const percentageChange = ((basePrice - (basePrice / Math.pow(1 + change, hour + 1))) / (basePrice / Math.pow(1 + change, hour + 1))) * 100;
+                
+                points.push({
+                    timestamp: timestamp.toISOString(),
+                    timestamp_ms: timestamp.getTime(),
+                    open: basePrice * 0.99,
+                    high: basePrice * 1.02,
+                    low: basePrice * 0.98,
+                    close: basePrice,
+                    volume: Math.floor(Math.random() * 10000000),
+                    percentage_change: percentageChange
+                });
+            }
+            
+            data[symbol] = points;
+        });
+        
+        return {
+            success: true,
+            data,
+            market_sessions: [],
+            timeline: [],
+            sydney_context: {
+                current_sydney_time: new Date().toISOString(),
+                sydney_market_status: true
+            },
+            refresh_schedule: { primary_refresh: 300 }
+        };
     }
     
     /**
@@ -679,9 +971,9 @@ class GSMTApp {
     }
     
     /**
-     * Update 24H chart specifically
+     * Update Sydney chart specifically
      */
-    update24HChart() {
+    updateSydneyChart() {
         if (!this.state.chartInstance) return;
         
         if (this.state.chartData.size === 0) {
@@ -689,76 +981,61 @@ class GSMTApp {
             return;
         }
         
-        const option = this.generate24HChartOption();
+        const option = this.generateSydneyChartOption();
         this.state.chartInstance.setOption(option, true);
     }
     
     /**
-     * Generate 24H chart option with market sessions
+     * Update 24H chart specifically (legacy support)
      */
-    generate24HChartOption() {
-        const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#f97316'];
+    update24HChart() {
+        this.updateSydneyChart();
+    }
+    
+    /**
+     * Generate Sydney-focused chart option with market sessions
+     */
+    generateSydneyChartOption() {
+        const colors = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#f97316'];
         const series = [];
         const markAreas = [];
         let colorIndex = 0;
         
-        // Create series for each market
+        // Create series for each market with Sydney context
         for (const [symbol, data] of this.state.chartData.entries()) {
             const market = this.getMarketForSymbol(symbol);
+            const displayName = this.getMarketDisplayName(market);
             
             series.push({
-                name: `${symbol} (${market})`,
+                name: `${symbol} ${displayName}`,
                 type: 'line',
-                data: data.map(point => [point.timestamp_ms, point.percentage_change]),
+                data: data.map(point => {
+                    // Convert timestamps to Sydney timezone for display
+                    const timestamp = this.state.sydneyTimeUtils ? 
+                        this.state.sydneyTimeUtils.formatTimestampForChart(point.timestamp_ms) :
+                        { timestamp: point.timestamp_ms };
+                    
+                    return [timestamp.timestamp || point.timestamp_ms, point.percentage_change];
+                }),
                 smooth: true,
                 symbol: 'none',
-                lineStyle: { width: 3 },
+                lineStyle: { width: market === 'Australia' ? 4 : 3 }, // Emphasize Australian markets
                 color: colors[colorIndex % colors.length],
                 emphasis: {
-                    lineStyle: { width: 4 }
+                    lineStyle: { width: market === 'Australia' ? 5 : 4 }
                 }
             });
             
             colorIndex++;
         }
         
-        // Add market session indicators
-        if (this.state.marketHours) {
-            const sessionColors = {
-                "Japan": "rgba(255, 99, 132, 0.1)",
-                "Hong Kong": "rgba(54, 162, 235, 0.1)", 
-                "UK": "rgba(255, 205, 86, 0.1)",
-                "Germany": "rgba(75, 192, 192, 0.1)",
-                "France": "rgba(153, 102, 255, 0.1)",
-                "US": "rgba(255, 159, 64, 0.1)"
-            };
-            
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            
-            Object.entries(this.state.marketHours).forEach(([market, hours]) => {
-                const startTime = new Date(today);
-                startTime.setHours(hours.open);
-                const endTime = new Date(today);
-                endTime.setHours(hours.close);
-                
-                markAreas.push({
-                    name: `${market} Trading Hours`,
-                    itemStyle: {
-                        color: sessionColors[market] || 'rgba(128, 128, 128, 0.1)'
-                    },
-                    data: [[
-                        { xAxis: startTime.getTime() },
-                        { xAxis: endTime.getTime() }
-                    ]]
-                });
-            });
-        }
+        // Add Sydney-based market session indicators
+        this.addSydneyMarketSessions(markAreas);
         
         return {
             title: {
-                text: 'Global 24H Market Flow - Percentage Changes',
-                subtext: 'Tracking market movements across time zones',
+                text: 'Sydney Markets - Live 24H Flow from 10am AEST/AEDT',
+                subtext: this.getSydneyChartSubtext(),
                 left: 'center',
                 textStyle: { fontSize: 18, fontWeight: 'bold', color: '#374151' },
                 subtextStyle: { fontSize: 12, color: '#6b7280' }
@@ -769,9 +1046,19 @@ class GSMTApp {
                 backgroundColor: 'rgba(255, 255, 255, 0.98)',
                 borderColor: '#e5e7eb',
                 textStyle: { color: '#374151' },
-                formatter: function(params) {
-                    const time = new Date(params[0].axisValue);
-                    let html = `<div style="font-weight: bold; margin-bottom: 5px;">${time.toLocaleTimeString()} UTC</div>`;
+                formatter: (params) => {
+                    const timestamp = params[0].axisValue;
+                    
+                    // Format time in Sydney timezone
+                    let timeDisplay = 'Time';
+                    if (this.state.sydneyTimeUtils) {
+                        const sydneyTime = this.state.sydneyTimeUtils.formatTimestampForChart(timestamp);
+                        timeDisplay = `${sydneyTime.display} AEST/AEDT`;
+                    } else {
+                        timeDisplay = new Date(timestamp).toLocaleTimeString();
+                    }
+                    
+                    let html = `<div style="font-weight: bold; margin-bottom: 5px; color: #10b981;">${timeDisplay}</div>`;
                     
                     params.forEach(param => {
                         const value = param.value[1];
@@ -803,7 +1090,14 @@ class GSMTApp {
                 axisLine: { lineStyle: { color: '#d1d5db' } },
                 axisLabel: { 
                     color: '#6b7280',
-                    formatter: '{HH}:00'
+                    formatter: (value) => {
+                        // Show Sydney time on axis
+                        if (this.state.sydneyTimeUtils) {
+                            const sydneyTime = this.state.sydneyTimeUtils.formatTimestampForChart(value);
+                            return sydneyTime.display.split(' ')[1] || new Date(value).getHours() + ':00';
+                        }
+                        return new Date(value).getHours() + ':00';
+                    }
                 },
                 splitLine: { 
                     show: true,
@@ -820,20 +1114,90 @@ class GSMTApp {
                 splitLine: { lineStyle: { color: '#f3f4f6' } }
             },
             series: series.concat(markAreas.length > 0 ? {
-                name: 'Trading Sessions',
+                name: 'Sydney Market Sessions',
                 type: 'line',
                 data: [],
                 markArea: {
                     silent: true,
                     itemStyle: {
-                        opacity: 0.3
+                        opacity: 0.2
                     },
-                    data: markAreas.map(area => area.data[0])
+                    data: markAreas
                 }
             } : []),
             animation: true,
             animationDuration: 1500
         };
+    }
+    
+    /**
+     * Legacy support - redirect to Sydney chart
+     */
+    generate24HChartOption() {
+        return this.generateSydneyChartOption();
+    }
+    
+    /**
+     * Get Sydney chart subtitle with current context
+     */
+    getSydneyChartSubtext() {
+        let subtext = 'Live market data starting from 10am Sydney time';
+        
+        if (this.state.sydneyContext) {
+            const phase = this.state.sydneyContext.market_day_phase || '';
+            subtext += ` • ${phase}`;
+        }
+        
+        return subtext;
+    }
+    
+    /**
+     * Add Sydney-based market session indicators to chart
+     */
+    addSydneyMarketSessions(markAreas) {
+        if (!this.state.marketSessionsData || !Array.isArray(this.state.marketSessionsData)) {
+            return;
+        }
+        
+        const sessionColors = {
+            "Australia": "rgba(16, 185, 129, 0.15)",  // emerald
+            "Japan": "rgba(59, 130, 246, 0.15)",      // blue
+            "Hong Kong": "rgba(139, 92, 246, 0.15)",  // purple
+            "China": "rgba(239, 68, 68, 0.15)",       // red
+            "UK": "rgba(245, 158, 11, 0.15)",         // amber
+            "Germany": "rgba(249, 115, 22, 0.15)",    // orange
+            "France": "rgba(99, 102, 241, 0.15)",     // indigo
+            "US": "rgba(6, 182, 212, 0.15)"           // cyan
+        };
+        
+        this.state.marketSessionsData.forEach(session => {
+            if (session.open_sydney && session.close_sydney) {
+                const openTime = new Date(session.open_sydney).getTime();
+                const closeTime = new Date(session.close_sydney).getTime();
+                
+                markAreas.push([
+                    { xAxis: openTime },
+                    { xAxis: closeTime }
+                ]);
+            }
+        });
+    }
+    
+    /**
+     * Get market display name with emoji
+     */
+    getMarketDisplayName(market) {
+        const displayNames = {
+            'Australia': '🇦🇺',
+            'Japan': '🇯🇵',
+            'Hong Kong': '🇭🇰',
+            'China': '🇨🇳',
+            'UK': '🇬🇧',
+            'Germany': '🇩🇪',
+            'France': '🇫🇷',
+            'US': '🇺🇸'
+        };
+        return displayNames[market] || '';
     }
     
     /**

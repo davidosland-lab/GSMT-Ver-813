@@ -1,0 +1,26 @@
+{
+  "name": "gsmt-sydney-edition",
+  "version": "7.0.0",
+  "description": "GSMT Ver 7.0 Sydney Edition - Live market data from 10am AEST/AEDT",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "build": "echo 'Frontend build complete - static files ready'",
+    "test": "node test-timezone.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {},
+  "keywords": [
+    "stock-market",
+    "sydney",
+    "timezone",
+    "live-data",
+    "australia"
+  ],
+  "author": "BLACKBOX.AI",
+  "license": "MIT"
+}

@@ -1,6 +1,6 @@
 """
 GSMT Ver 7.0 - FastAPI Backend
-Optimized for Railway deployment with clean architecture
+Optimized for Railway deployment with Sydney timezone integration
 """
 
 from fastapi import FastAPI, HTTPException, Query
@@ -17,6 +17,17 @@ import asyncio
 import logging
 import os
 import json
+# Import timezone handlers - handle as modules in same directory
+try:
+    from timezone_handler import sydney_tz_handler, get_sydney_24h_period, format_for_sydney_display
+    from market_sessions import market_sessions_manager
+except ImportError:
+    # Fallback for different import patterns
+    import sys
+    import os
+    sys.path.append(os.path.dirname(__file__))
+    from timezone_handler import sydney_tz_handler, get_sydney_24h_period, format_for_sydney_display
+    from market_sessions import market_sessions_manager
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -79,6 +90,8 @@ class AnalysisRequest(BaseModel):
     symbols: List[str] = Field(..., min_items=1, max_items=10)
     period: TimePeriod = TimePeriod.HOUR_24
     chart_type: ChartType = ChartType.PERCENTAGE
+    sydney_start: Optional[bool] = Field(default=True, description="Start 24h period from 10am Sydney time")
+    reference_time: Optional[str] = Field(default=None, description="Reference time for analysis (ISO format)")
 
 class AnalysisResponse(BaseModel):
     success: bool
@@ -87,8 +100,23 @@ class AnalysisResponse(BaseModel):
     period: str
     chart_type: str
     timestamp: str
+    sydney_timestamp: str
     total_symbols: int
     successful_symbols: int
+    period_start: str
+    period_end: str
+    market_sessions: Optional[Dict] = None
+
+class SydneyMarketResponse(BaseModel):
+    success: bool
+    data: Dict[str, List[MarketDataPoint]]
+    market_sessions: List[Dict]
+    timeline: List[Dict]
+    sydney_context: Dict
+    refresh_schedule: Dict
+    timestamp: str
+    period_start: str
+    period_end: str
 
 # Supported symbols database
 SYMBOLS_DB = {
@@ -168,9 +196,11 @@ def set_cached_data(key: str, data):
     """Set cached data with timestamp"""
     _cache[key] = (data, datetime.now())
 
-async def fetch_symbol_data(symbol: str, period: TimePeriod) -> List[MarketDataPoint]:
-    """Fetch data for a single symbol with caching"""
-    cache_key = f"{symbol}_{period.value}"
+async def fetch_symbol_data(symbol: str, period: TimePeriod, sydney_start: bool = True, reference_time: Optional[datetime] = None) -> List[MarketDataPoint]:
+    """Fetch data for a single symbol with Sydney timezone support"""
+    
+    # Create cache key with Sydney start parameter
+    cache_key = f"{symbol}_{period.value}_sydney_{sydney_start}_{reference_time.isoformat() if reference_time else 'now'}"
     
     # Check cache first
     cached = get_cached_data(cache_key)
@@ -181,37 +211,69 @@ async def fetch_symbol_data(symbol: str, period: TimePeriod) -> List[MarketDataP
         # Get period configuration
         config = PERIOD_CONFIG[period]
         
+        # Calculate time range based on Sydney timezone if requested
+        if sydney_start and period == TimePeriod.HOUR_24:
+            start_time, end_time = get_sydney_24h_period(reference_time)
+            
+            # Convert to UTC for yfinance
+            start_utc = start_time.astimezone(sydney_tz_handler.utc_tz)
+            end_utc = end_time.astimezone(sydney_tz_handler.utc_tz)
+            
+            logger.info(f"Fetching {symbol} data for Sydney 24h period: {start_time} to {end_time}")
+        else:
+            # Use standard period calculation
+            end_time = datetime.now(sydney_tz_handler.sydney_tz)
+            start_time = end_time - timedelta(days=config["days"])
+            start_utc = start_time.astimezone(sydney_tz_handler.utc_tz)
+            end_utc = end_time.astimezone(sydney_tz_handler.utc_tz)
+        
         # Fetch data from Yahoo Finance
         ticker = yf.Ticker(symbol)
         
-        # Convert period to yfinance format
-        if config["days"] <= 7:
-            yf_period = f"{config['days']}d"
-        elif config["days"] <= 60:
-            yf_period = f"{config['days']}d"
-        elif config["days"] <= 365:
-            months = config["days"] // 30
-            yf_period = f"{months}mo" if months <= 12 else "1y"
-        else:
-            yf_period = "2y"
+        # Use start/end dates for more precise control
+        hist = ticker.history(
+            start=start_utc.strftime('%Y-%m-%d'),
+            end=end_utc.strftime('%Y-%m-%d'), 
+            interval=config["interval"]
+        )
         
-        # Fetch historical data
-        hist = ticker.history(period=yf_period, interval=config["interval"])
+        if hist.empty:
+            # Try with period fallback
+            if config["days"] <= 7:
+                yf_period = f"{config['days']}d"
+            elif config["days"] <= 60:
+                yf_period = f"{config['days']}d"
+            elif config["days"] <= 365:
+                months = config["days"] // 30
+                yf_period = f"{months}mo" if months <= 12 else "1y"
+            else:
+                yf_period = "2y"
+                
+            hist = ticker.history(period=yf_period, interval=config["interval"])
         
         if hist.empty:
             return []
         
-        # Calculate percentage changes
+        # Calculate percentage changes with Sydney 10am as base if applicable
         data_points = []
         prices = hist['Close'].values
-        base_price = prices[0] if len(prices) > 0 else 1
+        
+        # Find base price - use first price in Sydney 24h period if applicable
+        if sydney_start and period == TimePeriod.HOUR_24:
+            # Use price closest to Sydney 10am start as base
+            base_price = prices[0] if len(prices) > 0 else 1
+        else:
+            base_price = prices[0] if len(prices) > 0 else 1
         
         for i, (timestamp, row) in enumerate(hist.iterrows()):
+            # Convert timestamp to Sydney timezone for display
+            sydney_timestamp = timestamp.tz_localize('UTC').astimezone(sydney_tz_handler.sydney_tz)
+            
             percentage_change = ((prices[i] - base_price) / base_price * 100) if base_price != 0 else 0
             
             data_points.append(MarketDataPoint(
-                timestamp=timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-                timestamp_ms=int(timestamp.timestamp() * 1000),
+                timestamp=sydney_timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                timestamp_ms=int(sydney_timestamp.timestamp() * 1000),
                 open=float(row['Open']),
                 high=float(row['High']),
                 low=float(row['Low']),
@@ -228,8 +290,8 @@ async def fetch_symbol_data(symbol: str, period: TimePeriod) -> List[MarketDataP
         logger.error(f"Error fetching data for {symbol}: {str(e)}")
         return []
 
-def generate_demo_data(symbol: str, period: TimePeriod) -> List[MarketDataPoint]:
-    """Generate realistic demo data when real data fails"""
+def generate_demo_data(symbol: str, period: TimePeriod, start_time: Optional[datetime] = None) -> List[MarketDataPoint]:
+    """Generate realistic demo data with Sydney timezone support"""
     config = PERIOD_CONFIG[period]
     days = config["days"]
     
@@ -241,25 +303,64 @@ def generate_demo_data(symbol: str, period: TimePeriod) -> List[MarketDataPoint]
     else:
         base_price = np.random.uniform(50, 500)      # US stock range
     
-    # Generate points
-    num_points = min(100, days * 4)  # Up to 100 points
+    # Use provided start time or calculate from Sydney timezone
+    if start_time is None:
+        if period == TimePeriod.HOUR_24:
+            start_time, _ = get_sydney_24h_period()
+        else:
+            start_time = sydney_tz_handler.get_sydney_now() - timedelta(days=days)
+    
+    # Generate points based on period
+    if period == TimePeriod.HOUR_24:
+        # For 24h period, generate hourly points
+        num_points = 24
+        time_increment = timedelta(hours=1)
+    else:
+        # For longer periods, generate daily points
+        num_points = min(100, days * 2)
+        time_increment = timedelta(days=(days / num_points))
+    
     data_points = []
     current_price = base_price
     
-    start_time = datetime.now() - timedelta(days=days)
-    
     for i in range(num_points):
-        # Random walk with mean reversion
-        change = np.random.normal(0, 0.02)  # 2% volatility
-        current_price = max(current_price * (1 + change), base_price * 0.5)
+        # Enhanced volatility model based on market and time
+        if symbol.startswith('^'):
+            # Index volatility
+            volatility = 0.015  # 1.5%
+        elif '.AX' in symbol:
+            # Australian stock volatility
+            volatility = 0.025  # 2.5%
+        else:
+            # International stock volatility
+            volatility = 0.02   # 2%
         
-        timestamp = start_time + timedelta(days=(days * i / num_points))
+        # Random walk with mean reversion
+        change = np.random.normal(0, volatility)
+        current_price = max(current_price * (1 + change), base_price * 0.3)
+        
+        # Calculate timestamp in Sydney timezone
+        timestamp = start_time + (time_increment * i)
+        
+        # Ensure timestamp is in Sydney timezone
+        if timestamp.tzinfo != sydney_tz_handler.sydney_tz:
+            timestamp = timestamp.astimezone(sydney_tz_handler.sydney_tz)
+        
         percentage_change = ((current_price - base_price) / base_price) * 100
         
-        # Generate OHLC around current price
-        high = current_price * (1 + abs(np.random.normal(0, 0.01)))
-        low = current_price * (1 - abs(np.random.normal(0, 0.01)))
-        open_price = current_price * (1 + np.random.normal(0, 0.005))
+        # Generate OHLC around current price with realistic spreads
+        spread = volatility * 0.5
+        high = current_price * (1 + abs(np.random.normal(0, spread)))
+        low = current_price * (1 - abs(np.random.normal(0, spread)))
+        open_price = current_price * (1 + np.random.normal(0, spread * 0.5))
+        
+        # Volume varies by market and time
+        if '.AX' in symbol:
+            volume = int(np.random.uniform(500000, 50000000))  # Australian volumes
+        elif symbol.startswith('^'):
+            volume = 0  # Indices don't have volume
+        else:
+            volume = int(np.random.uniform(1000000, 100000000))  # US volumes
         
         data_points.append(MarketDataPoint(
             timestamp=timestamp.strftime('%Y-%m-%d %H:%M:%S'),
@@ -268,7 +369,7 @@ def generate_demo_data(symbol: str, period: TimePeriod) -> List[MarketDataPoint]
             high=round(high, 2),
             low=round(low, 2),
             close=round(current_price, 2),
-            volume=int(np.random.uniform(100000, 10000000)),
+            volume=volume,
             percentage_change=round(percentage_change, 2)
         ))
     
@@ -294,16 +395,22 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint for Railway"""
+    """Health check endpoint with Sydney timezone info"""
     try:
+        sydney_now = sydney_tz_handler.get_sydney_now()
+        
         # Basic health check
         health_data = {
             "status": "healthy",
             "version": "7.0.0",
             "timestamp": datetime.now().isoformat(),
-            "service": "GSMT Ver 7.0 API",
+            "sydney_time": format_for_sydney_display(sydney_now),
+            "service": "GSMT Ver 7.0 API - Sydney Edition",
             "environment": os.environ.get("RAILWAY_ENVIRONMENT", "development"),
             "features": [
+                "Sydney timezone integration",
+                "24-hour periods from 10am AEST/AEDT",
+                "Global market sessions tracking",
                 "Percentage-based analysis",
                 "Multi-source data fallback", 
                 "Global market coverage",
@@ -311,6 +418,8 @@ async def health_check():
             ],
             "supported_symbols": len(SYMBOLS_DB),
             "cache_size": len(_cache),
+            "active_markets": sydney_tz_handler.get_active_markets(),
+            "sydney_market_open": sydney_tz_handler.is_market_open_now("Australia"),
             "uptime": "healthy"
         }
         
@@ -383,7 +492,7 @@ async def search_symbols(query: str, limit: int = Query(default=10, ge=1, le=50)
 
 @app.post("/analyze", response_model=AnalysisResponse)
 async def analyze_symbols(request: AnalysisRequest):
-    """Analyze symbols and return data"""
+    """Analyze symbols with Sydney timezone support"""
     
     # Validate symbols
     invalid_symbols = [s for s in request.symbols if s not in SYMBOLS_DB]
@@ -393,6 +502,29 @@ async def analyze_symbols(request: AnalysisRequest):
             detail=f"Unsupported symbols: {', '.join(invalid_symbols)}"
         )
     
+    # Parse reference time if provided
+    reference_time = None
+    if request.reference_time:
+        try:
+            reference_time = datetime.fromisoformat(request.reference_time.replace('Z', '+00:00'))
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid reference_time format. Use ISO format."
+            )
+    
+    # Get period boundaries
+    if request.sydney_start and request.period == TimePeriod.HOUR_24:
+        start_time, end_time = get_sydney_24h_period(reference_time)
+        period_start = format_for_sydney_display(start_time)
+        period_end = format_for_sydney_display(end_time)
+    else:
+        sydney_now = sydney_tz_handler.get_sydney_now()
+        end_time = sydney_now
+        start_time = sydney_now - timedelta(days=PERIOD_CONFIG[request.period]["days"])
+        period_start = format_for_sydney_display(start_time)
+        period_end = format_for_sydney_display(end_time)
+    
     # Fetch data for all symbols
     symbol_data = {}
     symbol_metadata = {}
@@ -400,13 +532,13 @@ async def analyze_symbols(request: AnalysisRequest):
     
     for symbol in request.symbols:
         try:
-            # Try to fetch real data
-            data = await fetch_symbol_data(symbol, request.period)
+            # Try to fetch real data with Sydney timezone support
+            data = await fetch_symbol_data(symbol, request.period, request.sydney_start, reference_time)
             
             # If no real data, generate demo data
             if not data:
                 logger.warning(f"No real data for {symbol}, using demo data")
-                data = generate_demo_data(symbol, request.period)
+                data = generate_demo_data(symbol, request.period, start_time)
             
             if data:
                 symbol_data[symbol] = data
@@ -417,7 +549,7 @@ async def analyze_symbols(request: AnalysisRequest):
             logger.error(f"Failed to fetch data for {symbol}: {str(e)}")
             # Generate demo data as fallback
             try:
-                data = generate_demo_data(symbol, request.period)
+                data = generate_demo_data(symbol, request.period, start_time)
                 if data:
                     symbol_data[symbol] = data
                     symbol_metadata[symbol] = SYMBOLS_DB[symbol]
@@ -431,6 +563,13 @@ async def analyze_symbols(request: AnalysisRequest):
             detail="Failed to fetch data for any symbols"
         )
     
+    # Get market sessions for 24h analysis
+    market_sessions_data = None
+    if request.period == TimePeriod.HOUR_24:
+        market_sessions_data = market_sessions_manager.get_24h_market_flow_data()
+    
+    sydney_now = sydney_tz_handler.get_sydney_now()
+    
     return AnalysisResponse(
         success=True,
         data=symbol_data,
@@ -438,9 +577,124 @@ async def analyze_symbols(request: AnalysisRequest):
         period=request.period.value,
         chart_type=request.chart_type.value,
         timestamp=datetime.now().isoformat(),
+        sydney_timestamp=format_for_sydney_display(sydney_now),
         total_symbols=len(request.symbols),
-        successful_symbols=successful_count
+        successful_symbols=successful_count,
+        period_start=period_start,
+        period_end=period_end,
+        market_sessions=market_sessions_data
     )
+
+@app.get("/sydney-markets", response_model=SydneyMarketResponse)
+async def get_sydney_markets():
+    """Get comprehensive Sydney-focused market analysis"""
+    
+    try:
+        # Get 24-hour market flow data
+        flow_data = market_sessions_manager.get_24h_market_flow_data()
+        
+        # Get default symbols for Sydney analysis
+        default_symbols = flow_data["default_symbols"]
+        
+        # Fetch data for default symbols
+        symbol_data = {}
+        for symbol in default_symbols:
+            try:
+                data = await fetch_symbol_data(symbol, TimePeriod.HOUR_24, sydney_start=True)
+                if not data:
+                    data = generate_demo_data(symbol, TimePeriod.HOUR_24, flow_data["start_time"])
+                
+                if data:
+                    symbol_data[symbol] = data
+            except Exception as e:
+                logger.error(f"Failed to fetch Sydney market data for {symbol}: {str(e)}")
+                try:
+                    symbol_data[symbol] = generate_demo_data(symbol, TimePeriod.HOUR_24, flow_data["start_time"])
+                except Exception as demo_error:
+                    logger.error(f"Failed to generate demo data for {symbol}: {str(demo_error)}")
+        
+        # Get additional context
+        sydney_context = market_sessions_manager.get_sydney_market_context()
+        refresh_schedule = market_sessions_manager.get_optimal_refresh_schedule()
+        
+        sydney_now = sydney_tz_handler.get_sydney_now()
+        
+        return SydneyMarketResponse(
+            success=True,
+            data=symbol_data,
+            market_sessions=flow_data["market_sessions"],
+            timeline=flow_data["timeline"],
+            sydney_context=sydney_context,
+            refresh_schedule=refresh_schedule,
+            timestamp=format_for_sydney_display(sydney_now),
+            period_start=format_for_sydney_display(flow_data["start_time"]),
+            period_end=format_for_sydney_display(flow_data["end_time"])
+        )
+        
+    except Exception as e:
+        logger.error(f"Sydney markets endpoint failed: {str(e)}")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Failed to fetch Sydney market data: {str(e)}"
+        )
+
+@app.get("/market-sessions")
+async def get_current_market_sessions():
+    """Get current global market sessions in Sydney timezone"""
+    
+    try:
+        sessions = market_sessions_manager.get_current_market_sessions()
+        timeline = sydney_tz_handler.get_market_session_timeline()
+        active_markets = sydney_tz_handler.get_active_markets()
+        
+        return {
+            "success": True,
+            "sessions": [
+                {
+                    "market": session.market,
+                    "display_name": session.display_name,
+                    "open_sydney": format_for_sydney_display(session.open_sydney),
+                    "close_sydney": format_for_sydney_display(session.close_sydney),
+                    "is_active": session.is_active,
+                    "color": session.color,
+                    "timezone": session.timezone_name
+                } for session in sessions
+            ],
+            "timeline": timeline,
+            "active_markets": active_markets,
+            "sydney_time": format_for_sydney_display(sydney_tz_handler.get_sydney_now()),
+            "refresh_schedule": market_sessions_manager.get_optimal_refresh_schedule()
+        }
+        
+    except Exception as e:
+        logger.error(f"Market sessions endpoint failed: {str(e)}")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Failed to fetch market sessions: {str(e)}"
+        )
+
+@app.get("/sydney-time")
+async def get_sydney_time_info():
+    """Get comprehensive Sydney timezone information"""
+    
+    sydney_now = sydney_tz_handler.get_sydney_now()
+    start_10am, end_10am = get_sydney_24h_period()
+    
+    return {
+        "success": True,
+        "sydney_time": format_for_sydney_display(sydney_now),
+        "sydney_timestamp_ms": int(sydney_now.timestamp() * 1000),
+        "timezone": str(sydney_now.tzinfo),
+        "is_dst": bool(sydney_now.dst()),
+        "utc_offset_hours": sydney_now.utcoffset().total_seconds() / 3600,
+        "period_24h": {
+            "start": format_for_sydney_display(start_10am),
+            "end": format_for_sydney_display(end_10am),
+            "start_ms": int(start_10am.timestamp() * 1000),
+            "end_ms": int(end_10am.timestamp() * 1000)
+        },
+        "market_context": market_sessions_manager.get_sydney_market_context()
+    }
 
 # Error handlers
 @app.exception_handler(HTTPException)
