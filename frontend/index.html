@@ -60,8 +60,27 @@
         </div>
     </header>
 
-    <!-- Main Application -->
+     <!-- Main Application -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        
+        <!-- Default Indices Info Panel -->
+        <section class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-info-circle text-blue-500 text-lg"></i>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-blue-800">Default Indices Pre-selected</h3>
+                    <div class="mt-1 text-sm text-blue-700">
+                        <span class="font-medium">FTSE 100</span> (London), 
+                        <span class="font-medium">S&P 500</span> (New York), 
+                        <span class="font-medium">ASX 200</span> (Sydney), 
+                        <span class="font-medium">Nikkei 225</span> (Tokyo) • 
+                        <span class="text-blue-600">24-hour percentage view ready - Click "Analyze" to begin!</span>
+                    </div>
+                </div>
+            </div>
+        </section>
         
         <!-- Control Panel -->
         <section class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
@@ -86,11 +105,11 @@
                     </div>
                 </div>
                 
-                <!-- Time Period -->
+                 <!-- Time Period -->
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">Time Period</label>
                     <select id="time-period" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
-                        <option value="24h">24 Hours</option>
+                        <option value="24h" selected>24 Hours (Default)</option>
                         <option value="3d">3 Days</option>
                         <option value="1w">1 Week</option>
                         <option value="2w">2 Weeks</option>
@@ -99,6 +118,8 @@
                         <option value="6M">6 Months</option>
                         <option value="1Y">1 Year</option>
                         <option value="2Y">2 Years</option>
+                        <option value="5Y">5 Years</option>
+                        <option value="10Y">10 Years</option>
                     </select>
                 </div>
                 
@@ -111,13 +132,26 @@
                     </select>
                 </div>
                 
-                <!-- Chart Type (for Standard Analysis) -->
+                 <!-- Chart Type (for Standard Analysis) -->
                 <div id="chart-type-container">
                     <label class="block text-sm font-medium text-gray-700 mb-2">Chart Type</label>
                     <select id="chart-type" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
-                        <option value="percentage">Percentage Change</option>
+                        <option value="percentage" selected>Percentage Change (Default)</option>
                         <option value="price">Price</option>
-                        <option value="candlestick">Candlestick</option>
+                        <option value="candlestick">Candlestick (OHLC)</option>
+                    </select>
+                </div>
+
+                <!-- Candlestick Interval (for Candlestick charts) -->
+                <div id="candlestick-interval-container" style="display: none;">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Candlestick Interval</label>
+                    <select id="candlestick-interval" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500">
+                        <option value="5m">5 Minutes</option>
+                        <option value="15m">15 Minutes</option>
+                        <option value="30m">30 Minutes</option>
+                        <option value="1h" selected>1 Hour</option>
+                        <option value="4h">4 Hours</option>
+                        <option value="1d">1 Day</option>
                     </select>
                 </div>
                 
