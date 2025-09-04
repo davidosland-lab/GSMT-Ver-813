@@ -1,13 +1,22 @@
 {
-  "name": "gsmt-frontend",
-  "version": "7.0.0",
-  "description": "GSMT Ver 7.0 Frontend - Global Stock Market Tracker",
+  "name": "gsmt-frontend-docs",
+  "version": "7.0.1",
+  "description": "GSMT Ver 7.0 Enhanced - Frontend documentation only (Railway deploys app.py backend)",
+  "private": true,
   "scripts": {
-    "build": "echo 'No build required - static frontend'",
-    "dev": "echo 'Open frontend/index.html in browser'",
-    "deploy": "echo 'Deploy frontend/ directory to Netlify'"
+    "info": "echo 'This package.json is for documentation only - Railway deploys Python backend (app.py)'",
+    "frontend": "echo 'Frontend is static HTML/JS - deploy frontend/ directory to Netlify'",
+    "backend": "echo 'Backend is Python FastAPI - Railway auto-deploys app.py'"
   },
-  "keywords": ["stock-market", "trading", "financial-analysis", "global-markets"],
+  "keywords": ["stock-market", "trading", "financial-analysis", "global-markets", "ftse", "sp500", "asx200", "nikkei"],
+  "railway": {
+    "build": {
+      "command": "python3 -m pip install -r requirements.txt"
+    },
+    "start": {
+      "command": "python3 app.py"
+    }
+  },
   "dependencies": {},
   "devDependencies": {}
 }

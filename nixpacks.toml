@@ -4,8 +4,11 @@ nixPkgs = ["python311", "python311Packages.pip", "bash"]
 [phases.install]
 cmd = "python3 -m pip install --upgrade pip && python3 -m pip install -r requirements.txt"
 
-[phases.build]
-cmd = "python3 test_python.py"
+[phases.build] 
+cmd = "echo 'Python FastAPI backend - no build step required'"
 
 [start]
-cmd = "bash start.sh"
+cmd = "python3 app.py"
+
+[variables]
+PORT = "8000"
