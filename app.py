@@ -499,7 +499,7 @@ async def root():
             "Market session tracking",
             "70+ global symbols"
         ],
-         "endpoints": {
+          "endpoints": {
             "health": "/health",
             "symbols": "/symbols", 
             "search": "/search/{query}",
@@ -719,19 +719,53 @@ async def get_default_indices():
         successful_symbols=len(symbol_data)
     )
 
-# Startup event
+@app.get("/default-indices")
+async def get_default_indices():
+    """Get the default indices (FTSE 100, S&P 500, ASX 200, Nikkei 225) with 24h percentage data"""
+    
+    # Default indices as specified in requirements
+    default_symbols = ['^FTSE', '^GSPC', '^AXJO', '^N225']
+    symbol_data = {}
+    symbol_metadata = {}
+    
+    for symbol in default_symbols:
+        try:
+            # Generate 24h percentage change data as default
+            data = generate_demo_data(symbol, TimePeriod.HOUR_24, ChartType.PERCENTAGE)
+            symbol_data[symbol] = data
+            symbol_metadata[symbol] = SYMBOLS_DB[symbol]
+        except Exception as e:
+            logger.error(f"Failed to generate data for default index {symbol}: {str(e)}")
+            continue
+    
+    return AnalysisResponse(
+        success=True,
+        data=symbol_data,
+        metadata=symbol_metadata,
+        period="24h",
+        chart_type="percentage", 
+        timestamp=datetime.now().isoformat(),
+        total_symbols=len(default_symbols),
+        successful_symbols=len(symbol_data)
+    )
+
+# Enhanced startup event
 @app.on_event("startup")
 async def startup_event():
     """Application startup"""
-    logger.info("🚀 GSMT Ver 7.0 API Starting - Enhanced Stock Indices Tracker")
+    logger.info("🚀 GSMT Ver 7.0 Enhanced API Starting - Complete Stock Indices Tracker")
     logger.info(f"📊 Loaded {len(SYMBOLS_DB)} symbols across {len(set(info.market for info in SYMBOLS_DB.values()))} markets")
-    logger.info("📍 Default indices: FTSE 100, S&P 500, ASX 200, Nikkei 225")
+    logger.info("📍 Default indices: FTSE 100, S&P 500, ASX 200, Nikkei 225 (auto-selected)")
     logger.info("⏰ Time ranges: 24h (default) to 10 years supported")
     logger.info("📈 Candlestick intervals: 5min, 15min, 30min, 1h, 4h, 1d")
-    logger.info("🌍 Market hours tracking with opening/closing visualization")
+    logger.info("🌍 Market hours tracking with opening/closing visualization:")
+    logger.info("   • FTSE 100: 08:00-16:30 GMT (London)")
+    logger.info("   • S&P 500: 09:30-16:00 EST / 14:30-21:00 UTC (New York)")
+    logger.info("   • ASX 200: 10:00-16:00 AEST / 23:00-06:00 UTC (Sydney)")
+    logger.info("   • Nikkei 225: 09:00-15:00 JST / 00:00-06:00 UTC (Tokyo)")
     logger.info("🎯 Global 24H Market Flow with session overlays")
     logger.info("✅ Percentage-based analysis with market awareness")
-    logger.info("🚀 Ready for Railway deployment")
+    logger.info("🚀 Enhanced and ready for Railway deployment")
 
 if __name__ == "__main__":
     try:

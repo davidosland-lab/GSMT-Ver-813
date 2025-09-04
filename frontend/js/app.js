@@ -40,11 +40,14 @@ class GSMTApp {
             // Load symbols database
             await this.loadSymbolsDatabase();
             
+             // Auto-select default indices (FTSE, S&P 500, ASX 200, Nikkei 225)
+            await this.autoSelectDefaultIndices();
+            
             // Apply settings
             this.applySettings();
             
-            console.log('✅ GSMT Ver 7.0 ready');
-            this.showToast('GSMT Ver 7.0 initialized successfully', 'success');
+            console.log('✅ GSMT Ver 7.0 Enhanced ready');
+            this.showToast('GSMT Ver 7.0 Enhanced: Default indices auto-selected', 'success');
             
         } catch (error) {
             console.error('❌ Initialization failed:', error);
@@ -95,9 +98,10 @@ class GSMTApp {
         document.getElementById('save-settings').addEventListener('click', this.saveSettings.bind(this));
         document.getElementById('cancel-settings').addEventListener('click', this.hideSettings.bind(this));
         
-        // Chart controls
+         // Chart controls
         document.getElementById('analysis-mode').addEventListener('change', this.handleAnalysisModeChange.bind(this));
         document.getElementById('chart-type').addEventListener('change', this.handleChartTypeChange.bind(this));
+        document.getElementById('candlestick-interval').addEventListener('change', this.handleCandlestickIntervalChange.bind(this));
         document.getElementById('fullscreen-btn').addEventListener('click', this.toggleFullscreen.bind(this));
         
         // Global events
@@ -148,6 +152,37 @@ class GSMTApp {
         }
     }
     
+     /**
+     * Auto-select default indices (FTSE 100, S&P 500, ASX 200, Nikkei 225)
+     */
+    async autoSelectDefaultIndices() {
+        // Default indices as specified in requirements
+        const defaultSymbols = ['^FTSE', '^GSPC', '^AXJO', '^N225'];
+        
+        // Add default symbols to selection
+        defaultSymbols.forEach(symbol => {
+            this.state.selectedSymbols.add(symbol);
+        });
+        
+        // Add to symbols database if not already there
+        if (this.state.symbolsDatabase.size === 0) {
+            const defaultSymbolsInfo = [
+                { symbol: '^FTSE', name: 'FTSE 100', market: 'UK', category: 'Index', priority: 1 },
+                { symbol: '^GSPC', name: 'S&P 500', market: 'US', category: 'Index', priority: 1 },
+                { symbol: '^AXJO', name: 'ASX 200', market: 'Australia', category: 'Index', priority: 1 },
+                { symbol: '^N225', name: 'Nikkei 225', market: 'Japan', category: 'Index', priority: 1 }
+            ];
+            
+            defaultSymbolsInfo.forEach(symbolInfo => {
+                this.state.symbolsDatabase.set(symbolInfo.symbol, symbolInfo);
+            });
+        }
+        
+        this.updateSelectedSymbolsDisplay();
+        
+        console.log('📊 Auto-selected default indices: FTSE 100, S&P 500, ASX 200, Nikkei 225');
+    }
+
     /**
      * Load symbols database from API
      */
@@ -964,10 +999,30 @@ class GSMTApp {
         grid.innerHTML = sessionCards;
     }
     
-    /**
+     /**
      * Handle chart type change
      */
     handleChartTypeChange() {
+        const chartType = document.getElementById('chart-type').value;
+        const candlestickContainer = document.getElementById('candlestick-interval-container');
+        
+        // Show/hide candlestick interval selector
+        if (chartType === 'candlestick') {
+            candlestickContainer.style.display = 'block';
+            this.showToast('Candlestick mode: Select interval from 5 minutes to 1 day', 'info');
+        } else {
+            candlestickContainer.style.display = 'none';
+        }
+        
+        if (this.state.chartData.size > 0) {
+            this.updateChart();
+        }
+    }
+
+    /**
+     * Handle candlestick interval change
+     */
+    handleCandlestickIntervalChange() {
         if (this.state.chartData.size > 0) {
             this.updateChart();
         }
