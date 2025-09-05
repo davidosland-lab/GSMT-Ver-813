@@ -1,26 +1,26 @@
 """
-GSMT Ver 7.0 - Global Stock Market Tracker
-Complete application with Global 24H Market Flow functionality
+Global Stock Market Tracker - Local Deployment
+24-Hour UTC Timeline Focus for Global Stock Indices with Live Data
 """
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
+import pytz
 import os
 import logging
+import asyncio
+from dotenv import load_dotenv
 
-# Try to import numpy, install if needed
-try:
-    import numpy as np
-except ImportError:
-    import subprocess
-    import sys
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "numpy"])
-    import numpy as np
+# Load environment variables
+load_dotenv()
+
+# Import multi-source live data service
+from multi_source_data_service import multi_source_aggregator, LiveDataPoint, MarketData
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -28,59 +28,44 @@ logger = logging.getLogger(__name__)
 
 # FastAPI app
 app = FastAPI(
-    title="GSMT Ver 7.0 API",
-    description="Global Stock Market Tracker with 24H Market Flow",
-    version="7.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc"
+    title="Global Stock Market Tracker",
+    description="24-Hour UTC Timeline for Global Stock Indices with Live Data",
+    version="2.0.0",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc"
 )
 
-# CORS middleware
+# Configuration - NO DEMO DATA
+LIVE_DATA_ENABLED = os.getenv('LIVE_DATA_ENABLED', 'true').lower() == 'true'
+REQUIRE_LIVE_DATA = os.getenv('REQUIRE_LIVE_DATA', 'true').lower() == 'true'
+
+# CORS middleware - allow local frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Allow all origins for local deployment
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
-# Enums
+# Enums - Simplified for 24-hour focus
 class TimePeriod(str, Enum):
     HOUR_24 = "24h"
-    DAYS_3 = "3d"
-    WEEK_1 = "1w"
-    WEEKS_2 = "2w"
-    MONTH_1 = "1M"
-    MONTHS_3 = "3M"
-    MONTHS_6 = "6M"
-    YEAR_1 = "1Y"
-    YEARS_2 = "2Y"
-    YEARS_5 = "5Y"
-    YEARS_10 = "10Y"
-
-class CandlestickInterval(str, Enum):
-    MIN_5 = "5m"
-    MIN_15 = "15m"
-    MIN_30 = "30m"
-    HOUR_1 = "1h"
-    HOUR_4 = "4h"
-    DAY_1 = "1d"
 
 class ChartType(str, Enum):
     PERCENTAGE = "percentage"
     PRICE = "price"
-    CANDLESTICK = "candlestick"
 
 # Pydantic models
 class MarketDataPoint(BaseModel):
     timestamp: str
     timestamp_ms: int
-    open: float
-    high: float
-    low: float
-    close: float
+    open: Optional[float] = None
+    high: Optional[float] = None
+    low: Optional[float] = None
+    close: Optional[float] = None
     volume: int
-    percentage_change: float
+    percentage_change: Optional[float] = None
     market_open: Optional[bool] = None
 
 class SymbolInfo(BaseModel):
@@ -91,26 +76,20 @@ class SymbolInfo(BaseModel):
     currency: str = "USD"
 
 class AnalysisRequest(BaseModel):
-    symbols: List[str] = Field(..., min_items=1, max_items=10)
-    period: TimePeriod = TimePeriod.HOUR_24
+    symbols: List[str] = Field(..., min_items=1, max_items=20)
     chart_type: ChartType = ChartType.PERCENTAGE
-    interval: Optional[CandlestickInterval] = CandlestickInterval.HOUR_1
 
-class CandlestickRequest(BaseModel):
-    symbols: List[str] = Field(..., min_items=1, max_items=5)
-    period: TimePeriod = TimePeriod.HOUR_24
-    interval: CandlestickInterval = CandlestickInterval.HOUR_1
+# Removed CandlestickRequest - focusing on 24h timeline only
 
 class AnalysisResponse(BaseModel):
     success: bool
     data: Dict[str, List[MarketDataPoint]]
     metadata: Dict[str, SymbolInfo]
-    period: str
     chart_type: str
     timestamp: str
     total_symbols: int
     successful_symbols: int
-    market_hours: Optional[Dict[str, Dict[str, int]]] = None
+    market_hours: Dict[str, Dict[str, int]]
 
 # Comprehensive symbols database
 SYMBOLS_DB = {
@@ -181,388 +160,475 @@ SYMBOLS_DB = {
     "ETH-USD": SymbolInfo(symbol="ETH-USD", name="Ethereum", market="Global", category="Cryptocurrency", currency="USD"),
 }
 
-# Period configurations
+# 24-hour period configuration
 PERIOD_CONFIG = {
-    TimePeriod.HOUR_24: {"days": 1, "description": "24 Hours"},
-    TimePeriod.DAYS_3: {"days": 3, "description": "3 Days"},
-    TimePeriod.WEEK_1: {"days": 7, "description": "1 Week"},
-    TimePeriod.WEEKS_2: {"days": 14, "description": "2 Weeks"},
-    TimePeriod.MONTH_1: {"days": 30, "description": "1 Month"},
-    TimePeriod.MONTHS_3: {"days": 90, "description": "3 Months"},
-    TimePeriod.MONTHS_6: {"days": 180, "description": "6 Months"},
-    TimePeriod.YEAR_1: {"days": 365, "description": "1 Year"},
-    TimePeriod.YEARS_2: {"days": 730, "description": "2 Years"},
-    TimePeriod.YEARS_5: {"days": 1825, "description": "5 Years"},
-    TimePeriod.YEARS_10: {"days": 3650, "description": "10 Years"},
+    TimePeriod.HOUR_24: {"hours": 24, "description": "24 Hours"}
 }
 
-# Candlestick interval configurations
-INTERVAL_CONFIG = {
-    CandlestickInterval.MIN_5: {"minutes": 5, "description": "5 Minutes"},
-    CandlestickInterval.MIN_15: {"minutes": 15, "description": "15 Minutes"},
-    CandlestickInterval.MIN_30: {"minutes": 30, "description": "30 Minutes"},
-    CandlestickInterval.HOUR_1: {"minutes": 60, "description": "1 Hour"},
-    CandlestickInterval.HOUR_4: {"minutes": 240, "description": "4 Hours"},
-    CandlestickInterval.DAY_1: {"minutes": 1440, "description": "1 Day"},
-}
+# Removed candlestick intervals - focusing on 24h timeline
 
-# Market trading hours (UTC) - CORE FEATURE FOR 24H FLOW
-MARKET_HOURS = {
-    "Japan": {"open": 0, "close": 6},      # 00:00-06:00 UTC
-    "Hong Kong": {"open": 1, "close": 8},  # 01:00-08:00 UTC  
-    "Australia": {"open": 23, "close": 6}, # 23:00-06:00 UTC (overnight)
-    "UK": {"open": 8, "close": 16},        # 08:00-16:00 UTC
-    "Germany": {"open": 7, "close": 15},   # 07:00-15:30 UTC
-    "France": {"open": 7, "close": 15},    # 07:00-15:30 UTC
-    "US": {"open": 14, "close": 21}        # 14:30-21:00 UTC
-}
+def get_dynamic_market_hours():
+    """Get market hours adjusted for current daylight saving time"""
+    now = datetime.now(timezone.utc)
+    
+    # Check if UK is in BST (British Summer Time) - last Sunday in March to last Sunday in October
+    uk_tz = pytz.timezone('Europe/London')
+    uk_time = now.astimezone(uk_tz)
+    is_bst = uk_time.dst() != timedelta(0)
+    
+    # Check if US is in EDT (Eastern Daylight Time) - 2nd Sunday in March to 1st Sunday in November  
+    us_tz = pytz.timezone('America/New_York')
+    us_time = now.astimezone(us_tz)
+    is_edt = us_time.dst() != timedelta(0)
+    
+    return {
+        "Japan": {"open": 0, "close": 6},           # 00:00-06:25 UTC (JST 09:00-15:25)
+        "Hong Kong": {"open": 1, "close": 8},      # 01:30-08:00 UTC (HKT 09:30-16:00)
+        "China": {"open": 1, "close": 7},          # 01:30-07:00 UTC (CST 09:30-15:00)
+        "Australia": {"open": 0, "close": 6},      # 00:00-06:00 UTC (AEST 10:00-16:00)
+        "South Korea": {"open": 0, "close": 6},    # 00:00-06:30 UTC (KST 09:00-15:30)
+        "India": {"open": 3, "close": 10},         # 03:45-10:00 UTC (IST 09:15-15:30)
+        "UK": {"open": 7 if is_bst else 8, "close": 16 if is_bst else 17},  # Dynamic BST/GMT
+        "Germany": {"open": 6 if is_bst else 7, "close": 15 if is_bst else 16},  # Dynamic CEST/CET
+        "France": {"open": 6 if is_bst else 7, "close": 15 if is_bst else 16},   # Dynamic CEST/CET
+        "Netherlands": {"open": 6 if is_bst else 7, "close": 15 if is_bst else 16}, # Dynamic CEST/CET
+        "Spain": {"open": 6 if is_bst else 7, "close": 15 if is_bst else 16},    # Dynamic CEST/CET
+        "US": {"open": 13 if is_edt else 14, "close": 21 if is_edt else 22},     # Dynamic EDT/EST
+        "Canada": {"open": 13 if is_edt else 14, "close": 21 if is_edt else 22}, # Dynamic EDT/EST
+        "Brazil": {"open": 13, "close": 20},       # 13:00-20:00 UTC (BRT 10:00-17:00)
+        "Global": {"open": 0, "close": 23}         # 24/7 for commodities and crypto
+    }
 
-def generate_global_24h_data(symbols: List[str]) -> Dict[str, List[MarketDataPoint]]:
-    """Generate 24-hour global market flow data - CORE GLOBAL 24H FEATURE"""
+# Use dynamic market hours
+MARKET_HOURS = get_dynamic_market_hours()
+
+async def generate_24h_market_data_live(symbols: List[str], chart_type: ChartType = ChartType.PERCENTAGE) -> Dict[str, List[MarketDataPoint]]:
+    """Generate 24-hour market data using multi-source live data aggregator - NO DEMO DATA"""
     result = {}
     
-    # Create 24 hours of data points (every hour = 24 points)
-    base_time = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    if not LIVE_DATA_ENABLED:
+        raise HTTPException(status_code=503, detail="Live data is disabled")
     
-    for symbol in symbols:
-        if symbol not in SYMBOLS_DB:
-            continue
+    try:
+        # Fetch live data from multiple sources for all symbols
+        for symbol in symbols:
+            if symbol not in SYMBOLS_DB:
+                logger.warning(f"Symbol {symbol} not in database, skipping")
+                continue
+                
+            market = SYMBOLS_DB[symbol].market
             
-        market = SYMBOLS_DB[symbol].market
-        data_points = []
-        
-        # Base price for the market
-        if symbol.startswith('^') or symbol.endswith('.SS'):
-            base_price = np.random.uniform(3000, 40000)
-        elif '.AX' in symbol:
-            base_price = np.random.uniform(10, 300)
-        else:
-            base_price = np.random.uniform(50, 500)
-        
-        current_price = base_price
-        
-        for hour in range(24):  # 24 hours
-            timestamp = base_time + timedelta(hours=hour)
+            # Get live data from multi-source aggregator
+            market_data = await multi_source_aggregator.get_live_data(symbol)
             
-            # Check if market is open for this hour
-            market_hours = MARKET_HOURS.get(market, {"open": 0, "close": 23})
+            if market_data and market_data.data_points:
+                # Convert live data to our format with market hours logic
+                data_points = convert_live_data_to_24h_format(market_data.data_points, symbol, market, chart_type)
+                result[symbol] = data_points
+                logger.info(f"✅ Generated {len(data_points)} data points for {symbol} from sources: {', '.join(market_data.sources_used)}")
+            else:
+                logger.error(f"❌ No live data available for {symbol} from any provider")
+                if REQUIRE_LIVE_DATA:
+                    continue  # Skip symbols without live data
+                else:
+                    raise HTTPException(status_code=503, detail=f"No live data available for {symbol}")
+        
+        if not result:
+            raise HTTPException(status_code=503, detail="No live data available for any requested symbols")
             
-            # Handle overnight markets (like Australia)
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching multi-source live data: {e}")
+        raise HTTPException(status_code=500, detail=f"Live data service error: {str(e)}")
+
+def convert_live_data_to_24h_format(live_points: List[LiveDataPoint], symbol: str, market: str, chart_type: ChartType) -> List[MarketDataPoint]:
+    """Convert live data points to rolling 24-hour format with complete session coverage"""
+    utc_now = datetime.now(timezone.utc)
+    
+    # Create rolling 24-hour window (last 24 hours from current time)
+    end_time = utc_now
+    start_time = end_time - timedelta(hours=24)
+    
+    logger.info(f"📅 Rolling 24h window for {symbol}: {start_time.strftime('%H:%M')} to {end_time.strftime('%H:%M')} UTC")
+    
+    # Get market hours configuration
+    market_hours = MARKET_HOURS.get(market, {"open": 0, "close": 23})
+    
+    # Filter and sort live data points within our 24-hour window
+    if not live_points:
+        logger.warning(f"No live data points available for {symbol}")
+        return []
+    
+    # Sort all points by timestamp
+    sorted_points = sorted(live_points, key=lambda x: x.timestamp)
+    
+    # Find the most recent market session for base price calculation
+    base_price = None
+    most_recent_market_open = None
+    
+    # Look for market open price in the last 24 hours - handle overnight markets
+    for point in reversed(sorted_points):
+        if point.timestamp >= start_time and is_market_open_at_time(point.timestamp, market_hours):
+            hour = point.timestamp.hour
+            
+            # Handle overnight markets (like Australia: 23:00-06:00)
             if market_hours["open"] > market_hours["close"]:
-                is_market_open = hour >= market_hours["open"] or hour <= market_hours["close"]
+                # For overnight markets, open could be 23 (previous day) or early hours
+                is_market_open_time = (hour >= market_hours["open"] or hour <= 1)
             else:
-                is_market_open = market_hours["open"] <= hour <= market_hours["close"]
+                # Regular markets
+                is_market_open_time = market_hours["open"] <= hour <= (market_hours["open"] + 1)
             
-            if is_market_open:
-                # Active trading - higher volatility
-                change = np.random.normal(0, 0.02)  # 2% volatility
-                volume_multiplier = 1.0
+            if is_market_open_time:
+                most_recent_market_open = point.open
+                break
+    
+    # Use most recent market open, or fallback to first available price
+    base_price = most_recent_market_open if most_recent_market_open else sorted_points[0].close
+    
+    logger.info(f"📊 Base price for {symbol}: {base_price}")
+    
+    # Create 5-minute interval lookup for better precision
+    live_data_lookup = {}
+    for point in sorted_points:
+        if start_time <= point.timestamp <= end_time:
+            # Use exact timestamp for better matching
+            live_data_lookup[point.timestamp] = point
+    
+    logger.info(f"📈 Found {len(live_data_lookup)} data points for {symbol} in 24h window")
+    
+    # Generate data points for each hour in the rolling 24-hour window
+    data_points = []
+    
+    for hour_offset in range(24):
+        current_hour_start = start_time + timedelta(hours=hour_offset)
+        current_hour_end = current_hour_start + timedelta(hours=1)
+        
+        # Check if market should be open during this hour
+        is_market_open_hour = is_market_open_at_time(current_hour_start, market_hours)
+        
+        # Find the best data point within this hour
+        best_point = None
+        best_timestamp = current_hour_start
+        
+        # Look for data points within this hour
+        hour_points = []
+        for ts, point in live_data_lookup.items():
+            if current_hour_start <= ts < current_hour_end:
+                hour_points.append((ts, point))
+        
+        # Special case: if this is the market close hour and we have no data in the hour,
+        # look for the most recent data within the last 2 hours
+        if is_market_open_hour and not hour_points:
+            market_close_hour = market_hours.get("close", 16)
+            if current_hour_start.hour == market_close_hour:
+                # Look for data in previous hours up to market close
+                search_start = current_hour_start - timedelta(hours=2)
+                recent_points = []
+                for ts, point in live_data_lookup.items():
+                    if search_start <= ts <= current_hour_end:
+                        recent_points.append((ts, point))
+                
+                if recent_points:
+                    # Take the most recent point as the market close data
+                    recent_points.sort(key=lambda x: x[0])
+                    best_timestamp, best_point = recent_points[-1]
+                    logger.info(f"📊 Using recent data for market close hour {current_hour_start.hour}: {best_timestamp}")
+        
+        elif hour_points:
+            # Sort by timestamp and take the latest point in the hour (most current data)
+            hour_points.sort(key=lambda x: x[0])
+            best_timestamp, best_point = hour_points[-1]
+        
+        if is_market_open_hour and best_point:
+            # Market is open and we have live data
+            if chart_type == ChartType.PERCENTAGE:
+                percentage_change = ((best_point.close - base_price) / base_price) * 100
             else:
-                # Market closed - minimal movement
-                change = np.random.normal(0, 0.003)  # 0.3% volatility
-                volume_multiplier = 0.1
-            
-            current_price *= (1 + change)
-            percentage_change = ((current_price - base_price) / base_price) * 100
-            
-            # Generate OHLC
-            high = current_price * (1 + abs(np.random.normal(0, 0.005)))
-            low = current_price * (1 - abs(np.random.normal(0, 0.005)))
-            open_price = current_price * (1 + np.random.normal(0, 0.002))
-            
-            base_volume = 2000000 if symbol.startswith('^') else 1000000
-            volume = int(base_volume * volume_multiplier * np.random.uniform(0.5, 2.0))
+                percentage_change = best_point.close
             
             data_points.append(MarketDataPoint(
-                timestamp=timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-                timestamp_ms=int(timestamp.timestamp() * 1000),
-                open=round(open_price, 2),
-                high=round(high, 2),
-                low=round(low, 2),
-                close=round(current_price, 2),
-                volume=volume,
-                percentage_change=round(percentage_change, 2),
-                market_open=is_market_open
+                timestamp=current_hour_start.strftime('%Y-%m-%d %H:%M:%S UTC'),
+                timestamp_ms=int(current_hour_start.timestamp() * 1000),
+                open=best_point.open,
+                high=best_point.high,
+                low=best_point.low,
+                close=best_point.close,
+                volume=best_point.volume,
+                percentage_change=round(percentage_change, 3),
+                market_open=True
             ))
-        
-        result[symbol] = data_points
+        else:
+            # Market is closed or no data available
+            data_points.append(MarketDataPoint(
+                timestamp=current_hour_start.strftime('%Y-%m-%d %H:%M:%S UTC'),
+                timestamp_ms=int(current_hour_start.timestamp() * 1000),
+                open=None,
+                high=None,
+                low=None,
+                close=None,
+                volume=0,
+                percentage_change=None,
+                market_open=False
+            ))
     
-    return result
-
-def generate_demo_data(symbol: str, period: TimePeriod, chart_type: ChartType = ChartType.PERCENTAGE, interval: CandlestickInterval = CandlestickInterval.HOUR_1) -> List[MarketDataPoint]:
-    """Generate realistic demo data for individual symbols with proper market hours and intervals"""
-    if symbol not in SYMBOLS_DB:
-        raise HTTPException(status_code=400, detail=f"Symbol {symbol} not found")
-    
-    config = PERIOD_CONFIG[period]
-    days = config["days"]
-    symbol_info = SYMBOLS_DB[symbol]
-    
-    # Get realistic base price for specific symbols
-    base_price = get_realistic_base_price(symbol)
-    
-    # Determine data resolution based on period and chart type
-    if chart_type == ChartType.CANDLESTICK:
-        # Use specified interval for candlestick charts
-        interval_minutes = INTERVAL_CONFIG[interval]["minutes"]
-        num_points = min(2000, int((days * 24 * 60) / interval_minutes))  # Limit to 2000 points
-        time_delta = timedelta(minutes=interval_minutes)
-    elif days == 1:  # 24h period
-        num_points = 24  # Hourly data
-        time_delta = timedelta(hours=1)
-    elif days <= 14:  # Up to 2 weeks
-        num_points = days * 4  # 6-hour intervals
-        time_delta = timedelta(hours=6)
-    elif days <= 365:  # Up to 1 year
-        num_points = min(365, days)  # Daily data
-        time_delta = timedelta(days=1)
-    else:  # Long-term periods (2-10 years)
-        num_points = min(520, days // 7)  # Weekly data for long periods
-        time_delta = timedelta(days=7)
-    
-    data_points = []
-    current_price = base_price
-    start_time = datetime.now() - timedelta(days=days)
-    
-    # Get market for volatility and volume calculations
-    market = symbol_info.market
-    
-    for i in range(num_points):
-        timestamp = start_time + (time_delta * i)
-        
-        # Determine if market is open (for intraday data)
-        is_market_hours = is_market_open_for_symbol(timestamp, market) if time_delta < timedelta(days=1) else True
-        
-        # Adjust volatility based on market hours and symbol type
-        base_volatility = get_symbol_volatility(symbol)
-        volatility = base_volatility * (1.0 if is_market_hours else 0.3)  # Reduced volatility when market closed
-        
-        # Random walk with mean reversion and slight upward trend
-        trend = 0.0001 if symbol.startswith('^') else 0.0002  # Slight upward trend
-        change = np.random.normal(trend, volatility)
-        current_price = max(current_price * (1 + change), base_price * 0.2)  # Minimum 20% of base price
-        
-        # Calculate percentage change from start
-        percentage_change = ((current_price - base_price) / base_price) * 100
-        
-        # Generate realistic OHLC around current price
-        high_factor = abs(np.random.normal(0, volatility * 0.5))
-        low_factor = abs(np.random.normal(0, volatility * 0.5))
-        
-        high = current_price * (1 + high_factor)
-        low = current_price * (1 - low_factor)
-        open_price = low + (high - low) * np.random.uniform(0.2, 0.8)  # Open between low and high
-        close_price = current_price
-        
-        # Ensure OHLC relationships are valid
-        high = max(high, open_price, close_price)
-        low = min(low, open_price, close_price)
-        
-        # Generate realistic volume
-        base_volume = get_symbol_base_volume(symbol)
-        volume_multiplier = 1.0 if is_market_hours else 0.1
-        volume_variation = np.random.uniform(0.5, 2.0)
-        volume = int(base_volume * volume_multiplier * volume_variation)
-        
-        data_points.append(MarketDataPoint(
-            timestamp=timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-            timestamp_ms=int(timestamp.timestamp() * 1000),
-            open=round(open_price, 2),
-            high=round(high, 2),
-            low=round(low, 2),
-            close=round(close_price, 2),
-            volume=volume,
-            percentage_change=round(percentage_change, 3),
-            market_open=is_market_hours if time_delta < timedelta(days=1) else None
-        ))
+    logger.info(f"✅ Generated {len(data_points)} hourly data points for {symbol}")
+    market_open_count = sum(1 for p in data_points if p.market_open)
+    logger.info(f"📊 {market_open_count} points with market data, {24-market_open_count} points market closed")
     
     return data_points
+def round_to_nearest_5min(dt: datetime) -> datetime:
+    """Round datetime to nearest 5-minute interval"""
+    minute = dt.minute
+    rounded_minute = 5 * round(minute / 5)
+    if rounded_minute == 60:
+        dt = dt.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    else:
+        dt = dt.replace(minute=rounded_minute, second=0, microsecond=0)
+    return dt
 
-def get_realistic_base_price(symbol: str) -> float:
-    """Get realistic base prices for specific symbols"""
-    realistic_prices = {
-        # Default indices as specified
-        '^FTSE': 7800.0,    # FTSE 100
-        '^GSPC': 4400.0,    # S&P 500
-        '^AXJO': 7200.0,    # ASX 200  
-        '^N225': 33000.0,   # Nikkei 225
-        
-        # Other major indices
-        '^IXIC': 13500.0,   # NASDAQ
-        '^DJI': 35000.0,    # Dow Jones
-        '^GDAXI': 15500.0,  # DAX
-        '^HSI': 18000.0,    # Hang Seng
-        '^FCHI': 7000.0,    # CAC 40
-        
-        # US Tech Stocks
-        'AAPL': 175.0,
-        'GOOGL': 140.0,
-        'MSFT': 350.0,
-        'AMZN': 150.0,
-        'TSLA': 250.0,
-        'META': 300.0,
-        'NVDA': 500.0,
-        
-        # Australian Stocks
-        'CBA.AX': 105.0,
-        'WBC.AX': 22.0,
-        'ANZ.AX': 26.0,
-        'NAB.AX': 32.0,
-        'BHP.AX': 45.0,
-        'RIO.AX': 120.0,
-        'CSL.AX': 280.0,
-        
-        # Crypto
-        'BTC-USD': 45000.0,
-        'ETH-USD': 2800.0,
-    }
-    
-    return realistic_prices.get(symbol, np.random.uniform(50, 500))
-
-def get_symbol_volatility(symbol: str) -> float:
-    """Get appropriate volatility for different symbol types"""
-    if symbol.endswith('-USD'):  # Crypto
-        return 0.04  # 4% daily volatility
-    elif symbol.startswith('^'):  # Indices
-        return 0.015  # 1.5% daily volatility
-    elif '.AX' in symbol:  # Australian stocks
-        return 0.025  # 2.5% daily volatility
-    else:  # US stocks
-        return 0.02  # 2% daily volatility
-
-def get_symbol_base_volume(symbol: str) -> int:
-    """Get realistic base trading volume for symbols"""
-    volume_map = {
-        # Major Indices (high volume)
-        '^FTSE': 500000000,
-        '^GSPC': 3000000000,
-        '^AXJO': 800000000,
-        '^N225': 1500000000,
-        
-        # Popular US stocks
-        'AAPL': 50000000,
-        'GOOGL': 25000000,
-        'MSFT': 30000000,
-        'TSLA': 75000000,
-        
-        # Australian stocks
-        'CBA.AX': 5000000,
-        'BHP.AX': 8000000,
-        
-        # Crypto
-        'BTC-USD': 20000000000,
-        'ETH-USD': 10000000000,
-    }
-    
-    return volume_map.get(symbol, 1000000)
-
-def is_market_open_for_symbol(timestamp: datetime, market: str) -> bool:
-    """Check if market is open at given timestamp (simplified)"""
+def is_market_open_at_time(timestamp: datetime, market_hours: dict) -> bool:
+    """Check if market is open at specific timestamp"""
     hour = timestamp.hour
+    minute = timestamp.minute
     
-    # Simplified market hours in UTC
-    market_hours_utc = {
-        "UK": (8, 16),      # 08:00-16:30 UTC
-        "US": (14, 21),     # 14:30-21:00 UTC  
-        "Australia": (23, 6), # 23:00-06:00 UTC (overnight)
-        "Japan": (0, 6),    # 00:00-06:00 UTC
-        "Hong Kong": (1, 8), # 01:00-08:00 UTC
-        "Germany": (7, 15)  # 07:00-15:30 UTC
-    }
+    # Handle markets that span midnight (like Australia)
+    if market_hours["open"] > market_hours["close"]:
+        # Market spans midnight
+        if hour > market_hours["open"] or hour < market_hours["close"]:
+            return True
+        elif hour == market_hours["open"]:
+            return minute >= 30  # Markets typically open at :30
+        elif hour == market_hours["close"]:
+            return minute <= 30  # Include the full closing hour
+    else:
+        # Normal market hours - include the full closing hour
+        if market_hours["open"] < hour < market_hours["close"]:
+            return True
+        elif hour == market_hours["open"]:
+            return minute >= 30  # Markets typically open at :30
+        elif hour == market_hours["close"]:
+            return True  # Include all minutes in the closing hour
+        elif hour == market_hours["close"] + 1 and minute == 0:
+            return True  # Include the exact close time (e.g., 21:00 for US markets)
     
-    if market not in market_hours_utc:
-        return True  # Default to always open
+    return False
+
+def find_best_data_point_for_hour(target_hour: datetime, data_lookup: dict) -> Optional[LiveDataPoint]:
+    """Find the best data point for a given hour, preferring later times in the hour"""
+    if not data_lookup:
+        return None
     
-    open_hour, close_hour = market_hours_utc[market]
+    # Look for data points within the target hour
+    hour_points = []
+    for timestamp, point in data_lookup.items():
+        if timestamp.hour == target_hour.hour and timestamp.date() == target_hour.date():
+            hour_points.append(point)
+    
+    if hour_points:
+        # Return the latest point in the hour
+        return max(hour_points, key=lambda p: p.timestamp)
+    
+    # If no data in the exact hour, find the nearest point
+    nearest_time = min(data_lookup.keys(), key=lambda x: abs((x - target_hour).total_seconds()))
+    if abs((nearest_time - target_hour).total_seconds()) < 3600:  # Within 1 hour
+        return data_lookup[nearest_time]
+    
+    return None
+
+def find_market_close_data(current_time: datetime, data_lookup: dict, market_hours: dict) -> Optional[LiveDataPoint]:
+    """Find the most recent market close data point"""
+    if not data_lookup:
+        return None
+    
+    # Look for data points near market close time
+    close_hour = market_hours["close"]
+    
+    # Find the most recent close time
+    recent_close_points = []
+    for timestamp, point in data_lookup.items():
+        # Check if this is a market close time (close hour or slightly after)
+        if (timestamp.hour == close_hour and timestamp.minute >= 30) or \
+           (timestamp.hour == close_hour + 1 and timestamp.minute <= 30):
+            recent_close_points.append(point)
+    
+    if recent_close_points:
+        # Return the latest close point
+        return max(recent_close_points, key=lambda p: p.timestamp)
+    
+    return None
+
+# ALL DEMO DATA FUNCTIONS REMOVED - USING MULTI-SOURCE LIVE DATA ONLY
+
+def is_market_open_at_hour(hour: int, market: str) -> bool:
+    """Check if market is open at given UTC hour"""
+    market_hours = MARKET_HOURS.get(market, {"open": 0, "close": 23})
     
     # Handle overnight markets (like Australia)
-    if open_hour > close_hour:
-        return hour >= open_hour or hour <= close_hour
+    if market_hours["open"] > market_hours["close"]:
+        return hour >= market_hours["open"] or hour <= market_hours["close"]
     else:
-        return open_hour <= hour <= close_hour
+        return market_hours["open"] <= hour <= market_hours["close"]
 
-# Routes
-@app.get("/")
-async def root():
-    """Root endpoint"""
+# API Routes
+@app.get("/api")
+@app.get("/api/")
+async def api_root():
+    """API root endpoint"""
     return {
-        "name": "GSMT Ver 7.0 API",
-        "version": "7.0.0",
-        "description": "Global Stock Market Tracker with 24H Market Flow",
+        "name": "Global Stock Market Tracker",
+        "version": "1.0.0",
+        "description": "24-Hour UTC Timeline for Global Stock Indices",
         "status": "healthy",
-        "deployment": "railway",
+        "deployment": "local",
         "features": [
-            "Global 24H Market Flow",
-            "Individual stock analysis",
-            "Candlestick charts",
-            "Percentage-based comparison",
-            "Market session tracking",
-            "70+ global symbols"
+            "24-Hour UTC Timeline",
+            "Global Stock Indices Selection",
+            "Market Session Tracking",
+            "Real-time Market Hours Display",
+            "Cross-timezone Market Analysis"
         ],
-          "endpoints": {
-            "health": "/health",
-            "symbols": "/symbols", 
-            "search": "/search/{query}",
-            "analyze": "/analyze",
-            "candlestick": "/candlestick",
-            "default-indices": "/default-indices",
-            "global-24h": "/global-24h",
-            "docs": "/docs"
+        "endpoints": {
+            "health": "/api/health",
+            "symbols": "/api/symbols", 
+            "search": "/api/search/{query}",
+            "analyze": "/api/analyze",
+            "market-hours": "/api/market-hours",
+            "docs": "/api/docs"
         },
-        "default_indices": ["^FTSE", "^GSPC", "^AXJO", "^N225"],
-        "supported_periods": ["24h", "3d", "1w", "2w", "1M", "3M", "6M", "1Y", "2Y", "5Y", "10Y"],
-        "candlestick_intervals": ["5m", "15m", "30m", "1h", "4h", "1d"],
+        "supported_indices": len(SYMBOLS_DB),
+        "markets_covered": list(set(info.market for info in SYMBOLS_DB.values())),
+        "chart_types": ["percentage", "price"],
         "key_features": [
-            "Default indices: FTSE 100, S&P 500, ASX 200, Nikkei 225",
-            "24-hour default view with percentage changes",
-            "Time ranges from 24 hours to 10 years",
-            "Candlestick charts with 5-minute to 1-day intervals",
-            "Market hours visualization and opening/closing points",
-            "Global market session tracking"
+            "24-hour UTC timeline focus",
+            "Global stock indices from all major markets",
+            "Real-time market session indicators",
+            "Opening and closing time visualization",
+            "Cross-market correlation analysis"
         ]
     }
 
-@app.get("/health")
+@app.get("/api/health")
 async def health_check():
-    """Health check endpoint"""
+    """Health check endpoint with multi-source live data status"""
+    utc_now = datetime.now(timezone.utc)
+    
+    # Check multi-source data aggregator status
+    live_data_status = "enabled" if LIVE_DATA_ENABLED else "disabled"
+    data_providers = []
+    
+    if LIVE_DATA_ENABLED:
+        # Get active providers from multi-source aggregator
+        for provider in multi_source_aggregator.providers:
+            if provider.is_configured():
+                data_providers.append(f"{provider.name} (configured)")
+            else:
+                data_providers.append(f"{provider.name} (not configured)")
+        
+        if not data_providers:
+            data_providers.append("No providers configured")
+    else:
+        data_providers.append("Live data disabled")
+    
     return {
         "status": "healthy",
-        "version": "7.0.0",
-        "service": "GSMT Ver 7.0 API",
-        "timestamp": datetime.now().isoformat(),
-        "deployment": "railway",
+        "version": "2.0.0",
+        "service": "Global Stock Market Tracker - Multi-Source Live Data",
+        "timestamp": utc_now.isoformat(),
+        "utc_time": utc_now.strftime('%Y-%m-%d %H:%M:%S UTC'),
+        "deployment": "local",
         "supported_symbols": len(SYMBOLS_DB),
         "markets": list(set(info.market for info in SYMBOLS_DB.values())),
+        "active_markets": get_currently_open_markets(utc_now.hour),
+        "live_data_status": live_data_status,
+        "total_providers": len(multi_source_aggregator.providers),
+        "data_providers": data_providers,
+        "demo_data_removed": True,
+        "require_live_data": REQUIRE_LIVE_DATA,
         "features": [
-            "Global 24H Market Flow tracking",
-            "Real-time market session indicators",
-            "Individual stock and index analysis",
-            "Candlestick and percentage charts"
+            "24-hour UTC timeline tracking",
+            "Multi-source live data aggregation",
+            "Global market session indicators",
+            "Real-time market hours display", 
+            "Multi-index selection and analysis",
+            "NO demo data fallbacks"
         ]
     }
 
-@app.get("/symbols")
+def get_currently_open_markets(utc_hour: int) -> List[str]:
+    """Get list of markets currently open at given UTC hour"""
+    open_markets = []
+    for market, hours in MARKET_HOURS.items():
+        if is_market_open_at_hour(utc_hour, market):
+            open_markets.append(market)
+    return open_markets
+
+@app.get("/api/symbols")
 async def get_symbols():
-    """Get all supported symbols organized by category"""
-    symbols_by_category = {}
+    """Get all supported symbols organized by market and category"""
+    symbols_by_market = {}
     
     for symbol, info in SYMBOLS_DB.items():
-        category = f"{info.market} {info.category}"
-        if category not in symbols_by_category:
-            symbols_by_category[category] = []
-        symbols_by_category[category].append(info.dict())
+        market = info.market
+        if market not in symbols_by_market:
+            symbols_by_market[market] = []
+        
+        symbol_data = info.dict()
+        # Add market hours info
+        market_hours = MARKET_HOURS.get(market, {"open": 0, "close": 23})
+        symbol_data["market_hours_utc"] = f"{market_hours['open']:02d}:00-{market_hours['close']:02d}:00"
+        
+        symbols_by_market[market].append(symbol_data)
     
     return {
         "total_symbols": len(SYMBOLS_DB),
-        "categories": symbols_by_category,
-        "supported_periods": [p.value for p in TimePeriod],
+        "markets": symbols_by_market,
         "chart_types": [c.value for c in ChartType],
-        "markets": list(set(info.market for info in SYMBOLS_DB.values())),
-        "market_hours": MARKET_HOURS
+        "market_hours_utc": MARKET_HOURS,
+        "timeline": "24-hour UTC focus"
     }
 
-@app.get("/search/{query}")
-async def search_symbols(query: str, limit: int = Query(default=10, ge=1, le=50)):
+@app.get("/api/live-status")
+async def get_live_status():
+    """Get real-time market status and refresh information"""
+    utc_now = datetime.now(timezone.utc)
+    
+    # Calculate when the next refresh will happen
+    next_refresh = utc_now.replace(second=0, microsecond=0)
+    minutes_to_next = 5 - (next_refresh.minute % 5)
+    if minutes_to_next == 5:
+        minutes_to_next = 0
+    next_refresh += timedelta(minutes=minutes_to_next)
+    
+    # Check which markets are currently open
+    currently_open_markets = []
+    for market, hours in MARKET_HOURS.items():
+        if is_market_open_at_hour(utc_now.hour, market):
+            # Check more precisely if market is actually open right now
+            if is_market_open_at_time(utc_now, hours):
+                currently_open_markets.append({
+                    "market": market,
+                    "hours_utc": f"{hours['open']:02d}:30-{hours['close']:02d}:30",
+                    "status": "open"
+                })
+    
+    return {
+        "current_time_utc": utc_now.isoformat(),
+        "display_time": utc_now.strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "next_refresh_utc": next_refresh.isoformat(),
+        "minutes_to_next_refresh": minutes_to_next,
+        "refresh_interval_minutes": 5,
+        "currently_open_markets": currently_open_markets,
+        "rolling_window_hours": 24,
+        "data_granularity": "5-minute intervals",
+        "last_data_update": utc_now.isoformat()
+    }
+
+@app.get("/api/search/{query}")
+async def search_symbols(query: str, limit: int = Query(default=20, ge=1, le=50)):
     """Search symbols by name, symbol, market, or category"""
     query_lower = query.lower()
     results = []
@@ -573,12 +639,14 @@ async def search_symbols(query: str, limit: int = Query(default=10, ge=1, le=50)
             query_lower in info.market.lower() or
             query_lower in info.category.lower()):
             
+            market_hours = MARKET_HOURS.get(info.market, {"open": 0, "close": 23})
             results.append({
                 "symbol": symbol,
                 "name": info.name,
                 "market": info.market,
                 "category": info.category,
-                "currency": info.currency
+                "currency": info.currency,
+                "market_hours_utc": f"{market_hours['open']:02d}:00-{market_hours['close']:02d}:00"
             })
     
     return {
@@ -587,39 +655,50 @@ async def search_symbols(query: str, limit: int = Query(default=10, ge=1, le=50)
         "total_found": len(results)
     }
 
-@app.get("/global-24h")
-async def get_global_24h_flow():
-    """Get 24-hour global market flow across Asia, Europe, US - CORE FEATURE"""
+@app.get("/api/market-hours")
+async def get_market_hours():
+    """Get current market hours and status across all markets"""
+    utc_now = datetime.now(timezone.utc)
+    current_hour = utc_now.hour
     
-    # Key global indices for 24-hour tracking
-    global_indices = [
-        "^N225",   # Nikkei 225 (Japan) - Asian open
-        "^HSI",    # Hang Seng (Hong Kong) - Asian continuation  
-        "^AXJO",   # ASX 200 (Australia) - Pacific market
-        "^FTSE",   # FTSE 100 (UK) - European open
-        "^GDAXI",  # DAX (Germany) - European main
-        "^GSPC",   # S&P 500 (US) - US market
-    ]
+    market_status = {}
+    for market, hours in MARKET_HOURS.items():
+        is_open = is_market_open_at_hour(current_hour, market)
+        
+        # Calculate next open/close time
+        if hours["open"] > hours["close"]:  # Overnight market
+            if current_hour >= hours["open"] or current_hour <= hours["close"]:
+                next_close = hours["close"] if current_hour >= hours["open"] else hours["close"]
+                next_event = "closes"
+                next_time = f"{next_close:02d}:00 UTC"
+            else:
+                next_event = "opens"
+                next_time = f"{hours['open']:02d}:00 UTC"
+        else:  # Regular market
+            if hours["open"] <= current_hour <= hours["close"]:
+                next_event = "closes"
+                next_time = f"{hours['close']:02d}:00 UTC"
+            else:
+                next_event = "opens"
+                next_time = f"{hours['open']:02d}:00 UTC"
+        
+        market_status[market] = {
+            "is_open": is_open,
+            "hours_utc": f"{hours['open']:02d}:00-{hours['close']:02d}:00",
+            "next_event": next_event,
+            "next_time": next_time
+        }
     
-    # Generate 24-hour flow data with market session awareness
-    symbol_data = generate_global_24h_data(global_indices)
-    symbol_metadata = {symbol: SYMBOLS_DB[symbol] for symbol in global_indices}
-    
-    return AnalysisResponse(
-        success=True,
-        data=symbol_data,
-        metadata=symbol_metadata,
-        market_hours=MARKET_HOURS,
-        period="24h",
-        chart_type="percentage",
-        timestamp=datetime.now().isoformat(),
-        total_symbols=len(global_indices),
-        successful_symbols=len(symbol_data)
-    ).dict()
+    return {
+        "current_utc_time": utc_now.strftime('%Y-%m-%d %H:%M:%S UTC'),
+        "current_utc_hour": current_hour,
+        "markets": market_status,
+        "currently_open": [market for market, status in market_status.items() if status["is_open"]]
+    }
 
-@app.post("/analyze", response_model=AnalysisResponse)
+@app.post("/api/analyze", response_model=AnalysisResponse)
 async def analyze_symbols(request: AnalysisRequest):
-    """Analyze individual symbols or mixed symbols with full chart type support"""
+    """Analyze selected symbols with 24-hour UTC timeline using live data when available"""
     
     # Validate symbols
     invalid_symbols = [s for s in request.symbols if s not in SYMBOLS_DB]
@@ -629,152 +708,144 @@ async def analyze_symbols(request: AnalysisRequest):
             detail=f"Unsupported symbols: {', '.join(invalid_symbols)}"
         )
     
-    # Generate data for all symbols
-    symbol_data = {}
-    symbol_metadata = {}
-    
-    for symbol in request.symbols:
-        try:
-            interval = request.interval if request.chart_type == ChartType.CANDLESTICK else CandlestickInterval.HOUR_1
-            data = generate_demo_data(symbol, request.period, request.chart_type, interval)
-            symbol_data[symbol] = data
-            symbol_metadata[symbol] = SYMBOLS_DB[symbol]
-        except Exception as e:
-            logger.error(f"Failed to generate data for {symbol}: {str(e)}")
-            continue
-    
-    return AnalysisResponse(
-        success=True,
-        data=symbol_data,
-        metadata=symbol_metadata,
-        period=request.period.value,
-        chart_type=request.chart_type.value,
-        timestamp=datetime.now().isoformat(),
-        total_symbols=len(request.symbols),
-        successful_symbols=len(symbol_data)
-    )
-
-@app.post("/candlestick")
-async def get_candlestick_data(request: CandlestickRequest):
-    """Get candlestick data with specific intervals (5min to 1day) for requested indices"""
-    
-    # Validate symbols
-    invalid_symbols = [s for s in request.symbols if s not in SYMBOLS_DB]
-    if invalid_symbols:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported symbols: {', '.join(invalid_symbols)}"
+    # Generate 24-hour data for all symbols (now with live data integration)
+    try:
+        symbol_data = await generate_24h_market_data_live(request.symbols, request.chart_type)
+        symbol_metadata = {symbol: SYMBOLS_DB[symbol] for symbol in request.symbols if symbol in SYMBOLS_DB}
+        
+        # Add data source information
+        data_source = "live" if LIVE_DATA_ENABLED else "demo"
+        
+        return AnalysisResponse(
+            success=True,
+            data=symbol_data,
+            metadata=symbol_metadata,
+            chart_type=request.chart_type.value,
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            total_symbols=len(request.symbols),
+            successful_symbols=len(symbol_data),
+            market_hours=MARKET_HOURS
         )
-    
-    symbol_data = {}
-    symbol_metadata = {}
-    
-    for symbol in request.symbols:
-        try:
-            data = generate_demo_data(symbol, request.period, ChartType.CANDLESTICK, request.interval)
-            symbol_data[symbol] = data
-            symbol_metadata[symbol] = SYMBOLS_DB[symbol]
-        except Exception as e:
-            logger.error(f"Failed to generate candlestick data for {symbol}: {str(e)}")
-            continue
-    
-    return AnalysisResponse(
-        success=True,
-        data=symbol_data,
-        metadata=symbol_metadata,
-        period=request.period.value,
-        chart_type="candlestick",
-        timestamp=datetime.now().isoformat(),
-        total_symbols=len(request.symbols),
-        successful_symbols=len(symbol_data)
-    )
+    except Exception as e:
+        logger.error(f"Failed to generate market data: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate market data: {str(e)}")
 
-@app.get("/default-indices")
-async def get_default_indices():
-    """Get the default indices (FTSE 100, S&P 500, ASX 200, Nikkei 225) with 24h percentage data"""
-    
-    # Default indices as specified in requirements
-    default_symbols = ['^FTSE', '^GSPC', '^AXJO', '^N225']
-    symbol_data = {}
-    symbol_metadata = {}
-    
-    for symbol in default_symbols:
-        try:
-            # Generate 24h percentage change data as default
-            data = generate_demo_data(symbol, TimePeriod.HOUR_24, ChartType.PERCENTAGE)
-            symbol_data[symbol] = data
-            symbol_metadata[symbol] = SYMBOLS_DB[symbol]
-        except Exception as e:
-            logger.error(f"Failed to generate data for default index {symbol}: {str(e)}")
-            continue
-    
-    return AnalysisResponse(
-        success=True,
-        data=symbol_data,
-        metadata=symbol_metadata,
-        period="24h",
-        chart_type="percentage", 
-        timestamp=datetime.now().isoformat(),
-        total_symbols=len(default_symbols),
-        successful_symbols=len(symbol_data)
-    )
+# Removed candlestick endpoint - focusing on 24h timeline only
 
-@app.get("/default-indices")
-async def get_default_indices():
-    """Get the default indices (FTSE 100, S&P 500, ASX 200, Nikkei 225) with 24h percentage data"""
+@app.get("/api/data-status")
+async def get_data_status():
+    """Get current multi-source data provider status and configuration"""
     
-    # Default indices as specified in requirements
-    default_symbols = ['^FTSE', '^GSPC', '^AXJO', '^N225']
-    symbol_data = {}
-    symbol_metadata = {}
+    # Get provider status from multi-source aggregator
+    provider_status = {}
+    for provider in multi_source_aggregator.providers:
+        provider_status[provider.name.lower().replace(' ', '_')] = {
+            "enabled": True,
+            "description": f"{provider.name} data provider",
+            "status": "configured" if provider.is_configured() else "not configured"
+        }
     
-    for symbol in default_symbols:
-        try:
-            # Generate 24h percentage change data as default
-            data = generate_demo_data(symbol, TimePeriod.HOUR_24, ChartType.PERCENTAGE)
-            symbol_data[symbol] = data
-            symbol_metadata[symbol] = SYMBOLS_DB[symbol]
-        except Exception as e:
-            logger.error(f"Failed to generate data for default index {symbol}: {str(e)}")
-            continue
-    
-    return AnalysisResponse(
-        success=True,
-        data=symbol_data,
-        metadata=symbol_metadata,
-        period="24h",
-        chart_type="percentage", 
-        timestamp=datetime.now().isoformat(),
-        total_symbols=len(default_symbols),
-        successful_symbols=len(symbol_data)
-    )
+    return {
+        "live_data_enabled": LIVE_DATA_ENABLED,
+        "require_live_data": REQUIRE_LIVE_DATA,
+        "demo_data_removed": True,
+        "total_providers": len(multi_source_aggregator.providers),
+        "data_providers": provider_status,
+        "cache_info": {
+            "cache_duration_minutes": int(os.getenv('DATA_CACHE_MINUTES', 3)),
+            "rate_limit_per_minute": int(os.getenv('MAX_API_CALLS_PER_MINUTE', 10))
+        },
+        "setup_instructions": {
+            "alpha_vantage": "Get free API key at https://www.alphavantage.co/support/#api-key",
+            "twelve_data": "Get free API key at https://twelvedata.com/",
+            "finnhub": "Get free API key at https://finnhub.io/",
+            "environment_file": "Add API keys to .env file (ALPHA_VANTAGE_API_KEY, TWELVE_DATA_API_KEY, FINNHUB_API_KEY)"
+        }
+    }
 
-# Enhanced startup event
+@app.get("/api/suggested-indices")
+async def get_suggested_indices():
+    """Get suggested global indices for 24-hour timeline analysis"""
+    
+    # Suggested indices across different time zones for 24h coverage
+    suggested = {
+        "asian_pacific": [
+            {"symbol": "^N225", "name": "Nikkei 225", "market": "Japan", "hours": "00:00-06:00 UTC"},
+            {"symbol": "^HSI", "name": "Hang Seng Index", "market": "Hong Kong", "hours": "01:00-08:00 UTC"},
+            {"symbol": "^AXJO", "name": "ASX 200", "market": "Australia", "hours": "23:00-06:00 UTC"}
+        ],
+        "european": [
+            {"symbol": "^FTSE", "name": "FTSE 100", "market": "UK", "hours": "08:00-16:00 UTC"},
+            {"symbol": "^GDAXI", "name": "DAX", "market": "Germany", "hours": "08:00-17:00 UTC"},
+            {"symbol": "^FCHI", "name": "CAC 40", "market": "France", "hours": "08:00-17:00 UTC"}
+        ],
+        "americas": [
+            {"symbol": "^GSPC", "name": "S&P 500", "market": "US", "hours": "14:30-21:00 UTC"},
+            {"symbol": "^IXIC", "name": "NASDAQ", "market": "US", "hours": "14:30-21:00 UTC"},
+            {"symbol": "^DJI", "name": "Dow Jones", "market": "US", "hours": "14:30-21:00 UTC"}
+        ]
+    }
+    
+    return {
+        "suggested_indices": suggested,
+        "total_coverage": "24-hour global market flow",
+        "recommendation": "Select at least one index from each region for complete 24h coverage"
+    }
+
+# Application startup event
 @app.on_event("startup")
 async def startup_event():
-    """Application startup"""
-    logger.info("🚀 GSMT Ver 7.0 Enhanced API Starting - Complete Stock Indices Tracker")
+    """Application startup with live data status"""
+    utc_now = datetime.now(timezone.utc)
+    logger.info("🚀 Global Stock Market Tracker v2.0 - Live Data Integration")
     logger.info(f"📊 Loaded {len(SYMBOLS_DB)} symbols across {len(set(info.market for info in SYMBOLS_DB.values()))} markets")
-    logger.info("📍 Default indices: FTSE 100, S&P 500, ASX 200, Nikkei 225 (auto-selected)")
-    logger.info("⏰ Time ranges: 24h (default) to 10 years supported")
-    logger.info("📈 Candlestick intervals: 5min, 15min, 30min, 1h, 4h, 1d")
-    logger.info("🌍 Market hours tracking with opening/closing visualization:")
-    logger.info("   • FTSE 100: 08:00-16:30 GMT (London)")
-    logger.info("   • S&P 500: 09:30-16:00 EST / 14:30-21:00 UTC (New York)")
-    logger.info("   • ASX 200: 10:00-16:00 AEST / 23:00-06:00 UTC (Sydney)")
-    logger.info("   • Nikkei 225: 09:00-15:00 JST / 00:00-06:00 UTC (Tokyo)")
-    logger.info("🎯 Global 24H Market Flow with session overlays")
-    logger.info("✅ Percentage-based analysis with market awareness")
-    logger.info("🚀 Enhanced and ready for Railway deployment")
+    logger.info(f"🕐 Current UTC Time: {utc_now.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    
+    # Multi-source live data status
+    if LIVE_DATA_ENABLED:
+        logger.info("📶 Multi-Source Live Data: ENABLED")
+        logger.info(f"   • Total Providers: {len(multi_source_aggregator.providers)}")
+        
+        for provider in multi_source_aggregator.providers:
+            status = "✅ CONFIGURED" if provider.is_configured() else "❌ NOT CONFIGURED"
+            logger.info(f"   • {provider.name}: {status}")
+        
+        logger.info("   • Demo Data Fallback: COMPLETELY REMOVED")
+        logger.info(f"   • Require Live Data: {REQUIRE_LIVE_DATA}")
+    else:
+        logger.error("📶 Live Data: DISABLED - Service will not function without live data")
+    
+    logger.info("⏰ Focus: 24-Hour UTC Timeline Only")
+    logger.info("🌍 Market Coverage:")
+    for market, hours in MARKET_HOURS.items():
+        status = "🟢 OPEN" if is_market_open_at_hour(utc_now.hour, market) else "🔴 CLOSED"
+        logger.info(f"   • {market}: {hours['open']:02d}:00-{hours['close']:02d}:00 UTC {status}")
+    
+    logger.info("✅ Ready for local deployment with live data integration")
+    logger.info("🌐 Frontend served at: http://localhost:8000/")
+    logger.info("📚 API docs at: http://localhost:8000/api/docs")
+    logger.info("📊 Data status at: http://localhost:8000/api/data-status")
+    
+    logger.info(f"🔗 Multi-source data providers: {len(multi_source_aggregator.providers)} configured")
+    logger.info("")
+    logger.info("💡 To configure additional providers, add API keys to .env:")
+    logger.info("   ALPHA_VANTAGE_API_KEY=your_key")
+    logger.info("   TWELVE_DATA_API_KEY=your_key") 
+    logger.info("   FINNHUB_API_KEY=your_key")
+
+# Mount static files AFTER all API routes are defined
+if os.path.exists("frontend"):
+    app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
 
 if __name__ == "__main__":
-    try:
-        import uvicorn
-    except ImportError:
-        import subprocess
-        import sys
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "uvicorn"])
-        import uvicorn
+    import uvicorn
     
     port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+    logger.info(f"Starting server on http://0.0.0.0:{port}")
+    uvicorn.run(
+        app, 
+        host="0.0.0.0", 
+        port=port, 
+        log_level="info",
+        reload=False
+    )

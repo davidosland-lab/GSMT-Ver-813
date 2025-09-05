@@ -1,32 +1,23 @@
 #!/bin/bash
+# Global Stock Market Tracker - Startup Script
 
-# Railway deployment startup script for GSMT Ver 7.0
-echo "🚀 Starting GSMT Ver 7.0 deployment..."
+echo "🚀 Starting Global Stock Market Tracker..."
 
-# Check Python installation
-echo "📋 Checking Python environment..."
-python3 --version || python --version || {
-    echo "❌ Python not found!"
-    exit 1
-}
-
-# Check pip installation  
-echo "📦 Checking pip installation..."
-python3 -m pip --version || python -m pip --version || {
-    echo "❌ pip not found!"
-    exit 1
-}
-
-# Install dependencies
-echo "⬇️ Installing dependencies..."
-python3 -m pip install -r requirements.txt || python -m pip install -r requirements.txt || {
-    echo "❌ Failed to install dependencies!"
-    exit 1
-}
-
-# Get port from environment or default to 8000
-PORT=${PORT:-8000}
-echo "🌐 Starting server on port $PORT..."
-
-# Start the application
-exec python3 app.py || exec python app.py
+# Check if PM2 is available
+if command -v pm2 &> /dev/null; then
+    echo "📦 Using PM2 for process management..."
+    pm2 start ecosystem.config.json
+    pm2 logs global-market-tracker --nostream
+else
+    # Check if supervisor is available
+    if command -v supervisord &> /dev/null; then
+        echo "📦 Using Supervisor for process management..."
+        supervisord -c supervisord.conf
+        sleep 2
+        supervisorctl -c supervisord.conf status
+    else
+        echo "🔧 No process manager found, starting directly..."
+        echo "💡 Consider installing PM2 (npm install -g pm2) or supervisor (pip install supervisor)"
+        python3 app.py
+    fi
+fi
