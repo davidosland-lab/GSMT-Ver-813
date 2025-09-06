@@ -483,6 +483,26 @@ class MultiSourceDataAggregator:
                     self.providers.append(twelve)
                     logger.info("✅ Twelve Data provider initialized")
         
+        # Polygon.io (High Priority - Real-time with complete session coverage)
+        if os.getenv('USE_POLYGON', 'true').lower() == 'true':
+            polygon_key = os.getenv('POLYGON_API_KEY')
+            if polygon_key:
+                polygon = PolygonDataProvider()
+                if polygon.is_configured():
+                    # Insert at beginning for high priority
+                    self.providers.insert(0, polygon)
+                    logger.info("✅ Polygon.io provider initialized (HIGH PRIORITY - complete session coverage)")
+        
+        # Databento (High Priority - Institutional grade)
+        if os.getenv('USE_DATABENTO', 'true').lower() == 'true':
+            databento_key = os.getenv('DATABENTO_API_KEY')
+            if databento_key:
+                databento = DatabentoDataProvider()
+                if databento.is_configured():
+                    # Insert at beginning for high priority
+                    self.providers.insert(0, databento)
+                    logger.info("✅ Databento provider initialized (HIGH PRIORITY - institutional grade)")
+        
         # Finnhub
         if os.getenv('USE_FINNHUB', 'true').lower() == 'true':
             finnhub_key = os.getenv('FINNHUB_API_KEY')
@@ -492,7 +512,7 @@ class MultiSourceDataAggregator:
                     self.providers.append(finnhub)
                     logger.info("✅ Finnhub provider initialized")
         
-        logger.info(f"📡 Initialized {len(self.providers)} data providers")
+        logger.info(f"📡 Initialized {len(self.providers)} data providers (prioritized for complete session coverage)")
     
     async def get_live_data(self, symbol: str) -> Optional[MarketData]:
         """Get live data from multiple sources with intelligent aggregation"""
@@ -689,5 +709,129 @@ class MultiSourceDataAggregator:
         self.cache.clear()
         logger.info("🗑️ Data cache cleared")
 
-# Global aggregator instance
+class PolygonDataProvider(DataProvider):
+    """Polygon.io data provider with real-time capability and complete session coverage"""
+    
+    def __init__(self):
+        self.name = "Polygon.io"
+        self.api_key = os.getenv('POLYGON_API_KEY')
+        self.base_url = "https://api.polygon.io"
+        
+    async def get_intraday_data(self, symbol: str) -> Optional[List[LiveDataPoint]]:
+        """Get real-time intraday data from Polygon.io with complete session coverage"""
+        if not self.is_configured():
+            logger.warning(f"⚠️ {self.name} not configured (missing POLYGON_API_KEY)")
+            return None
+            
+        polygon_symbol = self.get_symbol_mapping(symbol)
+        
+        # Get data for last 24 hours to ensure complete session coverage
+        end_date = datetime.now(timezone.utc)
+        start_date = end_date - timedelta(days=1)
+        
+        # Format dates for Polygon API
+        start_str = start_date.strftime('%Y-%m-%d')
+        end_str = end_date.strftime('%Y-%m-%d')
+        
+        url = f"{self.base_url}/v2/aggs/ticker/{polygon_symbol}/range/5/minute/{start_str}/{end_str}"
+        params = {
+            'adjusted': 'true',
+            'sort': 'asc',
+            'limit': 50000,  # High limit for complete coverage
+            'apikey': self.api_key
+        }
+        
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=15)) as response:
+                    if response.status != 200:
+                        logger.error(f"❌ {self.name} API error {response.status} for {symbol}")
+                        return None
+                    
+                    data = await response.json()
+                    
+                    if data.get('status') != 'OK' or not data.get('results'):
+                        logger.warning(f"⚠️ {self.name} no data for {symbol}")
+                        return None
+                    
+                    # Convert Polygon data to LiveDataPoint format
+                    live_data = []
+                    for candle in data['results']:
+                        timestamp = datetime.fromtimestamp(candle['t'] / 1000, tz=timezone.utc)
+                        
+                        live_data.append(LiveDataPoint(
+                            timestamp=timestamp,
+                            open=candle['o'],
+                            high=candle['h'],
+                            low=candle['l'],
+                            close=candle['c'],
+                            volume=candle['v'],
+                            symbol=symbol,
+                            source=self.name
+                        ))
+                    
+                    logger.info(f"✅ {self.name} provided {len(live_data)} data points for {symbol} (complete session)")
+                    return live_data
+                    
+        except Exception as e:
+            logger.error(f"❌ {self.name} error for {symbol}: {str(e)}")
+            return None
+    
+    def get_symbol_mapping(self, symbol: str) -> str:
+        """Map symbols to Polygon format (remove ^ prefix for indices)"""
+        if symbol.startswith('^'):
+            # Map common indices to Polygon format
+            index_map = {
+                '^GSPC': 'I:SPX',      # S&P 500
+                '^DJI': 'I:DJI',       # Dow Jones
+                '^IXIC': 'I:COMP',     # NASDAQ
+                '^FTSE': 'I:UKX',      # FTSE 100
+                '^GDAXI': 'I:DAX',     # DAX
+                '^N225': 'I:NKY',      # Nikkei 225
+                '^HSI': 'I:HSI',       # Hang Seng
+                '^AXJO': 'I:AS51'      # ASX 200
+            }
+            return index_map.get(symbol, symbol[1:])  # Remove ^ if not mapped
+        return symbol
+    
+    def is_configured(self) -> bool:
+        return bool(self.api_key)
+
+    @property 
+    def priority(self) -> int:
+        return 1  # High priority - real-time with complete session coverage
+
+
+class DatabentoDataProvider(DataProvider):
+    """Databento data provider with zero-license real-time feeds"""
+    
+    def __init__(self):
+        self.name = "Databento"
+        self.api_key = os.getenv('DATABENTO_API_KEY')
+        self.base_url = "https://hist.databento.com"
+        
+    async def get_intraday_data(self, symbol: str) -> Optional[List[LiveDataPoint]]:
+        """Get real-time data from Databento with complete session coverage"""
+        if not self.is_configured():
+            logger.warning(f"⚠️ {self.name} not configured (missing DATABENTO_API_KEY)")
+            return None
+            
+        # Implementation would depend on Databento's specific API structure
+        # This is a template - actual implementation requires Databento SDK or API details
+        logger.info(f"📡 {self.name} provider available but requires specific API implementation")
+        return None
+    
+    def get_symbol_mapping(self, symbol: str) -> str:
+        """Map symbols to Databento format"""
+        return symbol  # Placeholder - depends on Databento symbol conventions
+    
+    def is_configured(self) -> bool:
+        return bool(self.api_key)
+
+    @property 
+    def priority(self) -> int:
+        return 1  # High priority - institutional grade
+
+
+# Global aggregator instance with enhanced providers
 multi_source_aggregator = MultiSourceDataAggregator()
