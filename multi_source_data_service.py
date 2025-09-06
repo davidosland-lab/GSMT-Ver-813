@@ -271,7 +271,7 @@ class AlphaVantageProvider(DataProvider):
             return []
 
 class TwelveDataProvider(DataProvider):
-    """Twelve Data provider"""
+    """Twelve Data provider - Enhanced for complete session coverage"""
     
     def __init__(self, api_key: str):
         self.api_key = api_key
@@ -282,78 +282,140 @@ class TwelveDataProvider(DataProvider):
         return "Twelve Data"
     
     def is_configured(self) -> bool:
-        return bool(self.api_key and self.api_key.strip())
+        return bool(self.api_key and self.api_key.strip() and self.api_key != 'demo')
     
     def get_symbol_mapping(self, symbol: str) -> str:
+        """Enhanced symbol mapping for Twelve Data"""
         mapping = {
-            '^FTSE': 'UKX',
-            '^GSPC': 'SPX',
-            '^IXIC': 'IXIC', 
-            '^DJI': 'DJI',
-            '^N225': 'N225',
-            '^HSI': 'HSI',
-            '^AXJO': 'AS51',
-            '^GDAXI': 'DAX',
-            '^FCHI': 'CAC'
+            # Major US Indices
+            '^GSPC': 'SPX',      # S&P 500
+            '^IXIC': 'IXIC',     # NASDAQ
+            '^DJI': 'DJI',       # Dow Jones
+            
+            # European Indices  
+            '^FTSE': 'UKX',      # FTSE 100
+            '^GDAXI': 'DAX',     # DAX
+            '^FCHI': 'CAC',      # CAC 40
+            
+            # Asian Indices
+            '^N225': 'N225',     # Nikkei 225
+            '^HSI': 'HSI',       # Hang Seng
+            '^AXJO': 'AS51',     # ASX 200
+            
+            # Additional indices
+            '^STOXX50E': 'SX5E', # Euro Stoxx 50
+            '^IBEX': 'IBEX',     # IBEX 35
         }
         return mapping.get(symbol, symbol.replace('^', ''))
     
     async def get_intraday_data(self, symbol: str) -> Optional[List[LiveDataPoint]]:
+        """Enhanced intraday data with complete session coverage"""
         if not self.is_configured():
+            logger.warning(f"⚠️ {self.name} not configured (missing or invalid API key)")
             return None
         
-        try:
-            td_symbol = self.get_symbol_mapping(symbol)
-            url = f"{self.base_url}/time_series"
-            params = {
-                'symbol': td_symbol,
-                'interval': '1h',
-                'outputsize': '24',
-                'apikey': self.api_key
-            }
+        td_symbol = self.get_symbol_mapping(symbol)
+        
+        # Try multiple intervals for complete session coverage
+        intervals_to_try = ['5min', '15min', '30min', '1h']
+        
+        for interval in intervals_to_try:
+            try:
+                url = f"{self.base_url}/time_series"
+                params = {
+                    'symbol': td_symbol,
+                    'interval': interval,
+                    'outputsize': 96 if interval == '5min' else 48,  # More data for 5min
+                    'apikey': self.api_key,
+                    'format': 'json',
+                    'order': 'desc'  # Latest data first
+                }
+                
+                timeout = aiohttp.ClientTimeout(total=20)
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.get(url, params=params) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            
+                            # Check for API errors
+                            if 'code' in data and data['code'] != 200:
+                                if 'limit' in data.get('message', '').lower():
+                                    logger.warning(f"⚠️ {self.name} rate limit reached for {symbol}")
+                                else:
+                                    logger.error(f"❌ {self.name} API error: {data.get('message', 'Unknown')}")
+                                continue
+                            
+                            parsed_data = self._parse_response(data, symbol)
+                            if parsed_data:
+                                logger.info(f"✅ {self.name} provided {len(parsed_data)} points for {symbol} ({interval} interval)")
+                                return parsed_data
+                        
+                        elif response.status == 429:
+                            logger.warning(f"⚠️ {self.name} rate limited for {symbol} ({interval})")
+                            continue
+                        else:
+                            logger.warning(f"⚠️ {self.name} HTTP {response.status} for {symbol} ({interval})")
+                            continue
             
-            timeout = aiohttp.ClientTimeout(total=15)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(url, params=params) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return self._parse_response(data, symbol)
-                    else:
-                        logger.warning(f"Twelve Data error {response.status} for {symbol}")
-                        return None
+            except Exception as e:
+                logger.error(f"❌ {self.name} error for {symbol} ({interval}): {str(e)}")
+                continue
         
-        except Exception as e:
-            logger.error(f"Twelve Data error for {symbol}: {e}")
-            return None
+        logger.warning(f"❌ {self.name} failed all intervals for {symbol}")
+        return None
     
     def _parse_response(self, data: dict, symbol: str) -> List[LiveDataPoint]:
+        """Enhanced response parsing with better error handling"""
         try:
             if 'code' in data and data['code'] != 200:
-                logger.error(f"Twelve Data API error: {data.get('message', 'Unknown error')}")
+                logger.error(f"❌ {self.name} API error: {data.get('message', 'Unknown error')}")
                 return []
             
             values = data.get('values', [])
+            if not values:
+                logger.warning(f"⚠️ {self.name} no data values for {symbol}")
+                return []
             
             data_points = []
             for item in values:
-                timestamp = datetime.strptime(item['datetime'], '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
+                try:
+                    # Handle different datetime formats
+                    datetime_str = item['datetime']
+                    if 'T' in datetime_str:
+                        # ISO format: 2024-01-01T10:00:00
+                        timestamp = datetime.fromisoformat(datetime_str.replace('T', ' ')).replace(tzinfo=timezone.utc)
+                    else:
+                        # Standard format: 2024-01-01 10:00:00
+                        timestamp = datetime.strptime(datetime_str, '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
+                    
+                    data_points.append(LiveDataPoint(
+                        timestamp=timestamp,
+                        open=float(item['open']),
+                        high=float(item['high']),
+                        low=float(item['low']),
+                        close=float(item['close']),
+                        volume=int(float(item.get('volume', 0))),
+                        symbol=symbol,
+                        source=self.name
+                    ))
                 
-                data_points.append(LiveDataPoint(
-                    timestamp=timestamp,
-                    open=float(item['open']),
-                    high=float(item['high']),
-                    low=float(item['low']),
-                    close=float(item['close']),
-                    volume=int(float(item.get('volume', 0))),
-                    symbol=symbol,
-                    source="Twelve Data"
-                ))
+                except (ValueError, KeyError) as e:
+                    logger.warning(f"⚠️ {self.name} skipping invalid data point for {symbol}: {e}")
+                    continue
+            
+            if not data_points:
+                logger.warning(f"⚠️ {self.name} no valid data points parsed for {symbol}")
+                return []
             
             return sorted(data_points, key=lambda x: x.timestamp)
         
         except Exception as e:
-            logger.error(f"Error parsing Twelve Data response for {symbol}: {e}")
+            logger.error(f"❌ {self.name} error parsing response for {symbol}: {e}")
             return []
+    
+    @property
+    def priority(self) -> int:
+        return 2  # High priority - reliable provider with complete session coverage
 
 class FinnhubProvider(DataProvider):
     """Finnhub data provider"""
@@ -474,14 +536,22 @@ class MultiSourceDataAggregator:
                     self.providers.append(alpha)
                     logger.info("✅ Alpha Vantage provider initialized")
         
-        # Twelve Data
+        # Twelve Data (Enhanced - High Priority for complete session coverage)
         if os.getenv('USE_TWELVE_DATA', 'true').lower() == 'true':
             twelve_key = os.getenv('TWELVE_DATA_API_KEY')
-            if twelve_key:
+            if twelve_key and twelve_key.strip() and twelve_key != 'demo':
                 twelve = TwelveDataProvider(twelve_key)
                 if twelve.is_configured():
-                    self.providers.append(twelve)
-                    logger.info("✅ Twelve Data provider initialized")
+                    # Insert near beginning for high priority (after Polygon/Databento)
+                    if len(self.providers) >= 2:
+                        self.providers.insert(2, twelve)  # Third priority after Polygon/Databento
+                    else:
+                        self.providers.insert(0, twelve)  # First if no premium providers
+                    logger.info("✅ Twelve Data provider initialized (HIGH PRIORITY - complete session coverage)")
+                else:
+                    logger.warning("⚠️ Twelve Data API key invalid")
+            else:
+                logger.info("⚠️ Twelve Data not configured or using demo key")
         
         # Polygon.io (High Priority - Real-time with complete session coverage)
         if os.getenv('USE_POLYGON', 'true').lower() == 'true':
@@ -713,9 +783,12 @@ class PolygonDataProvider(DataProvider):
     """Polygon.io data provider with real-time capability and complete session coverage"""
     
     def __init__(self):
-        self.name = "Polygon.io"
         self.api_key = os.getenv('POLYGON_API_KEY')
         self.base_url = "https://api.polygon.io"
+    
+    @property
+    def name(self) -> str:
+        return "Polygon.io"
         
     async def get_intraday_data(self, symbol: str) -> Optional[List[LiveDataPoint]]:
         """Get real-time intraday data from Polygon.io with complete session coverage"""
@@ -806,9 +879,12 @@ class DatabentoDataProvider(DataProvider):
     """Databento data provider with zero-license real-time feeds"""
     
     def __init__(self):
-        self.name = "Databento"
         self.api_key = os.getenv('DATABENTO_API_KEY')
         self.base_url = "https://hist.databento.com"
+    
+    @property
+    def name(self) -> str:
+        return "Databento"
         
     async def get_intraday_data(self, symbol: str) -> Optional[List[LiveDataPoint]]:
         """Get real-time data from Databento with complete session coverage"""
