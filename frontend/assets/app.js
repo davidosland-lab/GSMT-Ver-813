@@ -311,8 +311,19 @@ class GlobalMarketTracker {
                 const value = chartType === 'percentage' ? point.percentage_change : point.close;
                 
                 // For y-axis scaling, collect all valid values regardless of market_open status
+                // Filter out extreme outliers that would skew the y-axis inappropriately
                 if (value !== null && !isNaN(value)) {
-                    allValues.push(value);
+                    // For percentage charts, filter out extreme outliers (>±50%)
+                    if (chartType === 'percentage') {
+                        if (Math.abs(value) <= 50) {  // Reasonable percentage change limit
+                            allValues.push(value);
+                        } else {
+                            console.warn(`Filtering extreme outlier: ${value}% for better y-axis scaling`);
+                        }
+                    } else {
+                        // For price charts, no filtering needed
+                        allValues.push(value);
+                    }
                 }
                 
                 // For display, only show values when market is open OR when we have valid data

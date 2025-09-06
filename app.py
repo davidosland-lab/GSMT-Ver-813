@@ -346,7 +346,14 @@ def convert_live_data_to_24h_format(live_points: List[LiveDataPoint], symbol: st
         if is_market_open_hour and best_point:
             # Market is open and we have live data
             if chart_type == ChartType.PERCENTAGE:
-                percentage_change = ((best_point.close - base_price) / base_price) * 100
+                # Protect against division by zero or extremely small base prices
+                if base_price and abs(base_price) > 0.001:  # Minimum reasonable price
+                    percentage_change = ((best_point.close - base_price) / base_price) * 100
+                    # Cap extreme percentage changes to prevent y-axis scaling issues
+                    percentage_change = max(-50.0, min(50.0, percentage_change))
+                else:
+                    logger.warning(f"Invalid base price {base_price} for {symbol}, skipping percentage calculation")
+                    percentage_change = 0.0
             else:
                 percentage_change = best_point.close
             
@@ -464,7 +471,16 @@ def find_market_close_data(current_time: datetime, data_lookup: dict, market_hou
 # ALL DEMO DATA FUNCTIONS REMOVED - USING MULTI-SOURCE LIVE DATA ONLY
 
 def is_market_open_at_hour(hour: int, market: str) -> bool:
-    """Check if market is open at given UTC hour"""
+    """Check if market is open at given UTC hour with weekend detection"""
+    utc_now = datetime.now(timezone.utc)
+    weekday = utc_now.weekday()  # 0=Monday, 6=Sunday
+    
+    # Markets are closed on weekends (Saturday=5, Sunday=6)
+    if weekday >= 5:  # Saturday or Sunday
+        # Only crypto/24-hour markets might be open on weekends
+        if market not in ['Global']:  # Global might include crypto
+            return False
+    
     market_hours = MARKET_HOURS.get(market, {"open": 0, "close": 23})
     
     # Handle overnight markets (like Australia)
