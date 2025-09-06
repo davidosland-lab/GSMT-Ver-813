@@ -307,14 +307,20 @@ class GlobalMarketTracker {
             
             // Handle null values - ECharts will create gaps in the line for null values
             const values = points.map(point => {
-                if (!point.market_open || point.percentage_change === null || point.close === null) {
-                    return null;  // This creates a gap in the line chart
-                }
+                // Determine the value to display based on chart type
                 const value = chartType === 'percentage' ? point.percentage_change : point.close;
+                
+                // For y-axis scaling, collect all valid values regardless of market_open status
                 if (value !== null && !isNaN(value)) {
                     allValues.push(value);
                 }
-                return value;
+                
+                // For display, only show values when market is open OR when we have valid data
+                if (value !== null && !isNaN(value)) {
+                    return value;
+                } else {
+                    return null;  // This creates a gap in the line chart
+                }
             });
             
             series.push({
