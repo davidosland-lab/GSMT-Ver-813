@@ -480,30 +480,47 @@ class GlobalMarketTracker {
         const range = maxValue - minValue;
 
         if (chartType === 'percentage') {
-            // For percentage charts, create a reasonable range around the data
+            // For percentage charts, create a tight 2-3% range for better visualization
             if (range === 0) {
                 // If all values are the same, create a small range around that value
                 const center = minValue;
                 return {
                     ...baseConfig,
-                    min: Math.max(center - 2, -10), // Don't go below -10%
-                    max: Math.min(center + 2, 10)   // Don't go above +10%
+                    min: center - 1.5, // 1.5% below center
+                    max: center + 1.5  // 1.5% above center
                 };
             } else {
-                // Add padding to the range (20% on each side)
-                const padding = range * 0.2;
+                // Add minimal padding to the range (10% on each side)
+                const padding = Math.max(range * 0.1, 0.2); // At least 0.2% padding
                 const suggestedMin = minValue - padding;
                 const suggestedMax = maxValue + padding;
                 
-                // Round to nice values and ensure reasonable bounds
-                const roundedMin = Math.max(Math.floor(suggestedMin), -20);
-                const roundedMax = Math.min(Math.ceil(suggestedMax), 20);
-                
-                return {
-                    ...baseConfig,
-                    min: roundedMin,
-                    max: roundedMax
-                };
+                // Ensure the range is at least 2% but not more than 3% total
+                const totalRange = suggestedMax - suggestedMin;
+                if (totalRange < 2) {
+                    // Expand to 2% range
+                    const center = (suggestedMin + suggestedMax) / 2;
+                    return {
+                        ...baseConfig,
+                        min: Math.round((center - 1) * 100) / 100,    // 1% below center
+                        max: Math.round((center + 1) * 100) / 100     // 1% above center
+                    };
+                } else if (totalRange > 3) {
+                    // Compress to 3% range centered on data
+                    const center = (minValue + maxValue) / 2;
+                    return {
+                        ...baseConfig,
+                        min: Math.round((center - 1.5) * 100) / 100,  // 1.5% below center
+                        max: Math.round((center + 1.5) * 100) / 100   // 1.5% above center
+                    };
+                } else {
+                    // Use calculated range (between 2-3%)
+                    return {
+                        ...baseConfig,
+                        min: Math.round(suggestedMin * 100) / 100,
+                        max: Math.round(suggestedMax * 100) / 100
+                    };
+                }
             }
         } else {
             // For price charts, let ECharts auto-scale but with some padding
