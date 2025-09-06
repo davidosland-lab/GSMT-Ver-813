@@ -43,6 +43,18 @@ class GlobalMarketTracker {
             // Load suggested indices
             await this.loadSuggestedIndices();
             
+            // Auto-select indices for testing y-axis scaling
+            this.selectedIndices.add('^GSPC'); // S&P 500
+            this.selectedIndices.add('^N225'); // Nikkei 225
+            this.updateSelectedIndicesDisplay();
+            this.updateAnalyzeButton();
+            
+            // Auto-analyze for testing
+            setTimeout(() => {
+                console.log('🔧 Auto-analyzing for y-axis testing...');
+                this.analyzeSelectedIndices();
+            }, 2000);
+            
             // Auto-refresh every 5 minutes
             this.startAutoRefresh();
             
