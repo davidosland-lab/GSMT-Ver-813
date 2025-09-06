@@ -300,6 +300,7 @@ class GlobalMarketTracker {
         
         // Calculate data range for intelligent y-axis scaling
         let allValues = [];
+        console.log('🔍 Y-Axis Debug: Starting chart update for chart type:', chartType);
         
         // Create series for each selected index
         Object.entries(data.data).forEach(([symbol, points]) => {
@@ -376,6 +377,14 @@ class GlobalMarketTracker {
             }
         });
         
+        // Debug y-axis scaling values
+        console.log('🔍 Y-Axis Debug: All values collected:', allValues);
+        console.log('🔍 Y-Axis Debug: Values count:', allValues.length);
+        if (allValues.length > 0) {
+            console.log('🔍 Y-Axis Debug: Min value:', Math.min(...allValues));
+            console.log('🔍 Y-Axis Debug: Max value:', Math.max(...allValues));
+        }
+        
         // Add current time indicator for rolling window - match new x-axis format
         const now = new Date();
         const currentMonth = (now.getUTCMonth() + 1).toString().padStart(2, '0');
@@ -447,7 +456,11 @@ class GlobalMarketTracker {
                 nameLocation: 'middle',
                 nameGap: 30
             },
-            yAxis: this.getYAxisConfig(chartType, allValues),
+            yAxis: (() => {
+                const yAxisConfig = this.getYAxisConfig(chartType, allValues);
+                console.log('🔍 Y-Axis Debug: Final y-axis config:', yAxisConfig);
+                return yAxisConfig;
+            })(),
             series: series.concat([{
                 type: 'line',
                 markLine: {
