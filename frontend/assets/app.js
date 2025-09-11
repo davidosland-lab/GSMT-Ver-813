@@ -777,23 +777,48 @@ class GlobalMarketTracker {
                 nameGap: 30
             },
             yAxis: this.getYAxisConfig(chartType, allValues),
-            series: series.concat([{
-                type: 'line',
-                markLine: {
-                    silent: true,
-                    data: markLines
-                },
-                markArea: {
-                    silent: true,
-                    data: this.getMarketSessionIndicators(chartType),
-                    label: {
-                        show: true,
-                        position: 'top',
-                        color: '#666',
-                        fontSize: 10
+            series: chartType === 'candlestick' ? 
+                // For candlestick charts, add markLine/markArea to the first candlestick series
+                series.map((s, index) => {
+                    if (index === 0) {
+                        return {
+                            ...s,
+                            markLine: {
+                                silent: true,
+                                data: markLines
+                            },
+                            markArea: {
+                                silent: true,
+                                data: this.getMarketSessionIndicators(chartType),
+                                label: {
+                                    show: true,
+                                    position: 'top',
+                                    color: '#666',
+                                    fontSize: 10
+                                }
+                            }
+                        };
                     }
-                }
-            }])
+                    return s;
+                }) :
+                // For line charts, use the original approach
+                series.concat([{
+                    type: 'line',
+                    markLine: {
+                        silent: true,
+                        data: markLines
+                    },
+                    markArea: {
+                        silent: true,
+                        data: this.getMarketSessionIndicators(chartType),
+                        label: {
+                            show: true,
+                            position: 'top',
+                            color: '#666',
+                            fontSize: 10
+                        }
+                    }
+                }])
         };
         
         // Clear and re-initialize chart for candlestick mode to ensure proper rendering
