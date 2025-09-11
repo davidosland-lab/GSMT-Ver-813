@@ -495,6 +495,7 @@ class GlobalMarketTracker {
                     };
                     
                     console.log(`📊 Adding percentage candlestick series for ${symbol}: ${candlestickData.length} total points (${candlestickData.filter(d => d !== null).length} with data)`);
+                    console.log(`🕯️ Candlestick series configuration:`, candlestickSeries);
                     series.push(candlestickSeries);
                 }
             } else {
@@ -795,6 +796,11 @@ class GlobalMarketTracker {
             }])
         };
         
+        // Clear and re-initialize chart for candlestick mode to ensure proper rendering
+        if (chartType === 'candlestick') {
+            this.chartInstance.clear();
+        }
+        
         this.chartInstance.setOption(option, true);
     }
     
@@ -996,6 +1002,11 @@ class GlobalMarketTracker {
             grid: gridConfig,
             series: allSeries
         };
+        
+        // Clear and re-initialize chart for candlestick mode to ensure proper rendering
+        if (chartType === 'candlestick') {
+            this.chartInstance.clear();
+        }
         
         this.chartInstance.setOption(option, true);
     }
