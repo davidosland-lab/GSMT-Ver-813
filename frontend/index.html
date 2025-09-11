@@ -217,32 +217,92 @@
                     </div>
                 </div>
                 
-                <!-- Index Search -->
-                <div class="mb-4">
-                    <div class="relative">
-                        <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
-                        <input 
-                            type="text" 
-                            id="index-search" 
-                            placeholder="Search indices (e.g., S&P 500, FTSE, Nikkei)..."
-                            class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                            aria-label="Search stock market indices"
-                            title="Search for stock market indices"
-                        >
+                <!-- Market Selection Dropdown Interface -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <!-- Market Categories Dropdown -->
+                    <div class="space-y-4">
+                        <h3 class="text-sm font-medium text-gray-700">Select Markets by Category</h3>
+                        
+                        <!-- Region Selection -->
+                        <div class="relative">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Market Region</label>
+                            <select id="region-dropdown" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                                <option value="">Choose a region...</option>
+                                <option value="asia_pacific">🌏 Asia Pacific</option>
+                                <option value="europe_middle_east_africa">🌍 Europe, Middle East & Africa</option>
+                                <option value="americas">🌎 Americas</option>
+                                <option value="major_global_stocks">💼 Major Global Stocks</option>
+                                <option value="commodities_energy">🏗️ Commodities & Energy</option>
+                                <option value="cryptocurrencies">💰 Cryptocurrencies</option>
+                                <option value="forex_majors">💱 Forex Majors</option>
+                            </select>
+                        </div>
+
+                        <!-- Markets Dropdown (populated based on region) -->
+                        <div class="relative">
+                            <label class="block text-xs font-medium text-gray-600 mb-1">Available Markets</label>
+                            <select id="markets-dropdown" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent" disabled>
+                                <option value="">Select a region first...</option>
+                            </select>
+                        </div>
+
+                        <!-- Add Market Button -->
+                        <button id="add-market-btn" class="w-full bg-primary-100 text-primary-700 border border-primary-300 px-4 py-2 rounded-lg hover:bg-primary-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                            <i class="fas fa-plus mr-2"></i>Add Selected Market
+                        </button>
+                    </div>
+
+                    <!-- Quick Selection Presets -->
+                    <div class="space-y-4">
+                        <h3 class="text-sm font-medium text-gray-700">Quick Selection Presets</h3>
+                        
+                        <div class="grid grid-cols-2 gap-2">
+                            <button class="preset-btn bg-blue-50 text-blue-700 border border-blue-200 px-3 py-2 rounded-lg hover:bg-blue-100 transition-colors text-sm" data-preset="major-indices">
+                                <i class="fas fa-chart-line mr-1"></i>Major Indices
+                            </button>
+                            <button class="preset-btn bg-green-50 text-green-700 border border-green-200 px-3 py-2 rounded-lg hover:bg-green-100 transition-colors text-sm" data-preset="global-flow">
+                                <i class="fas fa-globe mr-1"></i>24h Global Flow
+                            </button>
+                            <button class="preset-btn bg-purple-50 text-purple-700 border border-purple-200 px-3 py-2 rounded-lg hover:bg-purple-100 transition-colors text-sm" data-preset="tech-stocks">
+                                <i class="fas fa-microchip mr-1"></i>Tech Giants
+                            </button>
+                            <button class="preset-btn bg-yellow-50 text-yellow-700 border border-yellow-200 px-3 py-2 rounded-lg hover:bg-yellow-100 transition-colors text-sm" data-preset="commodities">
+                                <i class="fas fa-coins mr-1"></i>Commodities
+                            </button>
+                            <button class="preset-btn bg-indigo-50 text-indigo-700 border border-indigo-200 px-3 py-2 rounded-lg hover:bg-indigo-100 transition-colors text-sm" data-preset="crypto">
+                                <i class="fas fa-bitcoin mr-1"></i>Crypto
+                            </button>
+                            <button class="preset-btn bg-red-50 text-red-700 border border-red-200 px-3 py-2 rounded-lg hover:bg-red-100 transition-colors text-sm" data-preset="clear-all">
+                                <i class="fas fa-trash mr-1"></i>Clear All
+                            </button>
+                        </div>
+
+                        <!-- Index Search -->
+                        <div class="relative mt-4">
+                            <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+                            <input 
+                                type="text" 
+                                id="index-search" 
+                                placeholder="Search symbols (e.g., AAPL, ^GSPC, BTC-USD)..."
+                                class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                                aria-label="Search stock market symbols"
+                                title="Search for specific symbols"
+                            >
+                        </div>
                     </div>
                 </div>
-
-                <!-- Suggested Indices by Region -->
-                <div id="suggested-indices" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4" 
-                     role="region" aria-label="Suggested stock market indices by region">
-                    <!-- Populated by JavaScript -->
-                </div>
                 
-                <!-- Selected Indices Display -->
-                <div id="selected-indices" class="hidden">
-                    <h3 class="text-sm font-medium text-gray-700 mb-2">Selected Indices:</h3>
-                    <div id="selected-indices-list" class="flex flex-wrap gap-2">
-                        <!-- Selected indices chips will be shown here -->
+                <!-- Selected Markets Display with Intelligence -->
+                <div id="selected-markets" class="hidden">
+                    <div class="border-t pt-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-sm font-medium text-gray-700">Selected Markets & Intelligence</h3>
+                            <span id="selection-count" class="text-xs bg-primary-100 text-primary-700 px-2 py-1 rounded-full">0 markets selected</span>
+                        </div>
+                        
+                        <div id="selected-markets-grid" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                            <!-- Selected market cards with intelligence dropdowns will be shown here -->
+                        </div>
                     </div>
                 </div>
             </div>

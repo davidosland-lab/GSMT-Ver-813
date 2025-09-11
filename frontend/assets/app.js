@@ -97,6 +97,21 @@ class GlobalMarketTracker {
         // Plot mode change (combined vs individual)
         document.getElementById('plot-mode').addEventListener('change', 
             this.handlePlotModeChange.bind(this));
+
+        // New dropdown functionality
+        document.getElementById('region-dropdown').addEventListener('change', 
+            this.handleRegionChange.bind(this));
+        
+        document.getElementById('markets-dropdown').addEventListener('change', 
+            this.handleMarketDropdownChange.bind(this));
+        
+        document.getElementById('add-market-btn').addEventListener('click', 
+            this.addSelectedMarket.bind(this));
+
+        // Preset buttons
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            btn.addEventListener('click', this.handlePresetSelection.bind(this));
+        });
         
         // Calendar functionality
         const datePickerBtn = document.getElementById('date-picker-btn');
@@ -210,37 +225,103 @@ class GlobalMarketTracker {
     }
 
     displaySuggestedIndices(suggestedIndices) {
-        const container = document.getElementById('suggested-indices');
-        container.innerHTML = '';
+        // Store the indices data for dropdown population
+        this.allIndicesData = suggestedIndices;
+        console.log('📊 Loaded market data:', Object.keys(suggestedIndices));
+    }
+
+    handleRegionChange(event) {
+        const selectedRegion = event.target.value;
+        const marketsDropdown = document.getElementById('markets-dropdown');
+        const addBtn = document.getElementById('add-market-btn');
         
-        for (const [region, indices] of Object.entries(suggestedIndices)) {
-            const regionDiv = document.createElement('div');
-            regionDiv.className = 'border rounded-lg p-4';
-            
-            const regionTitle = region.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
-            regionDiv.innerHTML = `
-                <h4 class="font-medium text-gray-900 mb-3">${regionTitle}</h4>
-                <div class="space-y-2">
-                    ${indices.map(index => `
-                        <label class="flex items-center cursor-pointer hover:bg-gray-50 p-2 rounded">
-                            <input type="checkbox" 
-                                   value="${index.symbol}" 
-                                   class="index-checkbox mr-3 h-4 w-4 text-primary-600"
-                                   onchange="window.tracker.toggleIndex('${index.symbol}')">
-                            <div class="flex-1 min-w-0">
-                                <div class="flex items-center justify-between">
-                                    <span class="font-medium text-sm">${index.name}</span>
-                                    <span class="text-xs text-gray-500">${index.symbol}</span>
-                                </div>
-                                <div class="text-xs text-gray-500">${index.hours}</div>
-                            </div>
-                        </label>
-                    `).join('')}
-                </div>
-            `;
-            
-            container.appendChild(regionDiv);
+        if (!selectedRegion) {
+            marketsDropdown.disabled = true;
+            marketsDropdown.innerHTML = '<option value="">Select a region first...</option>';
+            addBtn.disabled = true;
+            return;
         }
+
+        // Populate markets dropdown based on selected region
+        const markets = this.allIndicesData[selectedRegion] || [];
+        marketsDropdown.innerHTML = '<option value="">Choose a market...</option>';
+        
+        markets.forEach(market => {
+            const option = document.createElement('option');
+            option.value = market.symbol;
+            option.textContent = `${market.name} (${market.symbol})`;
+            option.dataset.marketInfo = JSON.stringify(market);
+            marketsDropdown.appendChild(option);
+        });
+
+        marketsDropdown.disabled = false;
+        addBtn.disabled = true; // Enable only when market is selected
+    }
+
+    handleMarketDropdownChange(event) {
+        const addBtn = document.getElementById('add-market-btn');
+        addBtn.disabled = !event.target.value;
+    }
+
+    addSelectedMarket() {
+        const regionDropdown = document.getElementById('region-dropdown');
+        const marketsDropdown = document.getElementById('markets-dropdown');
+        
+        if (!marketsDropdown.value) return;
+
+        const symbol = marketsDropdown.value;
+        const marketInfo = JSON.parse(marketsDropdown.selectedOptions[0].dataset.marketInfo);
+        
+        // Add to selected indices
+        if (!this.selectedIndices.has(symbol)) {
+            this.selectedIndices.add(symbol);
+            this.updateSelectedMarketsDisplay();
+            this.updateAnalyzeButton();
+            
+            // Reset dropdowns after adding
+            marketsDropdown.value = '';
+            document.getElementById('add-market-btn').disabled = true;
+            
+            this.showToast(`Added ${marketInfo.name}`, 'success');
+        } else {
+            this.showToast(`${marketInfo.name} already selected`, 'warning');
+        }
+    }
+
+    handlePresetSelection(event) {
+        const preset = event.target.dataset.preset;
+        
+        switch (preset) {
+            case 'major-indices':
+                this.loadPreset(['^GSPC', '^IXIC', '^DJI', '^FTSE', '^GDAXI', '^N225', '^AXJO']);
+                break;
+            case 'global-flow':
+                this.loadPreset(['^N225', '^HSI', '^FTSE', '^GDAXI', '^GSPC', '^IXIC']);
+                break;
+            case 'tech-stocks':
+                this.loadPreset(['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA']);
+                break;
+            case 'commodities':
+                this.loadPreset(['GC=F', 'CL=F', 'SI=F', 'NG=F', 'ZC=F']);
+                break;
+            case 'crypto':
+                this.loadPreset(['BTC-USD', 'ETH-USD', 'BNB-USD', 'SOL-USD', 'ADA-USD']);
+                break;
+            case 'clear-all':
+                this.selectedIndices.clear();
+                this.updateSelectedMarketsDisplay();
+                this.updateAnalyzeButton();
+                this.showToast('All markets cleared', 'info');
+                break;
+        }
+    }
+
+    loadPreset(symbols) {
+        this.selectedIndices.clear();
+        symbols.forEach(symbol => this.selectedIndices.add(symbol));
+        this.updateSelectedMarketsDisplay();
+        this.updateAnalyzeButton();
+        this.showToast(`Loaded ${symbols.length} markets`, 'success');
     }
 
     toggleIndex(symbol) {
@@ -254,9 +335,10 @@ class GlobalMarketTracker {
         this.updateAnalyzeButton();
     }
 
-    updateSelectedIndicesDisplay() {
-        const container = document.getElementById('selected-indices');
-        const listContainer = document.getElementById('selected-indices-list');
+    updateSelectedMarketsDisplay() {
+        const container = document.getElementById('selected-markets');
+        const gridContainer = document.getElementById('selected-markets-grid');
+        const countElement = document.getElementById('selection-count');
         
         if (this.selectedIndices.size === 0) {
             container.classList.add('hidden');
@@ -264,23 +346,53 @@ class GlobalMarketTracker {
         }
         
         container.classList.remove('hidden');
-        listContainer.innerHTML = '';
+        countElement.textContent = `${this.selectedIndices.size} market${this.selectedIndices.size === 1 ? '' : 's'} selected`;
+        
+        gridContainer.innerHTML = '';
         
         this.selectedIndices.forEach(symbol => {
             const symbolInfo = this.allSymbols.get(symbol);
             if (!symbolInfo) return;
             
-            const chip = document.createElement('div');
-            chip.className = 'bg-primary-100 text-primary-800 px-3 py-1 rounded-full text-sm flex items-center';
-            chip.innerHTML = `
-                <span class="mr-2">${symbolInfo.name} (${symbol})</span>
-                <button onclick="window.tracker.removeIndex('${symbol}')" 
-                        class="text-primary-600 hover:text-primary-800">
-                    <i class="fas fa-times"></i>
-                </button>
+            const marketCard = document.createElement('div');
+            marketCard.className = 'bg-gray-50 rounded-lg p-4 border border-gray-200';
+            marketCard.innerHTML = `
+                <div class="flex items-start justify-between mb-3">
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-900">${symbolInfo.name}</h4>
+                        <p class="text-xs text-gray-600">${symbol} • ${symbolInfo.market}</p>
+                    </div>
+                    <button onclick="window.tracker.removeMarket('${symbol}')" 
+                            class="text-gray-400 hover:text-red-600 transition-colors">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <!-- Market Intelligence Dropdown -->
+                <div class="space-y-2">
+                    <label class="block text-xs font-medium text-gray-700">Market Intelligence</label>
+                    <select id="intelligence-${symbol}" class="w-full text-xs border border-gray-300 rounded px-2 py-1.5">
+                        <option value="">Loading intelligence...</option>
+                    </select>
+                    
+                    <!-- Intelligence Details -->
+                    <div id="intelligence-details-${symbol}" class="hidden mt-2 p-2 bg-white rounded border text-xs">
+                        <div class="text-gray-600">Select an item above to view details</div>
+                    </div>
+                </div>
             `;
-            listContainer.appendChild(chip);
+            
+            gridContainer.appendChild(marketCard);
+            
+            // Load market intelligence for this specific market
+            this.loadMarketIntelligence(symbol);
         });
+    }
+
+    updateSelectedIndicesDisplay() {
+        // This function is now replaced by updateSelectedMarketsDisplay
+        // but keeping it for backward compatibility
+        this.updateSelectedMarketsDisplay();
     }
 
     removeIndex(symbol) {
@@ -292,6 +404,13 @@ class GlobalMarketTracker {
         
         this.updateSelectedIndicesDisplay();
         this.updateAnalyzeButton();
+    }
+
+    removeMarket(symbol) {
+        this.selectedIndices.delete(symbol);
+        this.updateSelectedMarketsDisplay();
+        this.updateAnalyzeButton();
+        this.showToast(`Removed ${symbol}`, 'info');
     }
 
     updateAnalyzeButton() {
@@ -1354,6 +1473,213 @@ class GlobalMarketTracker {
                 setTimeout(() => toast.remove(), 300);
             }
         }, 5000);
+    }
+
+    async loadMarketIntelligence(symbol) {
+        const dropdown = document.getElementById(`intelligence-${symbol}`);
+        const detailsContainer = document.getElementById(`intelligence-details-${symbol}`);
+        
+        if (!dropdown) return;
+        
+        try {
+            // Get economic events data from the backend using existing endpoint
+            const response = await fetch(`${this.apiBaseUrl}/economic-events?symbols=${encodeURIComponent(symbol)}&hours_back=48&hours_forward=24`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            
+            const data = await response.json();
+            
+            // Clear loading state
+            dropdown.innerHTML = '<option value="">Select intelligence type...</option>';
+            
+            // Add categories to dropdown based on API response structure
+            if (data.events && data.events.length > 0) {
+                // Separate events by type
+                const marketSessions = data.events.filter(event => event.event_type === 'market_session');
+                const economicData = data.events.filter(event => event.event_type === 'economic_data');
+                const announcements = data.events.filter(event => event.event_type === 'market_announcement');
+                
+                // Market Sessions Group
+                if (marketSessions.length > 0) {
+                    const sessionGroup = document.createElement('optgroup');
+                    sessionGroup.label = `Market Sessions (${marketSessions.length})`;
+                    marketSessions.forEach((event, index) => {
+                        const option = document.createElement('option');
+                        option.value = `session-${index}`;
+                        const importance = event.importance === 'high' ? '🔴' : 
+                                        event.importance === 'medium' ? '🟡' : '🟢';
+                        option.textContent = `${importance} ${event.title}`;
+                        sessionGroup.appendChild(option);
+                    });
+                    dropdown.appendChild(sessionGroup);
+                }
+                
+                // Economic Data Group  
+                if (economicData.length > 0) {
+                    const eventGroup = document.createElement('optgroup');
+                    eventGroup.label = `Economic Events (${economicData.length})`;
+                    economicData.forEach((event, index) => {
+                        const option = document.createElement('option');
+                        option.value = `event-${index}`;
+                        const importance = event.importance === 'high' ? '🔴' : 
+                                        event.importance === 'medium' ? '🟡' : '🟢';
+                        option.textContent = `${importance} ${event.title}`;
+                        eventGroup.appendChild(option);
+                    });
+                    dropdown.appendChild(eventGroup);
+                }
+                
+                // Market Announcements Group
+                if (announcements.length > 0) {
+                    const announcementGroup = document.createElement('optgroup');
+                    announcementGroup.label = `Market Announcements (${announcements.length})`;
+                    announcements.forEach((announcement, index) => {
+                        const option = document.createElement('option');
+                        option.value = `announcement-${index}`;
+                        option.textContent = `📢 ${announcement.title}`;
+                        announcementGroup.appendChild(option);
+                    });
+                    dropdown.appendChild(announcementGroup);
+                }
+            }
+            
+            // Add economic calendar view option
+            const calendarOption = document.createElement('option');
+            calendarOption.value = 'calendar-view';
+            calendarOption.textContent = '📅 Economic Calendar View';
+            dropdown.appendChild(calendarOption);
+            
+            // Store the events data for detail display
+            dropdown.dataset.intelligenceData = JSON.stringify(data);
+            dropdown.dataset.marketSessions = JSON.stringify(data.events ? data.events.filter(event => event.event_type === 'market_session') : []);
+            dropdown.dataset.economicData = JSON.stringify(data.events ? data.events.filter(event => event.event_type === 'economic_data') : []);  
+            dropdown.dataset.announcements = JSON.stringify(data.events ? data.events.filter(event => event.event_type === 'market_announcement') : []);
+            
+            // Add event listener for dropdown selection
+            dropdown.addEventListener('change', (e) => {
+                this.displayIntelligenceDetails(symbol, e.target.value, data);
+            });
+            
+        } catch (error) {
+            console.error(`Failed to load intelligence for ${symbol}:`, error);
+            dropdown.innerHTML = '<option value="">Failed to load intelligence</option>';
+        }
+    }
+
+    displayIntelligenceDetails(symbol, selection, data) {
+        const detailsContainer = document.getElementById(`intelligence-details-${symbol}`);
+        if (!detailsContainer || !selection) {
+            detailsContainer.classList.add('hidden');
+            return;
+        }
+
+        let content = '';
+        
+        // Get event arrays from the data
+        const allEvents = data.events || [];
+        const marketSessions = allEvents.filter(event => event.event_type === 'market_session');
+        const economicEvents = allEvents.filter(event => event.event_type === 'economic_data');
+        const announcements = allEvents.filter(event => event.event_type === 'market_announcement');
+        
+        if (selection === 'calendar-view') {
+            // Show economic calendar view
+            content = `
+                <div class="bg-blue-50 border border-blue-200 rounded p-2">
+                    <h5 class="font-medium text-blue-800 mb-2">📅 Economic Calendar</h5>
+                    <div class="space-y-2 text-blue-700">
+                        <div class="flex justify-between">
+                            <span>Market Sessions:</span>
+                            <span class="font-medium">${marketSessions.length}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Economic Events:</span>
+                            <span class="font-medium">${economicEvents.length}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Market Announcements:</span>
+                            <span class="font-medium">${announcements.length}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Total Events:</span>
+                            <span class="font-medium">${allEvents.length}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Next Update:</span>
+                            <span class="font-medium">${new Date(Date.now() + 30*60000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (selection.startsWith('session-')) {
+            // Show market session details
+            const sessionIndex = parseInt(selection.split('-')[1]);
+            const session = marketSessions[sessionIndex];
+            if (session) {
+                const importanceColor = session.importance === 'high' ? 'red' : 
+                                      session.importance === 'medium' ? 'blue' : 'green';
+                
+                content = `
+                    <div class="bg-${importanceColor}-50 border border-${importanceColor}-200 rounded p-2">
+                        <h5 class="font-medium text-${importanceColor}-800 mb-2">📅 ${session.title}</h5>
+                        <div class="space-y-1 text-${importanceColor}-700">
+                            <div><strong>Type:</strong> ${session.event_type}</div>
+                            <div><strong>Country:</strong> ${session.country}</div>
+                            <div><strong>Currency:</strong> ${session.currency}</div>
+                            <div><strong>Importance:</strong> ${session.importance.toUpperCase()}</div>
+                            <div><strong>Time:</strong> ${new Date(session.timestamp).toLocaleString()}</div>
+                            ${session.description ? `<div class="mt-2"><strong>Description:</strong><br/><span class="text-xs">${session.description}</span></div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+        } else if (selection.startsWith('event-')) {
+            // Show economic event details
+            const eventIndex = parseInt(selection.split('-')[1]);
+            const event = economicEvents[eventIndex];
+            if (event) {
+                const importanceColor = event.importance === 'high' ? 'red' : 
+                                      event.importance === 'medium' ? 'yellow' : 'green';
+                
+                content = `
+                    <div class="bg-${importanceColor}-50 border border-${importanceColor}-200 rounded p-2">
+                        <h5 class="font-medium text-${importanceColor}-800 mb-2">📊 ${event.title}</h5>
+                        <div class="space-y-1 text-${importanceColor}-700">
+                            <div><strong>Type:</strong> ${event.event_type}</div>
+                            <div><strong>Country:</strong> ${event.country}</div>
+                            <div><strong>Currency:</strong> ${event.currency}</div>
+                            <div><strong>Importance:</strong> ${event.importance.toUpperCase()}</div>
+                            ${event.actual_value ? `<div><strong>Actual:</strong> ${event.actual_value}</div>` : ''}
+                            ${event.forecast_value ? `<div><strong>Forecast:</strong> ${event.forecast_value}</div>` : ''}
+                            ${event.previous_value ? `<div><strong>Previous:</strong> ${event.previous_value}</div>` : ''}
+                            <div><strong>Time:</strong> ${new Date(event.timestamp).toLocaleString()}</div>
+                            ${event.description ? `<div class="mt-2"><strong>Description:</strong><br/><span class="text-xs">${event.description}</span></div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+        } else if (selection.startsWith('announcement-')) {
+            // Show market announcement details
+            const announcementIndex = parseInt(selection.split('-')[1]);
+            const announcement = announcements[announcementIndex];
+            if (announcement) {
+                content = `
+                    <div class="bg-purple-50 border border-purple-200 rounded p-2">
+                        <h5 class="font-medium text-purple-800 mb-2">📢 ${announcement.title}</h5>
+                        <div class="space-y-1 text-purple-700">
+                            <div><strong>Type:</strong> ${announcement.event_type}</div>
+                            <div><strong>Country:</strong> ${announcement.country}</div>
+                            <div><strong>Currency:</strong> ${announcement.currency}</div>
+                            <div><strong>Importance:</strong> ${announcement.importance.toUpperCase()}</div>
+                            <div><strong>Time:</strong> ${new Date(announcement.timestamp).toLocaleString()}</div>
+                            ${announcement.impact_markets?.length ? `<div><strong>Affects:</strong> ${announcement.impact_markets.join(', ')}</div>` : ''}
+                            ${announcement.description ? `<div class="mt-2"><strong>Details:</strong><br/><span class="text-xs">${announcement.description}</span></div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        detailsContainer.innerHTML = content;
+        detailsContainer.classList.remove('hidden');
     }
 
     debounce(func, wait) {
