@@ -457,7 +457,9 @@ def convert_live_data_to_format(live_points: List[LiveDataPoint], symbol: str, m
                                 high=simulated_price * 1.001, 
                                 low=simulated_price * 0.998,
                                 close=simulated_price,
-                                volume=latest_point.volume or 1000000
+                                volume=latest_point.volume or 1000000,
+                                symbol=symbol,
+                                source="Simulated"
                             )
                             logger.info(f"🎲 Simulated data for {market} market at {current_interval_start.strftime('%H:%M')} (±0.1% variation)")
         
