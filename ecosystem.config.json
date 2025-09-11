@@ -2,8 +2,8 @@
   "apps": [
     {
       "name": "global-market-tracker",
-      "script": "app.py",
-      "interpreter": "python3",
+      "script": "python3",
+      "args": "-m uvicorn app:app --host 0.0.0.0 --port 8000",
       "cwd": "/home/user/webapp",
       "env": {
         "PORT": "8000",
