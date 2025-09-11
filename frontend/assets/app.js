@@ -417,8 +417,9 @@ class GlobalMarketTracker {
                 // For candlestick charts, preserve all 24 time slots with null for market-closed periods
                 console.log(`🕯️ Processing percentage-based candlestick data for ${symbol}, ${points.length} total points`);
                 
-                // Create candlestick data array that maintains all 24 time slots
+                // Create candlestick data array - filter to only include market open periods
                 const candlestickData = [];
+                const candlestickXAxis = [];
                 
                 points.forEach((point, index) => {
                     if (point.market_open && point.open !== null && point.high !== null && 
@@ -431,6 +432,7 @@ class GlobalMarketTracker {
                         allValues.push(point.open, point.close, point.low, point.high);
                         
                         candlestickData.push(ohlc);
+                        candlestickXAxis.push(xAxisData[index]); // Store corresponding x-axis label
                         
                         if (index >= 14 && index <= 21) {
                             console.log(`📊 Hour ${index}: OHLC% = [${ohlc.map(v => v.toFixed(2)).join(', ')}]%, market_open: ${point.market_open}`);
@@ -439,21 +441,18 @@ class GlobalMarketTracker {
                         if (index >= 14 && index <= 21) {
                             console.log(`⏸️ Hour ${index}: Market closed or null data, market_open: ${point.market_open}`);
                         }
-                        // Use null for market-closed periods to preserve timeline spacing
-                        candlestickData.push(null);
                     }
                 });
                 
-                console.log(`🕯️ Candlestick data for ${symbol}: ${candlestickData.filter(d => d !== null).length} valid out of ${points.length} total points`);
-                console.log(`🔍 Sample candlestick data:`, candlestickData.filter(d => d !== null).slice(0, 3));
+                console.log(`🕯️ Candlestick data for ${symbol}: ${candlestickData.length} valid out of ${points.length} total points`);
+                console.log(`🔍 Sample candlestick data:`, candlestickData.slice(0, 3));
                 
-                if (candlestickData.filter(d => d !== null).length === 0) {
+                if (candlestickData.length === 0) {
                     console.warn(`⚠️ No valid candlestick data for ${symbol} - all market closed or null OHLC values`);
                 } else {
-                    // Use the complete xAxisData (all 24 hours) for candlestick charts
-                    // This maintains proper timeline spacing
+                    // Use the filtered x-axis data that matches candlestick data points
                     if (!window.candlestickXAxisData) {
-                        window.candlestickXAxisData = xAxisData;
+                        window.candlestickXAxisData = candlestickXAxis;
                     }
                     
                     // Enhanced candlestick series with market-specific colors
