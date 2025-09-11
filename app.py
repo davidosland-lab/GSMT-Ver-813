@@ -327,17 +327,28 @@ def convert_live_data_to_format(live_points: List[LiveDataPoint], symbol: str, m
     # Sort all points by timestamp
     sorted_points = sorted(live_points, key=lambda x: x.timestamp)
     
-    # Use previous day's close price for accurate daily percentage calculation
-    # This is the standard financial calculation: (Today's Price - Yesterday's Close) / Yesterday's Close
+    # Use consistent base price calculation for both 24h and 48h modes
+    # Always use previous day's close for accurate daily percentage calculations
     if previous_close:
         base_price = previous_close
         logger.info(f"📊 Using previous day's close as base price for {symbol}: {base_price}")
     else:
-        # Fallback to first available price if previous close not available
-        base_price = sorted_points[0].close
-        logger.warning(f"⚠️ Previous close not available for {symbol}, using first available price: {base_price}")
+        # Fallback: use the most recent available price that matches the current data scale
+        if sorted_points:
+            # Use a recent point to ensure same scale/data source as current live data
+            recent_points = sorted_points[-5:]  # Last 5 points for average
+            if recent_points:
+                base_price = sum(p.close for p in recent_points) / len(recent_points)
+                logger.info(f"📊 No previous close available, using recent average price as base for {symbol}: {base_price}")
+            else:
+                base_price = sorted_points[-1].close  # Last available point
+                logger.info(f"📊 Using last available price as base for {symbol}: {base_price}")
+        else:
+            # Ultimate fallback - should rarely happen with live data
+            base_price = 100.0
+            logger.warning(f"⚠️ No live data available for {symbol}, using default fallback: {base_price}")
     
-    logger.info(f"📊 Base price for {symbol}: {base_price}")
+    logger.info(f"📊 Final base price for {symbol}: {base_price}")
     
     # Create 5-minute interval lookup for better precision
     live_data_lookup = {}
@@ -398,85 +409,32 @@ def convert_live_data_to_format(live_points: List[LiveDataPoint], symbol: str, m
             if current_interval_start <= ts < current_interval_end:
                 interval_points.append((ts, point))
         
-        # Enhanced gap-filling strategy for sparse data markets (Asian/Australian)
-        if is_market_open_interval and not interval_points:
-            # First try standard ±4 interval window
-            search_window_minutes = interval_minutes * 4
+        # STRICT gap-filling strategy - only for confirmed market hours with live data available
+        if is_market_open_interval and not interval_points and live_data_lookup:
+            # Only attempt gap-filling if we have actual live data and are within market hours
+            # Restrict search to a smaller, more conservative window
+            search_window_minutes = min(interval_minutes * 2, 30)  # Max 30 minutes search window
             search_start = current_interval_start - timedelta(minutes=search_window_minutes)
             search_end = current_interval_end + timedelta(minutes=search_window_minutes)
             
             nearby_points = []
             for ts, point in live_data_lookup.items():
                 if search_start <= ts <= search_end:
-                    # Calculate distance from target interval center
-                    interval_center = current_interval_start + timedelta(minutes=interval_minutes // 2)
-                    distance = abs((ts - interval_center).total_seconds())
-                    nearby_points.append((distance, ts, point))
+                    # Verify the source timestamp is also within market hours
+                    if is_market_open_at_time(ts, market_hours):
+                        interval_center = current_interval_start + timedelta(minutes=interval_minutes // 2)
+                        distance = abs((ts - interval_center).total_seconds())
+                        nearby_points.append((distance, ts, point))
             
             if nearby_points:
                 # Sort by distance and take the closest point
                 nearby_points.sort(key=lambda x: x[0])
                 distance, best_timestamp, best_point = nearby_points[0]
-                logger.info(f"📊 Gap-filled market interval {current_interval_start.strftime('%H:%M')} using data from {best_timestamp.strftime('%H:%M')} (±{distance/60:.1f}min)")
-            else:
-                # Enhanced gap-filling for Asian/Australian markets with sparse data
-                if market in ["Japan", "Australia", "Hong Kong", "China", "South Korea"]:
-                    # Search for ANY available data point within the entire market session for the day
-                    session_start = current_interval_start.replace(hour=market_hours["open"], minute=0, second=0, microsecond=0)
-                    session_end = current_interval_start.replace(hour=market_hours["close"], minute=59, second=59, microsecond=999999)
-                    
-                    session_points = []
-                    for ts, point in live_data_lookup.items():
-                        if session_start <= ts <= session_end:
-                            interval_center = current_interval_start + timedelta(minutes=interval_minutes // 2)
-                            distance = abs((ts - interval_center).total_seconds())
-                            session_points.append((distance, ts, point))
-                    
-                    if session_points:
-                        # Use the closest available point from the trading session
-                        session_points.sort(key=lambda x: x[0])
-                        distance, best_timestamp, best_point = session_points[0]
-                        logger.info(f"🌏 Enhanced gap-fill for {market} market at {current_interval_start.strftime('%H:%M')} using session data from {best_timestamp.strftime('%H:%M')} (±{distance/3600:.1f}h)")
-                    else:
-                        # Last resort: use most recent data point and simulate variation with deterministic seeding
-                        if live_data_lookup and previous_close:
-                            # Get the most recent available data point
-                            latest_ts = max(live_data_lookup.keys())
-                            latest_point = live_data_lookup[latest_ts]
-                            
-                            # Create deterministic variation based on timestamp and symbol
-                            # This ensures consistent data across API calls for the same time/symbol
-                            import hashlib
-                            seed_string = f"{symbol}_{current_interval_start.strftime('%Y%m%d%H%M')}_{market}"
-                            seed_hash = hashlib.md5(seed_string.encode()).hexdigest()
-                            # Convert first 8 characters of hash to a float between -0.001 and 0.001
-                            hash_int = int(seed_hash[:8], 16)
-                            variation = ((hash_int % 2000) - 1000) / 1000000  # Range: -0.001 to +0.001
-                            
-                            simulated_price = latest_point.close * (1 + variation)
-                            
-                            # Create deterministic OHLC variations using different parts of the hash
-                            open_hash = int(seed_hash[8:12], 16)
-                            high_hash = int(seed_hash[12:16], 16) 
-                            low_hash = int(seed_hash[16:20], 16)
-                            
-                            open_variation = 0.999 + ((open_hash % 200) / 100000)  # 0.999 to 1.001
-                            high_variation = 1.001 + ((high_hash % 100) / 100000)  # 1.001 to 1.002
-                            low_variation = 0.998 - ((low_hash % 100) / 100000)   # 0.997 to 0.998
-                            
-                            # Create simulated data point with deterministic values
-                            from multi_source_data_service import LiveDataPoint
-                            best_point = LiveDataPoint(
-                                timestamp=current_interval_start,
-                                open=simulated_price * open_variation,
-                                high=simulated_price * high_variation, 
-                                low=simulated_price * low_variation,
-                                close=simulated_price,
-                                volume=latest_point.volume or 1000000,
-                                symbol=symbol,
-                                source="Deterministic"
-                            )
-                            logger.info(f"🔧 Deterministic data for {market} market at {current_interval_start.strftime('%H:%M')} (consistent variation)")
+                # Only use if distance is reasonable (within 1 hour)
+                if distance <= 3600:  # 1 hour max
+                    logger.info(f"📊 Conservative gap-fill for {current_interval_start.strftime('%H:%M')} using market data from {best_timestamp.strftime('%H:%M')} (±{distance/60:.1f}min)")
+                else:
+                    logger.info(f"⚠️ Skipping gap-fill for {current_interval_start.strftime('%H:%M')} - nearest data too far ({distance/60:.1f}min)")
         
         elif interval_points:
             # Sort by timestamp and take the latest point in the interval (most current data)
