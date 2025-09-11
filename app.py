@@ -438,30 +438,45 @@ def convert_live_data_to_format(live_points: List[LiveDataPoint], symbol: str, m
                         distance, best_timestamp, best_point = session_points[0]
                         logger.info(f"🌏 Enhanced gap-fill for {market} market at {current_interval_start.strftime('%H:%M')} using session data from {best_timestamp.strftime('%H:%M')} (±{distance/3600:.1f}h)")
                     else:
-                        # Last resort: use most recent data point and simulate variation
+                        # Last resort: use most recent data point and simulate variation with deterministic seeding
                         if live_data_lookup and previous_close:
                             # Get the most recent available data point
                             latest_ts = max(live_data_lookup.keys())
                             latest_point = live_data_lookup[latest_ts]
                             
-                            # Create a simulated point with small variation (±0.1% random walk)
-                            import random
-                            variation = random.uniform(-0.001, 0.001)  # ±0.1% variation
+                            # Create deterministic variation based on timestamp and symbol
+                            # This ensures consistent data across API calls for the same time/symbol
+                            import hashlib
+                            seed_string = f"{symbol}_{current_interval_start.strftime('%Y%m%d%H%M')}_{market}"
+                            seed_hash = hashlib.md5(seed_string.encode()).hexdigest()
+                            # Convert first 8 characters of hash to a float between -0.001 and 0.001
+                            hash_int = int(seed_hash[:8], 16)
+                            variation = ((hash_int % 2000) - 1000) / 1000000  # Range: -0.001 to +0.001
+                            
                             simulated_price = latest_point.close * (1 + variation)
                             
-                            # Create simulated data point
+                            # Create deterministic OHLC variations using different parts of the hash
+                            open_hash = int(seed_hash[8:12], 16)
+                            high_hash = int(seed_hash[12:16], 16) 
+                            low_hash = int(seed_hash[16:20], 16)
+                            
+                            open_variation = 0.999 + ((open_hash % 200) / 100000)  # 0.999 to 1.001
+                            high_variation = 1.001 + ((high_hash % 100) / 100000)  # 1.001 to 1.002
+                            low_variation = 0.998 - ((low_hash % 100) / 100000)   # 0.997 to 0.998
+                            
+                            # Create simulated data point with deterministic values
                             from multi_source_data_service import LiveDataPoint
                             best_point = LiveDataPoint(
                                 timestamp=current_interval_start,
-                                open=simulated_price * 0.999,
-                                high=simulated_price * 1.001, 
-                                low=simulated_price * 0.998,
+                                open=simulated_price * open_variation,
+                                high=simulated_price * high_variation, 
+                                low=simulated_price * low_variation,
                                 close=simulated_price,
                                 volume=latest_point.volume or 1000000,
                                 symbol=symbol,
-                                source="Simulated"
+                                source="Deterministic"
                             )
-                            logger.info(f"🎲 Simulated data for {market} market at {current_interval_start.strftime('%H:%M')} (±0.1% variation)")
+                            logger.info(f"🔧 Deterministic data for {market} market at {current_interval_start.strftime('%H:%M')} (consistent variation)")
         
         elif interval_points:
             # Sort by timestamp and take the latest point in the interval (most current data)
@@ -602,8 +617,13 @@ def generate_realistic_historical_data(symbol: str, start_date: datetime, end_da
     current_time = start_date
     previous_close = base_price
     
-    # Add some historical volatility (slightly different from current day)
-    daily_volatility = random.uniform(0.008, 0.025)  # 0.8% to 2.5% daily range
+    # Add deterministic historical volatility based on symbol and date
+    import hashlib
+    volatility_seed = f"{symbol}_{start_date.strftime('%Y%m%d')}_volatility"
+    vol_hash = hashlib.md5(volatility_seed.encode()).hexdigest()
+    # Use hash to generate consistent volatility between 0.008 and 0.025
+    vol_int = int(vol_hash[:8], 16)
+    daily_volatility = 0.008 + ((vol_int % 17000) / 1000000)  # 0.008 to 0.025 range
     intraday_volatility = daily_volatility * 0.3  # Intraday moves are smaller
     
     # Market session info for the symbol
@@ -631,11 +651,17 @@ def generate_realistic_historical_data(symbol: str, start_date: datetime, end_da
         if is_market_open:
             # Generate realistic OHLC for 5-minute interval during market hours
             
-            # Random price movement within daily volatility
-            price_change_pct = random.uniform(-intraday_volatility/2, intraday_volatility/2)
+            # Deterministic price movement based on timestamp and symbol
+            time_seed = f"{symbol}_{current_time.strftime('%Y%m%d%H%M')}_price"
+            price_hash = hashlib.md5(time_seed.encode()).hexdigest()
+            price_int = int(price_hash[:8], 16)
             
-            # Add some trending bias (slight upward bias over time)
-            trend_bias = random.uniform(-0.0005, 0.001)  # Small trend component
+            # Generate consistent price change within volatility range
+            price_change_pct = ((price_int % 2000) - 1000) / 1000000 * intraday_volatility
+            
+            # Add deterministic trending bias
+            trend_int = int(price_hash[8:12], 16)
+            trend_bias = ((trend_int % 1500) - 500) / 1000000  # -0.0005 to +0.001 range
             price_change_pct += trend_bias
             
             # Calculate new price
@@ -644,24 +670,41 @@ def generate_realistic_historical_data(symbol: str, start_date: datetime, end_da
             # Generate OHLC with realistic relationships
             open_price = previous_close
             
-            # Add intra-interval volatility
-            interval_volatility = random.uniform(0.001, 0.003)  # 0.1% to 0.3% per interval
-            high_price = max(open_price, new_price) * (1 + random.uniform(0, interval_volatility))
-            low_price = min(open_price, new_price) * (1 - random.uniform(0, interval_volatility))
+            # Add deterministic intra-interval volatility
+            vol_int = int(price_hash[12:16], 16)
+            interval_volatility = 0.001 + ((vol_int % 2000) / 1000000)  # 0.001 to 0.003 range
+            
+            high_int = int(price_hash[16:20], 16)
+            low_int = int(price_hash[20:24], 16)
+            
+            high_multiplier = 1 + ((high_int % 1000) / 1000000) * interval_volatility
+            low_multiplier = 1 - ((low_int % 1000) / 1000000) * interval_volatility
+            
+            high_price = max(open_price, new_price) * high_multiplier
+            low_price = min(open_price, new_price) * low_multiplier
             close_price = new_price
             
             # Ensure OHLC relationships are correct
             high_price = max(high_price, open_price, close_price)
             low_price = min(low_price, open_price, close_price)
             
-            # Generate realistic volume (higher during market opens/closes)
+            # Generate deterministic realistic volume (higher during market opens/closes)
+            volume_seed = f"{symbol}_{current_time.strftime('%Y%m%d%H%M')}_volume"
+            volume_hash = hashlib.md5(volume_seed.encode()).hexdigest()
+            volume_int = int(volume_hash[:8], 16)
+            
             hour = current_time.hour
             if hour in [market_start_hour, market_start_hour + 1, market_end_hour - 1]:
-                volume_multiplier = random.uniform(1.5, 3.0)  # Higher volume at open/close
+                # Higher volume at open/close: 1.5 to 3.0 multiplier
+                multiplier_int = int(volume_hash[8:12], 16)
+                volume_multiplier = 1.5 + ((multiplier_int % 1500) / 1000)
             else:
-                volume_multiplier = random.uniform(0.5, 1.5)  # Normal volume
+                # Normal volume: 0.5 to 1.5 multiplier
+                multiplier_int = int(volume_hash[8:12], 16)
+                volume_multiplier = 0.5 + ((multiplier_int % 1000) / 1000)
                 
-            volume = int(random.uniform(50000, 200000) * volume_multiplier)
+            base_volume = 50000 + ((volume_int % 150000))  # 50k to 200k base
+            volume = int(base_volume * volume_multiplier)
             
             historical_points.append({
                 'timestamp': current_time,
