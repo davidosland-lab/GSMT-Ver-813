@@ -360,7 +360,7 @@ def convert_live_data_to_format(live_points: List[LiveDataPoint], symbol: str, m
         else:
             filtered_count += 1
     
-    logger.info(f"📈 Found {len(live_data_lookup)} data points for {symbol} in 24h window ({filtered_count} filtered out)")
+    logger.info(f"📈 Found {len(live_data_lookup)} data points for {symbol} in {time_period} window ({filtered_count} filtered out)")
     
     # Debug logging for FTSE to understand timestamp issues
     if symbol == '^FTSE' and len(sorted_points) > 0:
@@ -450,6 +450,11 @@ def convert_live_data_to_format(live_points: List[LiveDataPoint], symbol: str, m
                 # Protect against division by zero or extremely small base prices
                 if base_price and abs(base_price) > 0.001:  # Minimum reasonable price
                     percentage_change = ((best_point.close - base_price) / base_price) * 100
+                    
+                    # Debug extreme percentage calculations
+                    if abs(percentage_change) > 5:
+                        logger.warning(f"⚠️ Large percentage change for {symbol}: {percentage_change:.1f}% (close: {best_point.close}, base: {base_price}, source: {getattr(best_point, 'source', 'unknown')}, timestamp: {best_timestamp if 'best_timestamp' in locals() else 'N/A'})")
+                    
                     # Cap extreme percentage changes to prevent y-axis scaling issues
                     percentage_change = max(-50.0, min(50.0, percentage_change))
                 else:

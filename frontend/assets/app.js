@@ -701,15 +701,17 @@ class GlobalMarketTracker {
             console.log(`🕯️ Candlestick series data:`, series.map(s => ({name: s.name, type: s.type, dataLength: s.data?.length})));
         }
         
-        // Update title to include interval information
+        // Update title to include interval and time period information
         const currentInterval = parseInt(document.getElementById('time-interval').value);
+        const timePeriod = document.getElementById('time-period').value;
         const intervalText = currentInterval === 5 ? '5-Minute' : currentInterval === 30 ? '30-Minute' : 'Hourly';
+        const periodText = timePeriod === '48h' ? '48-Hour' : '24-Hour';
         const chartTypeText = chartType === 'candlestick' ? 'Candlestick View' : 
                              chartType === 'percentage' ? 'Percentage Change' : 'Price Values';
         
         const option = {
             title: {
-                text: `24-Hour Market Timeline (${intervalText}) - ${chartTypeText}`,
+                text: `${periodText} Market Timeline (${intervalText}) - ${chartTypeText}`,
                 left: 'center',
                 textStyle: { fontSize: 16, fontWeight: 'bold' }
             },
