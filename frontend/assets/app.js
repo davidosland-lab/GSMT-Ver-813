@@ -413,6 +413,10 @@ class GlobalMarketTracker {
         Object.entries(data.data).forEach(([symbol, points]) => {
             const symbolInfo = data.metadata[symbol];
             
+            // Check if this is previous day data
+            const isPreviousDay = symbol.endsWith('_prev_day');
+            const baseName = isPreviousDay ? symbolInfo.name.replace(' (Previous Day)', '') : symbolInfo.name;
+            
             if (chartType === 'candlestick') {
                 // For candlestick charts, preserve all 24 time slots with null for market-closed periods
                 console.log(`🕯️ Processing percentage-based candlestick data for ${symbol}, ${points.length} total points`);
@@ -457,11 +461,23 @@ class GlobalMarketTracker {
                     
                     // Enhanced candlestick series with market-specific colors
                     const marketColors = this.getMarketColors(symbolInfo.market);
+                    
+                    // Adjust styling for previous day data
+                    const seriesName = isPreviousDay ? 
+                        `${baseName} (${symbolInfo.market}) - Previous Day` : 
+                        `${symbolInfo.name} (${symbolInfo.market})`;
+                    
                     const candlestickSeries = {
-                        name: `${symbolInfo.name} (${symbolInfo.market})`,
+                        name: seriesName,
                         type: 'candlestick',
                         data: candlestickData,
-                        itemStyle: {
+                        itemStyle: isPreviousDay ? {
+                            // Previous day styling - more transparent/faded
+                            color: this.addAlpha(marketColors.bull, 0.4),      // Faded bull candle
+                            color0: this.addAlpha(marketColors.bear, 0.4),     // Faded bear candle
+                            borderColor: this.addAlpha(marketColors.bull, 0.6), // Faded bull border
+                            borderColor0: this.addAlpha(marketColors.bear, 0.6) // Faded bear border
+                        } : {
                             color: marketColors.bull,      // Bull candle color
                             color0: marketColors.bear,     // Bear candle color  
                             borderColor: marketColors.bull, // Bull border
@@ -538,14 +554,18 @@ class GlobalMarketTracker {
                 });
                 
                 series.push({
-                    name: symbolInfo.name,
+                    name: isPreviousDay ? `${baseName} (Previous Day)` : symbolInfo.name,
                     type: 'line',
                     data: values,
                     smooth: true,
                     symbol: 'circle',
-                    symbolSize: 4,
-                    lineWidth: 2,
+                    symbolSize: isPreviousDay ? 3 : 4,  // Smaller symbols for previous day
+                    lineWidth: isPreviousDay ? 1 : 2,   // Thinner line for previous day
                     connectNulls: false,  // Don't connect across null values (market closed periods)
+                    lineStyle: isPreviousDay ? {
+                        opacity: 0.5,       // Semi-transparent line
+                        type: 'dashed'      // Dashed line style
+                    } : undefined,
                     emphasis: {
                         focus: 'series'
                     }
@@ -1058,6 +1078,15 @@ class GlobalMarketTracker {
         };
         
         return marketColorSchemes[market] || { bull: '#00da3c', bear: '#ec0000' };
+    }
+    
+    addAlpha(hexColor, alpha) {
+        // Convert hex color to RGBA with alpha transparency
+        const hex = hexColor.replace('#', '');
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
     }
 
     getMarketSessionIndicators(chartType) {

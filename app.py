@@ -102,13 +102,16 @@ class AnalysisResponse(BaseModel):
     market_hours: Dict[str, Dict[str, int]]
     market_groups: Optional[Dict[str, Dict[str, List[MarketDataPoint]]]] = None  # New field for individual market plotting
 
-# Comprehensive symbols database
+# Comprehensive symbols database - SIGNIFICANTLY EXPANDED GLOBAL MARKETS
 SYMBOLS_DB = {
-    # US Indices
+    # === US MARKET ===
+    # US Major Indices
     "^GSPC": SymbolInfo(symbol="^GSPC", name="S&P 500", market="US", category="Index"),
     "^IXIC": SymbolInfo(symbol="^IXIC", name="NASDAQ Composite", market="US", category="Index"),
     "^DJI": SymbolInfo(symbol="^DJI", name="Dow Jones Industrial Average", market="US", category="Index"),
     "^RUT": SymbolInfo(symbol="^RUT", name="Russell 2000", market="US", category="Index"),
+    "^VIX": SymbolInfo(symbol="^VIX", name="CBOE Volatility Index", market="US", category="Index"),
+    "^NDX": SymbolInfo(symbol="^NDX", name="NASDAQ-100", market="US", category="Index"),
     
     # US Tech Stocks
     "AAPL": SymbolInfo(symbol="AAPL", name="Apple Inc.", market="US", category="Technology"),
@@ -119,6 +122,8 @@ SYMBOLS_DB = {
     "META": SymbolInfo(symbol="META", name="Meta Platforms Inc.", market="US", category="Technology"),
     "NVDA": SymbolInfo(symbol="NVDA", name="NVIDIA Corporation", market="US", category="Technology"),
     "NFLX": SymbolInfo(symbol="NFLX", name="Netflix Inc.", market="US", category="Technology"),
+    "AMD": SymbolInfo(symbol="AMD", name="Advanced Micro Devices", market="US", category="Technology"),
+    "ORCL": SymbolInfo(symbol="ORCL", name="Oracle Corporation", market="US", category="Technology"),
     
     # US Finance
     "JPM": SymbolInfo(symbol="JPM", name="JPMorgan Chase & Co.", market="US", category="Finance"),
@@ -126,6 +131,7 @@ SYMBOLS_DB = {
     "MA": SymbolInfo(symbol="MA", name="Mastercard Inc.", market="US", category="Finance"),
     "BAC": SymbolInfo(symbol="BAC", name="Bank of America Corp.", market="US", category="Finance"),
     "WFC": SymbolInfo(symbol="WFC", name="Wells Fargo & Co.", market="US", category="Finance"),
+    "GS": SymbolInfo(symbol="GS", name="Goldman Sachs Group", market="US", category="Finance"),
     
     # US Healthcare
     "JNJ": SymbolInfo(symbol="JNJ", name="Johnson & Johnson", market="US", category="Healthcare"),
@@ -133,8 +139,10 @@ SYMBOLS_DB = {
     "PFE": SymbolInfo(symbol="PFE", name="Pfizer Inc.", market="US", category="Healthcare"),
     "ABBV": SymbolInfo(symbol="ABBV", name="AbbVie Inc.", market="US", category="Healthcare"),
     
-    # Australian Markets
+    # === ASIA-PACIFIC MARKETS ===
+    # Australia
     "^AXJO": SymbolInfo(symbol="^AXJO", name="ASX 200", market="Australia", category="Index", currency="AUD"),
+    "^AORD": SymbolInfo(symbol="^AORD", name="All Ordinaries", market="Australia", category="Index", currency="AUD"),
     "CBA.AX": SymbolInfo(symbol="CBA.AX", name="Commonwealth Bank of Australia", market="Australia", category="Finance", currency="AUD"),
     "WBC.AX": SymbolInfo(symbol="WBC.AX", name="Westpac Banking Corporation", market="Australia", category="Finance", currency="AUD"),
     "ANZ.AX": SymbolInfo(symbol="ANZ.AX", name="Australia and New Zealand Banking Group", market="Australia", category="Finance", currency="AUD"),
@@ -147,28 +155,159 @@ SYMBOLS_DB = {
     "TLS.AX": SymbolInfo(symbol="TLS.AX", name="Telstra Corporation", market="Australia", category="Telecommunications", currency="AUD"),
     "WOW.AX": SymbolInfo(symbol="WOW.AX", name="Woolworths Group", market="Australia", category="Retail", currency="AUD"),
     
-    # Asian Indices
+    # Japan
     "^N225": SymbolInfo(symbol="^N225", name="Nikkei 225", market="Japan", category="Index", currency="JPY"),
-    "^HSI": SymbolInfo(symbol="^HSI", name="Hang Seng Index", market="Hong Kong", category="Index", currency="HKD"),
-    "000001.SS": SymbolInfo(symbol="000001.SS", name="Shanghai Composite", market="China", category="Index", currency="CNY"),
-    "^KS11": SymbolInfo(symbol="^KS11", name="KOSPI Composite Index", market="South Korea", category="Index", currency="KRW"),
-    "^TWII": SymbolInfo(symbol="^TWII", name="Taiwan Weighted Index", market="Taiwan", category="Index", currency="TWD"),
+    "^TOPX": SymbolInfo(symbol="^TOPX", name="Tokyo Stock Price Index (TOPIX)", market="Japan", category="Index", currency="JPY"),
+    "7203.T": SymbolInfo(symbol="7203.T", name="Toyota Motor Corporation", market="Japan", category="Automotive", currency="JPY"),
+    "6758.T": SymbolInfo(symbol="6758.T", name="Sony Group Corporation", market="Japan", category="Technology", currency="JPY"),
+    "9984.T": SymbolInfo(symbol="9984.T", name="SoftBank Group Corp", market="Japan", category="Technology", currency="JPY"),
     
-    # European Indices
+    # Hong Kong
+    "^HSI": SymbolInfo(symbol="^HSI", name="Hang Seng Index", market="Hong Kong", category="Index", currency="HKD"),
+    "^HSCE": SymbolInfo(symbol="^HSCE", name="Hang Seng China Enterprises Index", market="Hong Kong", category="Index", currency="HKD"),
+    "0700.HK": SymbolInfo(symbol="0700.HK", name="Tencent Holdings Limited", market="Hong Kong", category="Technology", currency="HKD"),
+    "0005.HK": SymbolInfo(symbol="0005.HK", name="HSBC Holdings plc", market="Hong Kong", category="Finance", currency="HKD"),
+    
+    # China
+    "000001.SS": SymbolInfo(symbol="000001.SS", name="Shanghai Composite", market="China", category="Index", currency="CNY"),
+    "399001.SZ": SymbolInfo(symbol="399001.SZ", name="Shenzhen Component", market="China", category="Index", currency="CNY"),
+    "000300.SS": SymbolInfo(symbol="000300.SS", name="CSI 300 Index", market="China", category="Index", currency="CNY"),
+    
+    # South Korea
+    "^KS11": SymbolInfo(symbol="^KS11", name="KOSPI Composite Index", market="South Korea", category="Index", currency="KRW"),
+    "005930.KS": SymbolInfo(symbol="005930.KS", name="Samsung Electronics", market="South Korea", category="Technology", currency="KRW"),
+    
+    # Taiwan
+    "^TWII": SymbolInfo(symbol="^TWII", name="Taiwan Weighted Index", market="Taiwan", category="Index", currency="TWD"),
+    "2330.TW": SymbolInfo(symbol="2330.TW", name="Taiwan Semiconductor Manufacturing", market="Taiwan", category="Technology", currency="TWD"),
+    
+    # Singapore
+    "^STI": SymbolInfo(symbol="^STI", name="Straits Times Index", market="Singapore", category="Index", currency="SGD"),
+    
+    # India
+    "^BSESN": SymbolInfo(symbol="^BSESN", name="BSE SENSEX", market="India", category="Index", currency="INR"),
+    "^NSEI": SymbolInfo(symbol="^NSEI", name="NIFTY 50", market="India", category="Index", currency="INR"),
+    
+    # Malaysia
+    "^KLSE": SymbolInfo(symbol="^KLSE", name="FTSE Bursa Malaysia KLCI", market="Malaysia", category="Index", currency="MYR"),
+    
+    # Thailand
+    "^SET.BK": SymbolInfo(symbol="^SET.BK", name="SET Index", market="Thailand", category="Index", currency="THB"),
+    
+    # Indonesia
+    "^JKSE": SymbolInfo(symbol="^JKSE", name="Jakarta Composite Index", market="Indonesia", category="Index", currency="IDR"),
+    
+    # Philippines
+    "^PSI": SymbolInfo(symbol="^PSI", name="PSEi Index", market="Philippines", category="Index", currency="PHP"),
+    
+    # New Zealand
+    "^NZ50": SymbolInfo(symbol="^NZ50", name="S&P/NZX 50 Index", market="New Zealand", category="Index", currency="NZD"),
+    
+    # === EUROPEAN MARKETS ===
+    # United Kingdom
     "^FTSE": SymbolInfo(symbol="^FTSE", name="FTSE 100", market="UK", category="Index", currency="GBP"),
+    "^FTMC": SymbolInfo(symbol="^FTMC", name="FTSE 250", market="UK", category="Index", currency="GBP"),
+    "SHEL.L": SymbolInfo(symbol="SHEL.L", name="Shell plc", market="UK", category="Energy", currency="GBP"),
+    "BP.L": SymbolInfo(symbol="BP.L", name="BP p.l.c.", market="UK", category="Energy", currency="GBP"),
+    
+    # Germany
     "^GDAXI": SymbolInfo(symbol="^GDAXI", name="DAX Performance Index", market="Germany", category="Index", currency="EUR"),
+    "^MDAXI": SymbolInfo(symbol="^MDAXI", name="MDAX", market="Germany", category="Index", currency="EUR"),
+    "SAP.DE": SymbolInfo(symbol="SAP.DE", name="SAP SE", market="Germany", category="Technology", currency="EUR"),
+    
+    # France
     "^FCHI": SymbolInfo(symbol="^FCHI", name="CAC 40", market="France", category="Index", currency="EUR"),
+    "MC.PA": SymbolInfo(symbol="MC.PA", name="LVMH Moët Hennessy Louis Vuitton", market="France", category="Consumer Goods", currency="EUR"),
+    
+    # Netherlands
     "^AEX": SymbolInfo(symbol="^AEX", name="AEX Index", market="Netherlands", category="Index", currency="EUR"),
+    "ASML.AS": SymbolInfo(symbol="ASML.AS", name="ASML Holding N.V.", market="Netherlands", category="Technology", currency="EUR"),
+    
+    # Spain
     "^IBEX": SymbolInfo(symbol="^IBEX", name="IBEX 35", market="Spain", category="Index", currency="EUR"),
     
-    # Commodities
-    "GC=F": SymbolInfo(symbol="GC=F", name="Gold Futures", market="Global", category="Commodities", currency="USD"),
-    "CL=F": SymbolInfo(symbol="CL=F", name="Crude Oil Futures", market="Global", category="Commodities", currency="USD"),
-    "SI=F": SymbolInfo(symbol="SI=F", name="Silver Futures", market="Global", category="Commodities", currency="USD"),
+    # Italy
+    "^FTMIB": SymbolInfo(symbol="^FTMIB", name="FTSE MIB Index", market="Italy", category="Index", currency="EUR"),
     
-    # Cryptocurrencies
+    # Switzerland
+    "^SSMI": SymbolInfo(symbol="^SSMI", name="Swiss Market Index", market="Switzerland", category="Index", currency="CHF"),
+    "NESN.SW": SymbolInfo(symbol="NESN.SW", name="Nestlé S.A.", market="Switzerland", category="Consumer Goods", currency="CHF"),
+    
+    # Sweden
+    "^OMX": SymbolInfo(symbol="^OMX", name="OMX Stockholm 30", market="Sweden", category="Index", currency="SEK"),
+    
+    # Norway
+    "^OSEBX": SymbolInfo(symbol="^OSEBX", name="Oslo Børs All-share Index", market="Norway", category="Index", currency="NOK"),
+    
+    # Denmark
+    "^OMXC25": SymbolInfo(symbol="^OMXC25", name="OMX Copenhagen 25", market="Denmark", category="Index", currency="DKK"),
+    
+    # Belgium
+    "^BFX": SymbolInfo(symbol="^BFX", name="BEL 20", market="Belgium", category="Index", currency="EUR"),
+    
+    # Austria
+    "^ATX": SymbolInfo(symbol="^ATX", name="ATX Index", market="Austria", category="Index", currency="EUR"),
+    
+    # Russia
+    "IMOEX.ME": SymbolInfo(symbol="IMOEX.ME", name="MOEX Russia Index", market="Russia", category="Index", currency="RUB"),
+    
+    # === AMERICAS MARKETS ===
+    # Canada
+    "^GSPTSE": SymbolInfo(symbol="^GSPTSE", name="S&P/TSX Composite Index", market="Canada", category="Index", currency="CAD"),
+    "SHOP.TO": SymbolInfo(symbol="SHOP.TO", name="Shopify Inc.", market="Canada", category="Technology", currency="CAD"),
+    
+    # Mexico
+    "^MXX": SymbolInfo(symbol="^MXX", name="IPC Mexico", market="Mexico", category="Index", currency="MXN"),
+    
+    # Brazil
+    "^BVSP": SymbolInfo(symbol="^BVSP", name="IBOVESPA", market="Brazil", category="Index", currency="BRL"),
+    "VALE3.SA": SymbolInfo(symbol="VALE3.SA", name="Vale S.A.", market="Brazil", category="Mining", currency="BRL"),
+    
+    # Argentina
+    "^MERV": SymbolInfo(symbol="^MERV", name="S&P MERVAL", market="Argentina", category="Index", currency="ARS"),
+    
+    # Chile
+    "^IPSA": SymbolInfo(symbol="^IPSA", name="S&P CLX IPSA", market="Chile", category="Index", currency="CLP"),
+    
+    # === MIDDLE EAST & AFRICA ===
+    # Israel
+    "^TA125.TA": SymbolInfo(symbol="^TA125.TA", name="TA-125 Index", market="Israel", category="Index", currency="ILS"),
+    
+    # South Africa
+    "^J203.JO": SymbolInfo(symbol="^J203.JO", name="FTSE/JSE All Share", market="South Africa", category="Index", currency="ZAR"),
+    
+    # Egypt
+    "^CASE30": SymbolInfo(symbol="^CASE30", name="EGX 30 Index", market="Egypt", category="Index", currency="EGP"),
+    
+    # Turkey
+    "^XU100.IS": SymbolInfo(symbol="^XU100.IS", name="BIST 100", market="Turkey", category="Index", currency="TRY"),
+    
+    # === COMMODITIES & FUTURES ===
+    "GC=F": SymbolInfo(symbol="GC=F", name="Gold Futures", market="Global", category="Commodities", currency="USD"),
+    "CL=F": SymbolInfo(symbol="CL=F", name="Crude Oil WTI Futures", market="Global", category="Commodities", currency="USD"),
+    "BZ=F": SymbolInfo(symbol="BZ=F", name="Brent Crude Oil Futures", market="Global", category="Commodities", currency="USD"),
+    "SI=F": SymbolInfo(symbol="SI=F", name="Silver Futures", market="Global", category="Commodities", currency="USD"),
+    "PL=F": SymbolInfo(symbol="PL=F", name="Platinum Futures", market="Global", category="Commodities", currency="USD"),
+    "NG=F": SymbolInfo(symbol="NG=F", name="Natural Gas Futures", market="Global", category="Commodities", currency="USD"),
+    "ZC=F": SymbolInfo(symbol="ZC=F", name="Corn Futures", market="Global", category="Commodities", currency="USD"),
+    "ZS=F": SymbolInfo(symbol="ZS=F", name="Soybean Futures", market="Global", category="Commodities", currency="USD"),
+    
+    # === CRYPTOCURRENCIES ===
     "BTC-USD": SymbolInfo(symbol="BTC-USD", name="Bitcoin", market="Global", category="Cryptocurrency", currency="USD"),
     "ETH-USD": SymbolInfo(symbol="ETH-USD", name="Ethereum", market="Global", category="Cryptocurrency", currency="USD"),
+    "ADA-USD": SymbolInfo(symbol="ADA-USD", name="Cardano", market="Global", category="Cryptocurrency", currency="USD"),
+    "BNB-USD": SymbolInfo(symbol="BNB-USD", name="Binance Coin", market="Global", category="Cryptocurrency", currency="USD"),
+    "XRP-USD": SymbolInfo(symbol="XRP-USD", name="XRP", market="Global", category="Cryptocurrency", currency="USD"),
+    "SOL-USD": SymbolInfo(symbol="SOL-USD", name="Solana", market="Global", category="Cryptocurrency", currency="USD"),
+    "DOT-USD": SymbolInfo(symbol="DOT-USD", name="Polkadot", market="Global", category="Cryptocurrency", currency="USD"),
+    
+    # === FOREX MAJORS ===
+    "EURUSD=X": SymbolInfo(symbol="EURUSD=X", name="EUR/USD", market="Global", category="Forex", currency="USD"),
+    "GBPUSD=X": SymbolInfo(symbol="GBPUSD=X", name="GBP/USD", market="Global", category="Forex", currency="USD"),
+    "USDJPY=X": SymbolInfo(symbol="USDJPY=X", name="USD/JPY", market="Global", category="Forex", currency="JPY"),
+    "AUDUSD=X": SymbolInfo(symbol="AUDUSD=X", name="AUD/USD", market="Global", category="Forex", currency="USD"),
+    "USDCAD=X": SymbolInfo(symbol="USDCAD=X", name="USD/CAD", market="Global", category="Forex", currency="CAD"),
+    "USDCHF=X": SymbolInfo(symbol="USDCHF=X", name="USD/CHF", market="Global", category="Forex", currency="CHF"),
 }
 
 # Period configuration for global market coverage
@@ -194,21 +333,52 @@ def get_dynamic_market_hours():
     is_edt = us_time.dst() != timedelta(0)
     
     return {
-        "Japan": {"open": 0, "close": 5},           # 00:00-05:59 UTC → 10:00-15:59 AEST (JST market 09:00-15:25)
-        "Hong Kong": {"open": 1, "close": 8},      # 01:30-08:00 UTC → 11:30-18:00 AEST (HKT 09:30-16:00)
-        "China": {"open": 1, "close": 7},          # 01:30-07:00 UTC → 11:30-17:00 AEST (CST 09:30-15:00)
-        "Australia": {"open": 0, "close": 6},      # 00:00-06:59 UTC → 10:00-16:59 AEST (market closes at 4:00 PM = 16:00 AEST)
-        "South Korea": {"open": 0, "close": 6},    # 00:00-06:30 UTC → 10:00-16:30 AEST (KST 09:00-15:30)
-        "India": {"open": 3, "close": 10},         # 03:45-10:00 UTC → 13:45-20:00 AEST (IST 09:15-15:30)
-        "UK": {"open": 7 if is_bst else 8, "close": 16 if is_bst else 17},  # Dynamic BST/GMT
-        "Germany": {"open": 6 if is_bst else 7, "close": 15 if is_bst else 16},  # Dynamic CEST/CET
-        "France": {"open": 6 if is_bst else 7, "close": 15 if is_bst else 16},   # Dynamic CEST/CET
+        # === ASIA-PACIFIC HOURS (UTC) ===
+        "Japan": {"open": 0, "close": 6},           # 00:00-06:00 UTC → 09:00-15:00 JST
+        "Hong Kong": {"open": 1, "close": 8},       # 01:30-08:00 UTC → 09:30-16:00 HKT
+        "China": {"open": 1, "close": 7},           # 01:30-07:00 UTC → 09:30-15:00 CST
+        "Australia": {"open": 0, "close": 6},       # 00:00-06:00 UTC → 10:00-16:00 AEST
+        "New Zealand": {"open": 22, "close": 4},    # 22:00-04:00 UTC → 10:00-16:00 NZST
+        "South Korea": {"open": 0, "close": 6},     # 00:00-06:30 UTC → 09:00-15:30 KST
+        "Taiwan": {"open": 1, "close": 5},          # 01:00-05:30 UTC → 09:00-13:30 CST
+        "Singapore": {"open": 1, "close": 9},       # 01:00-09:00 UTC → 09:00-17:00 SGT
+        "India": {"open": 3, "close": 10},          # 03:45-10:00 UTC → 09:15-15:30 IST
+        "Malaysia": {"open": 1, "close": 8},        # 01:00-08:00 UTC → 09:00-17:00 MYT
+        "Thailand": {"open": 2, "close": 10},       # 02:30-10:00 UTC → 09:30-16:30 ICT
+        "Indonesia": {"open": 1, "close": 8},       # 01:00-08:00 UTC → 09:00-16:00 WIB
+        "Philippines": {"open": 1, "close": 7},     # 01:30-07:30 UTC → 09:30-15:30 PHT
+        
+        # === EUROPEAN HOURS (UTC) - Dynamic DST/Standard Time ===
+        "UK": {"open": 7 if is_bst else 8, "close": 16 if is_bst else 17},          # Dynamic BST/GMT
+        "Germany": {"open": 6 if is_bst else 7, "close": 15 if is_bst else 16},     # Dynamic CEST/CET
+        "France": {"open": 6 if is_bst else 7, "close": 15 if is_bst else 16},      # Dynamic CEST/CET
         "Netherlands": {"open": 6 if is_bst else 7, "close": 15 if is_bst else 16}, # Dynamic CEST/CET
-        "Spain": {"open": 6 if is_bst else 7, "close": 15 if is_bst else 16},    # Dynamic CEST/CET
-        "US": {"open": 13 if is_edt else 14, "close": 21 if is_edt else 22},     # Dynamic EDT/EST
-        "Canada": {"open": 13 if is_edt else 14, "close": 21 if is_edt else 22}, # Dynamic EDT/EST
-        "Brazil": {"open": 13, "close": 20},       # 13:00-20:00 UTC → 23:00-06:00 AEST (BRT 10:00-17:00)
-        "Global": {"open": 0, "close": 23}         # 24/7 for commodities and crypto
+        "Spain": {"open": 6 if is_bst else 7, "close": 15 if is_bst else 16},       # Dynamic CEST/CET
+        "Italy": {"open": 6 if is_bst else 7, "close": 15 if is_bst else 16},       # Dynamic CEST/CET
+        "Switzerland": {"open": 6 if is_bst else 7, "close": 15 if is_bst else 16}, # Dynamic CEST/CET
+        "Austria": {"open": 6 if is_bst else 7, "close": 15 if is_bst else 16},     # Dynamic CEST/CET
+        "Belgium": {"open": 6 if is_bst else 7, "close": 15 if is_bst else 16},     # Dynamic CEST/CET
+        "Sweden": {"open": 6 if is_bst else 7, "close": 15 if is_bst else 16},      # Dynamic CEST/CET
+        "Norway": {"open": 6 if is_bst else 7, "close": 14 if is_bst else 15},      # Dynamic CEST/CET
+        "Denmark": {"open": 6 if is_bst else 7, "close": 15 if is_bst else 16},     # Dynamic CEST/CET
+        "Russia": {"open": 6, "close": 15},         # 06:00-15:00 UTC → 09:00-18:00 MSK (no DST)
+        
+        # === AMERICAS HOURS (UTC) ===
+        "US": {"open": 13 if is_edt else 14, "close": 21 if is_edt else 22},        # Dynamic EDT/EST
+        "Canada": {"open": 13 if is_edt else 14, "close": 21 if is_edt else 22},    # Dynamic EDT/EST
+        "Mexico": {"open": 14, "close": 21},        # 14:30-21:00 UTC → 08:30-15:00 CST
+        "Brazil": {"open": 13, "close": 20},        # 13:00-20:00 UTC → 10:00-17:00 BRT
+        "Argentina": {"open": 14, "close": 20},     # 14:00-20:00 UTC → 11:00-17:00 ART
+        "Chile": {"open": 13, "close": 21},         # 13:30-21:00 UTC → 09:30-17:00 CLT
+        
+        # === MIDDLE EAST & AFRICA HOURS (UTC) ===
+        "Israel": {"open": 6, "close": 14},         # 06:00-14:00 UTC → 09:00-17:00 IST
+        "South Africa": {"open": 7, "close": 15},   # 07:00-15:00 UTC → 09:00-17:00 SAST
+        "Egypt": {"open": 8, "close": 12},          # 08:30-12:30 UTC → 10:30-14:30 EET
+        "Turkey": {"open": 6, "close": 14},         # 06:00-14:00 UTC → 09:00-17:00 TRT
+        
+        # === GLOBAL MARKETS (24/7) ===
+        "Global": {"open": 0, "close": 23}          # 24/7 for commodities, crypto, and forex
     }
 
 # Use dynamic market hours
@@ -1197,6 +1367,119 @@ async def search_symbols(query: str, limit: int = Query(default=20, ge=1, le=50)
         "total_found": len(results)
     }
 
+async def get_previous_day_data(symbol: str, chart_type: ChartType, interval_minutes: int = 60) -> List[MarketDataPoint]:
+    """Get REAL previous trading day's data for Asian/Australian markets - NO SYNTHETIC DATA ALLOWED"""
+    try:
+        # Calculate previous trading day relative to current 48h window
+        aest = pytz.timezone('Australia/Sydney')
+        utc_now = datetime.now(timezone.utc)
+        aest_now = utc_now.astimezone(aest)
+        
+        # Calculate the exact previous day relative to the 48h window
+        # Current 48h window: starts at (now - 1 day) at 10:00 AEST
+        # Previous day: should be (now - 2 days) at 10:00 AEST
+        current_48h_start = aest_now - timedelta(days=1)
+        prev_day = current_48h_start - timedelta(days=1)  # One more day back
+        
+        # For weekends, get Friday's data
+        while prev_day.weekday() >= 5:  # Saturday = 5, Sunday = 6
+            prev_day = prev_day - timedelta(days=1)
+        
+        # Ensure we're using the date at 10:00 AEST for consistency with live data
+        prev_day_target = prev_day.replace(hour=10, minute=0, second=0, microsecond=0)
+        
+        logger.info(f"📅 Getting previous day historical data for {symbol} on {prev_day_target.strftime('%Y-%m-%d %H:%M')} AEST")
+        logger.info(f"📊 Current time: {aest_now.strftime('%Y-%m-%d %H:%M')} AEST")
+        logger.info(f"📊 Current 48h starts: {current_48h_start.strftime('%Y-%m-%d %H:%M')} AEST")
+        
+        # CRITICAL FIX: Use REAL historical data from live providers, NOT synthetic data
+        # The generate_historical_24h_data function creates synthetic/demo data which violates no-demo policy
+        logger.warning(f"🚨 ATTEMPTING TO GET REAL HISTORICAL DATA - NO SYNTHETIC DATA ALLOWED")
+        
+        # Try to get real historical data from live data providers
+        live_data = await multi_source_aggregator.get_live_data(symbol)
+        
+        if not live_data or not live_data.data_points:
+            logger.error(f"❌ No live data available for {symbol} - cannot provide real previous day data")
+            return []
+        
+        # Filter for previous day data points (most APIs provide some historical data)
+        prev_day_start = prev_day_target - timedelta(hours=10)  # Start from previous day
+        prev_day_end = prev_day_target + timedelta(hours=14)    # End at previous day
+        
+        # Convert to UTC for filtering
+        prev_day_start_utc = prev_day_start.astimezone(timezone.utc)  
+        prev_day_end_utc = prev_day_end.astimezone(timezone.utc)
+        
+        # Filter for real previous day data points
+        prev_day_points = []
+        for point in live_data.data_points:
+            if prev_day_start_utc <= point.timestamp <= prev_day_end_utc:
+                prev_day_points.append(point)
+        
+        logger.info(f"📊 Found {len(prev_day_points)} REAL data points for {symbol} on previous day from {len(live_data.data_points)} total")
+        
+        if not prev_day_points:
+            logger.error(f"❌ No REAL historical data available for {symbol} on {prev_day_target.strftime('%Y-%m-%d')} - APIs don't provide sufficient history")
+            logger.error(f"🚨 REFUSING to generate synthetic data - maintaining no-demo-data policy")
+            return []
+        
+        # Get market info and previous close for baseline
+        symbol_info = SYMBOLS_DB.get(symbol)
+        if not symbol_info:
+            logger.warning(f"⚠️ Symbol {symbol} not found in database")
+            return []
+            
+        market = symbol_info.market
+        previous_close = await get_previous_close_price(symbol)
+        
+        # Convert REAL historical data to timeline format
+        timeline_data = convert_live_data_to_format(
+            prev_day_points, symbol, market, chart_type, 
+            interval_minutes, previous_close, "24h"
+        )
+        
+        logger.info(f"✅ Using {len(timeline_data)} data points from REAL historical sources for {symbol}")
+        historical_data = {symbol: timeline_data}
+        
+        if symbol in historical_data and historical_data[symbol]:
+            timeline_data = historical_data[symbol]
+            
+            # Adjust timestamps to show correct previous day date and add suffix
+            for point in timeline_data:
+                if point.timestamp:
+                    # Extract current timestamp parts
+                    timestamp_str = point.timestamp.replace(" AEST", "")
+                    try:
+                        # Parse the timestamp to get date and time components
+                        timestamp_dt = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+                        
+                        # Replace the date with the actual previous day date
+                        adjusted_dt = timestamp_dt.replace(
+                            year=prev_day_target.year,
+                            month=prev_day_target.month, 
+                            day=prev_day_target.day
+                        )
+                        
+                        # Format back to string with (Prev Day) suffix
+                        point.timestamp = f"{adjusted_dt.strftime('%Y-%m-%d %H:%M:%S')} AEST (Prev Day)"
+                        
+                    except ValueError:
+                        # Fallback if parsing fails
+                        point.timestamp = point.timestamp.replace(" AEST", " AEST (Prev Day)")
+                        logger.warning(f"⚠️ Could not parse timestamp for date adjustment: {point.timestamp}")
+            
+            
+            logger.info(f"📅 Generated {len(timeline_data)} previous day historical points for {symbol}")
+            return timeline_data
+        
+        logger.warning(f"⚠️ No previous day historical data generated for {symbol}")
+        return []
+        
+    except Exception as e:
+        logger.error(f"❌ Error getting previous day data for {symbol}: {str(e)}")
+        return []
+
 @app.get("/api/market-hours")
 async def get_market_hours():
     """Get current market hours and status across all markets"""
@@ -1271,6 +1554,27 @@ async def analyze_symbols(request: AnalysisRequest):
         symbol_data = await generate_market_data_live(request.symbols, chart_type_enum, interval_minutes, request.time_period)
         symbol_metadata = {symbol: SYMBOLS_DB[symbol] for symbol in request.symbols if symbol in SYMBOLS_DB}
         
+        # For 48h mode, add previous day data for Asian/Australian markets
+        if request.time_period == "48h":
+            asian_australian_markets = ['Japan', 'Hong Kong', 'China', 'South Korea', 'Australia']
+            for symbol in request.symbols:
+                if symbol in SYMBOLS_DB and SYMBOLS_DB[symbol].market in asian_australian_markets:
+                    prev_day_data = await get_previous_day_data(symbol, chart_type_enum, interval_minutes)
+                    if prev_day_data:
+                        # Add previous day data with a prefix to distinguish it
+                        prev_day_symbol = f"{symbol}_prev_day"
+                        symbol_data[prev_day_symbol] = prev_day_data
+                        # Add metadata for the previous day series
+                        prev_day_metadata = SymbolInfo(
+                            symbol=prev_day_symbol,
+                            name=f"{SYMBOLS_DB[symbol].name} (Previous Day)", 
+                            market=SYMBOLS_DB[symbol].market,
+                            category=SYMBOLS_DB[symbol].category,
+                            currency=getattr(SYMBOLS_DB[symbol], 'currency', 'USD')
+                        )
+                        symbol_metadata[prev_day_symbol] = prev_day_metadata
+                        logger.info(f"📈 Added previous day data for {symbol} ({SYMBOLS_DB[symbol].market} market)")
+        
         # Add data source information
         data_source = "live" if LIVE_DATA_ENABLED else "demo"
         
@@ -1343,31 +1647,136 @@ async def get_data_status():
 
 @app.get("/api/suggested-indices")
 async def get_suggested_indices():
-    """Get suggested global indices for 24-hour timeline analysis"""
+    """Get comprehensive global market indices and stocks for 24-hour timeline analysis - SIGNIFICANTLY EXPANDED"""
     
-    # Suggested indices across different time zones for 24h coverage
+    # Comprehensive market selection across all time zones for full global coverage
     suggested = {
-        "asian_pacific": [
-            {"symbol": "^N225", "name": "Nikkei 225", "market": "Japan", "hours": "00:00-06:00 UTC"},
-            {"symbol": "^HSI", "name": "Hang Seng Index", "market": "Hong Kong", "hours": "01:00-08:00 UTC"},
-            {"symbol": "^AXJO", "name": "ASX 200", "market": "Australia", "hours": "23:00-06:00 UTC"}
+        "asia_pacific": [
+            # Major Asian Indices
+            {"symbol": "^N225", "name": "Nikkei 225", "market": "Japan", "hours": "00:00-06:00 UTC", "category": "Index"},
+            {"symbol": "^TOPX", "name": "TOPIX", "market": "Japan", "hours": "00:00-06:00 UTC", "category": "Index"},
+            {"symbol": "^HSI", "name": "Hang Seng Index", "market": "Hong Kong", "hours": "01:30-08:00 UTC", "category": "Index"},
+            {"symbol": "^HSCE", "name": "Hang Seng China Enterprises", "market": "Hong Kong", "hours": "01:30-08:00 UTC", "category": "Index"},
+            {"symbol": "000001.SS", "name": "Shanghai Composite", "market": "China", "hours": "01:30-07:00 UTC", "category": "Index"},
+            {"symbol": "399001.SZ", "name": "Shenzhen Component", "market": "China", "hours": "01:30-07:00 UTC", "category": "Index"},
+            {"symbol": "^KS11", "name": "KOSPI", "market": "South Korea", "hours": "00:00-06:30 UTC", "category": "Index"},
+            {"symbol": "^TWII", "name": "Taiwan Weighted", "market": "Taiwan", "hours": "01:00-05:30 UTC", "category": "Index"},
+            {"symbol": "^AXJO", "name": "ASX 200", "market": "Australia", "hours": "00:00-06:00 UTC", "category": "Index"},
+            {"symbol": "^AORD", "name": "All Ordinaries", "market": "Australia", "hours": "00:00-06:00 UTC", "category": "Index"},
+            {"symbol": "^NZ50", "name": "NZX 50", "market": "New Zealand", "hours": "22:00-04:00 UTC", "category": "Index"},
+            {"symbol": "^STI", "name": "Straits Times Index", "market": "Singapore", "hours": "01:00-09:00 UTC", "category": "Index"},
+            {"symbol": "^BSESN", "name": "BSE SENSEX", "market": "India", "hours": "03:45-10:00 UTC", "category": "Index"},
+            {"symbol": "^NSEI", "name": "NIFTY 50", "market": "India", "hours": "03:45-10:00 UTC", "category": "Index"},
+            {"symbol": "^KLSE", "name": "FTSE Bursa Malaysia KLCI", "market": "Malaysia", "hours": "01:00-08:00 UTC", "category": "Index"},
+            {"symbol": "^SET.BK", "name": "SET Index", "market": "Thailand", "hours": "02:30-10:00 UTC", "category": "Index"},
+            {"symbol": "^JKSE", "name": "Jakarta Composite", "market": "Indonesia", "hours": "01:00-08:00 UTC", "category": "Index"},
+            {"symbol": "^PSI", "name": "PSEi Index", "market": "Philippines", "hours": "01:30-07:30 UTC", "category": "Index"}
         ],
-        "european": [
-            {"symbol": "^FTSE", "name": "FTSE 100", "market": "UK", "hours": "08:00-16:00 UTC"},
-            {"symbol": "^GDAXI", "name": "DAX", "market": "Germany", "hours": "08:00-17:00 UTC"},
-            {"symbol": "^FCHI", "name": "CAC 40", "market": "France", "hours": "08:00-17:00 UTC"}
+        "europe_middle_east_africa": [
+            # Major European Indices
+            {"symbol": "^FTSE", "name": "FTSE 100", "market": "UK", "hours": "08:00-16:00 UTC", "category": "Index"},
+            {"symbol": "^FTMC", "name": "FTSE 250", "market": "UK", "hours": "08:00-16:00 UTC", "category": "Index"},
+            {"symbol": "^GDAXI", "name": "DAX", "market": "Germany", "hours": "07:00-15:00 UTC", "category": "Index"},
+            {"symbol": "^MDAXI", "name": "MDAX", "market": "Germany", "hours": "07:00-15:00 UTC", "category": "Index"},
+            {"symbol": "^FCHI", "name": "CAC 40", "market": "France", "hours": "07:00-15:00 UTC", "category": "Index"},
+            {"symbol": "^AEX", "name": "AEX", "market": "Netherlands", "hours": "07:00-15:00 UTC", "category": "Index"},
+            {"symbol": "^IBEX", "name": "IBEX 35", "market": "Spain", "hours": "07:00-15:00 UTC", "category": "Index"},
+            {"symbol": "^FTMIB", "name": "FTSE MIB", "market": "Italy", "hours": "07:00-15:00 UTC", "category": "Index"},
+            {"symbol": "^SSMI", "name": "Swiss Market Index", "market": "Switzerland", "hours": "07:00-15:00 UTC", "category": "Index"},
+            {"symbol": "^OMX", "name": "OMX Stockholm 30", "market": "Sweden", "hours": "07:00-15:00 UTC", "category": "Index"},
+            {"symbol": "^OSEBX", "name": "Oslo Børs All-share", "market": "Norway", "hours": "07:00-14:00 UTC", "category": "Index"},
+            {"symbol": "^OMXC25", "name": "OMX Copenhagen 25", "market": "Denmark", "hours": "07:00-15:00 UTC", "category": "Index"},
+            {"symbol": "^BFX", "name": "BEL 20", "market": "Belgium", "hours": "07:00-15:00 UTC", "category": "Index"},
+            {"symbol": "^ATX", "name": "ATX Index", "market": "Austria", "hours": "07:00-15:00 UTC", "category": "Index"},
+            {"symbol": "IMOEX.ME", "name": "MOEX Russia Index", "market": "Russia", "hours": "06:00-15:00 UTC", "category": "Index"},
+            # Middle East & Africa
+            {"symbol": "^TA125.TA", "name": "TA-125", "market": "Israel", "hours": "06:00-14:00 UTC", "category": "Index"},
+            {"symbol": "^J203.JO", "name": "FTSE/JSE All Share", "market": "South Africa", "hours": "07:00-15:00 UTC", "category": "Index"},
+            {"symbol": "^CASE30", "name": "EGX 30 Index", "market": "Egypt", "hours": "08:30-12:30 UTC", "category": "Index"},
+            {"symbol": "^XU100.IS", "name": "BIST 100", "market": "Turkey", "hours": "06:00-14:00 UTC", "category": "Index"}
         ],
         "americas": [
-            {"symbol": "^GSPC", "name": "S&P 500", "market": "US", "hours": "14:30-21:00 UTC"},
-            {"symbol": "^IXIC", "name": "NASDAQ", "market": "US", "hours": "14:30-21:00 UTC"},
-            {"symbol": "^DJI", "name": "Dow Jones", "market": "US", "hours": "14:30-21:00 UTC"}
+            # North America
+            {"symbol": "^GSPC", "name": "S&P 500", "market": "US", "hours": "14:30-21:00 UTC", "category": "Index"},
+            {"symbol": "^IXIC", "name": "NASDAQ Composite", "market": "US", "hours": "14:30-21:00 UTC", "category": "Index"},
+            {"symbol": "^DJI", "name": "Dow Jones", "market": "US", "hours": "14:30-21:00 UTC", "category": "Index"},
+            {"symbol": "^RUT", "name": "Russell 2000", "market": "US", "hours": "14:30-21:00 UTC", "category": "Index"},
+            {"symbol": "^VIX", "name": "VIX Volatility", "market": "US", "hours": "14:30-21:00 UTC", "category": "Index"},
+            {"symbol": "^NDX", "name": "NASDAQ-100", "market": "US", "hours": "14:30-21:00 UTC", "category": "Index"},
+            {"symbol": "^GSPTSE", "name": "TSX Composite", "market": "Canada", "hours": "14:30-21:00 UTC", "category": "Index"},
+            # Latin America
+            {"symbol": "^MXX", "name": "IPC Mexico", "market": "Mexico", "hours": "14:30-21:00 UTC", "category": "Index"},
+            {"symbol": "^BVSP", "name": "IBOVESPA", "market": "Brazil", "hours": "13:00-20:00 UTC", "category": "Index"},
+            {"symbol": "^MERV", "name": "S&P MERVAL", "market": "Argentina", "hours": "14:00-20:00 UTC", "category": "Index"},
+            {"symbol": "^IPSA", "name": "S&P CLX IPSA", "market": "Chile", "hours": "13:30-21:00 UTC", "category": "Index"}
+        ],
+        "major_global_stocks": [
+            # US Tech Giants
+            {"symbol": "AAPL", "name": "Apple Inc.", "market": "US", "hours": "14:30-21:00 UTC", "category": "Technology"},
+            {"symbol": "MSFT", "name": "Microsoft Corp.", "market": "US", "hours": "14:30-21:00 UTC", "category": "Technology"},
+            {"symbol": "GOOGL", "name": "Alphabet Inc.", "market": "US", "hours": "14:30-21:00 UTC", "category": "Technology"},
+            {"symbol": "AMZN", "name": "Amazon.com Inc.", "market": "US", "hours": "14:30-21:00 UTC", "category": "Technology"},
+            {"symbol": "NVDA", "name": "NVIDIA Corp.", "market": "US", "hours": "14:30-21:00 UTC", "category": "Technology"},
+            {"symbol": "TSLA", "name": "Tesla Inc.", "market": "US", "hours": "14:30-21:00 UTC", "category": "Automotive"},
+            {"symbol": "META", "name": "Meta Platforms", "market": "US", "hours": "14:30-21:00 UTC", "category": "Technology"},
+            # Global Large Caps
+            {"symbol": "7203.T", "name": "Toyota Motor", "market": "Japan", "hours": "00:00-06:00 UTC", "category": "Automotive"},
+            {"symbol": "0700.HK", "name": "Tencent Holdings", "market": "Hong Kong", "hours": "01:30-08:00 UTC", "category": "Technology"},
+            {"symbol": "2330.TW", "name": "Taiwan Semiconductor", "market": "Taiwan", "hours": "01:00-05:30 UTC", "category": "Technology"},
+            {"symbol": "005930.KS", "name": "Samsung Electronics", "market": "South Korea", "hours": "00:00-06:30 UTC", "category": "Technology"},
+            {"symbol": "SAP.DE", "name": "SAP SE", "market": "Germany", "hours": "07:00-15:00 UTC", "category": "Technology"},
+            {"symbol": "ASML.AS", "name": "ASML Holding", "market": "Netherlands", "hours": "07:00-15:00 UTC", "category": "Technology"},
+            {"symbol": "NESN.SW", "name": "Nestlé S.A.", "market": "Switzerland", "hours": "07:00-15:00 UTC", "category": "Consumer Goods"},
+            {"symbol": "CBA.AX", "name": "Commonwealth Bank", "market": "Australia", "hours": "00:00-06:00 UTC", "category": "Finance"},
+            {"symbol": "SHOP.TO", "name": "Shopify Inc.", "market": "Canada", "hours": "14:30-21:00 UTC", "category": "Technology"}
+        ],
+        "commodities_energy": [
+            {"symbol": "GC=F", "name": "Gold Futures", "market": "Global", "hours": "24/7", "category": "Precious Metals"},
+            {"symbol": "SI=F", "name": "Silver Futures", "market": "Global", "hours": "24/7", "category": "Precious Metals"},
+            {"symbol": "PL=F", "name": "Platinum Futures", "market": "Global", "hours": "24/7", "category": "Precious Metals"},
+            {"symbol": "CL=F", "name": "WTI Crude Oil", "market": "Global", "hours": "24/7", "category": "Energy"},
+            {"symbol": "BZ=F", "name": "Brent Crude Oil", "market": "Global", "hours": "24/7", "category": "Energy"},
+            {"symbol": "NG=F", "name": "Natural Gas", "market": "Global", "hours": "24/7", "category": "Energy"},
+            {"symbol": "ZC=F", "name": "Corn Futures", "market": "Global", "hours": "24/7", "category": "Agriculture"},
+            {"symbol": "ZS=F", "name": "Soybean Futures", "market": "Global", "hours": "24/7", "category": "Agriculture"}
+        ],
+        "cryptocurrencies": [
+            {"symbol": "BTC-USD", "name": "Bitcoin", "market": "Global", "hours": "24/7", "category": "Cryptocurrency"},
+            {"symbol": "ETH-USD", "name": "Ethereum", "market": "Global", "hours": "24/7", "category": "Cryptocurrency"},
+            {"symbol": "BNB-USD", "name": "Binance Coin", "market": "Global", "hours": "24/7", "category": "Cryptocurrency"},
+            {"symbol": "ADA-USD", "name": "Cardano", "market": "Global", "hours": "24/7", "category": "Cryptocurrency"},
+            {"symbol": "SOL-USD", "name": "Solana", "market": "Global", "hours": "24/7", "category": "Cryptocurrency"},
+            {"symbol": "XRP-USD", "name": "XRP", "market": "Global", "hours": "24/7", "category": "Cryptocurrency"},
+            {"symbol": "DOT-USD", "name": "Polkadot", "market": "Global", "hours": "24/7", "category": "Cryptocurrency"}
+        ],
+        "forex_majors": [
+            {"symbol": "EURUSD=X", "name": "EUR/USD", "market": "Global", "hours": "24/5", "category": "Forex"},
+            {"symbol": "GBPUSD=X", "name": "GBP/USD", "market": "Global", "hours": "24/5", "category": "Forex"},
+            {"symbol": "USDJPY=X", "name": "USD/JPY", "market": "Global", "hours": "24/5", "category": "Forex"},
+            {"symbol": "AUDUSD=X", "name": "AUD/USD", "market": "Global", "hours": "24/5", "category": "Forex"},
+            {"symbol": "USDCAD=X", "name": "USD/CAD", "market": "Global", "hours": "24/5", "category": "Forex"},
+            {"symbol": "USDCHF=X", "name": "USD/CHF", "market": "Global", "hours": "24/5", "category": "Forex"}
         ]
     }
     
+    # Count total available markets and symbols
+    total_symbols = sum(len(category) for category in suggested.values())
+    total_markets = len(set(item["market"] for category in suggested.values() for item in category))
+    
     return {
         "suggested_indices": suggested,
-        "total_coverage": "24-hour global market flow",
-        "recommendation": "Select at least one index from each region for complete 24h coverage"
+        "total_coverage": "Complete 24-hour global market flow with 7 major categories",
+        "total_symbols": total_symbols,
+        "total_markets": total_markets,
+        "regions_covered": list(suggested.keys()),
+        "recommendation": "Select symbols from different regions and time zones for comprehensive global coverage. Asia-Pacific (22:00-10:00 UTC), Europe/EMEA (06:00-16:00 UTC), Americas (13:00-22:00 UTC), Global 24/7 markets.",
+        "usage_tips": {
+            "48h_mode": "For 48h charts, select indices from different regions to see the complete market flow across two trading days",
+            "regional_focus": "For regional analysis, select multiple indices from the same region (e.g., multiple European indices)",
+            "global_diversification": "Mix indices, major stocks, commodities, and crypto for a comprehensive global portfolio view",
+            "time_zone_coverage": "Ensure representation from Asia-Pacific, Europe, and Americas for 24h market activity",
+            "category_mixing": "Combine different asset classes: indices for market sentiment, stocks for individual company performance, commodities for inflation hedging, crypto for alternative investments"
+        }
     }
 
 @app.post("/api/analyze/historical")
