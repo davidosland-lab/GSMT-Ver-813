@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 import pytz
@@ -15,6 +15,8 @@ import os
 import logging
 import asyncio
 import random
+import aiohttp
+import json
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -91,6 +93,60 @@ class AnalysisRequest(BaseModel):
 
 # Removed CandlestickRequest - focusing on 24h timeline only
 
+# === ECONOMIC DATA & MARKET ANNOUNCEMENTS MODELS ===
+
+class EconomicEventType(str, Enum):
+    CENTRAL_BANK = "central_bank"
+    ECONOMIC_DATA = "economic_data"
+    EARNINGS = "earnings"
+    POLITICAL = "political"
+    GEOPOLITICAL = "geopolitical"
+    MARKET_OPEN_CLOSE = "market_session"
+
+class EconomicEventImportance(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+class EconomicEvent(BaseModel):
+    event_id: str
+    title: str
+    description: str
+    country: str
+    currency: str
+    event_type: EconomicEventType
+    importance: EconomicEventImportance
+    timestamp: datetime
+    timestamp_ms: int
+    actual_value: Optional[str] = None
+    forecast_value: Optional[str] = None
+    previous_value: Optional[str] = None
+    impact_markets: List[str] = []  # List of affected market symbols
+    source: str = "economic_calendar"
+
+class MarketAnnouncement(BaseModel):
+    announcement_id: str
+    title: str
+    summary: str
+    country: str
+    markets_affected: List[str]  # Market symbols affected
+    announcement_type: EconomicEventType
+    importance: EconomicEventImportance
+    timestamp: datetime
+    timestamp_ms: int
+    url: Optional[str] = None
+    source: str
+
+class EconomicDataResponse(BaseModel):
+    success: bool
+    events: List[EconomicEvent]
+    announcements: List[MarketAnnouncement]
+    total_events: int
+    date_range: Dict[str, str]
+    countries_covered: List[str]
+    markets_affected: List[str]
+
 class AnalysisResponse(BaseModel):
     success: bool
     data: Dict[str, List[MarketDataPoint]]
@@ -101,6 +157,9 @@ class AnalysisResponse(BaseModel):
     successful_symbols: int
     market_hours: Dict[str, Dict[str, int]]
     market_groups: Optional[Dict[str, Dict[str, List[MarketDataPoint]]]] = None  # New field for individual market plotting
+    economic_events: Optional[List[EconomicEvent]] = []  # Economic events affecting selected markets
+    market_announcements: Optional[List[MarketAnnouncement]] = []  # Recent market announcements
+    economic_summary: Optional[Dict[str, Any]] = None  # Summary of economic factors
 
 # Comprehensive symbols database - SIGNIFICANTLY EXPANDED GLOBAL MARKETS
 SYMBOLS_DB = {
@@ -308,6 +367,72 @@ SYMBOLS_DB = {
     "AUDUSD=X": SymbolInfo(symbol="AUDUSD=X", name="AUD/USD", market="Global", category="Forex", currency="USD"),
     "USDCAD=X": SymbolInfo(symbol="USDCAD=X", name="USD/CAD", market="Global", category="Forex", currency="CAD"),
     "USDCHF=X": SymbolInfo(symbol="USDCHF=X", name="USD/CHF", market="Global", category="Forex", currency="CHF"),
+}
+
+# === MARKET TO COUNTRY MAPPING FOR ECONOMIC DATA ===
+MARKET_COUNTRY_MAPPING = {
+    # US Markets
+    "US": {"country": "US", "currency": "USD", "central_bank": "Federal Reserve", "economic_indicators": ["GDP", "CPI", "NFP", "FOMC", "Retail Sales", "ISM PMI"]},
+    
+    # Asia-Pacific
+    "Japan": {"country": "JP", "currency": "JPY", "central_bank": "Bank of Japan", "economic_indicators": ["GDP", "CPI", "Tankan Survey", "Trade Balance", "Industrial Production"]},
+    "Australia": {"country": "AU", "currency": "AUD", "central_bank": "Reserve Bank of Australia", "economic_indicators": ["GDP", "CPI", "Employment", "RBA Rate Decision", "Trade Balance"]},
+    "China": {"country": "CN", "currency": "CNY", "central_bank": "People's Bank of China", "economic_indicators": ["GDP", "CPI", "PMI", "Trade Balance", "Industrial Production"]},
+    "Hong Kong": {"country": "HK", "currency": "HKD", "central_bank": "Hong Kong Monetary Authority", "economic_indicators": ["GDP", "CPI", "Trade Balance"]},
+    "South Korea": {"country": "KR", "currency": "KRW", "central_bank": "Bank of Korea", "economic_indicators": ["GDP", "CPI", "Trade Balance", "Industrial Production"]},
+    "Taiwan": {"country": "TW", "currency": "TWD", "central_bank": "Central Bank of Taiwan", "economic_indicators": ["GDP", "CPI", "Trade Balance", "Industrial Production"]},
+    "Singapore": {"country": "SG", "currency": "SGD", "central_bank": "Monetary Authority of Singapore", "economic_indicators": ["GDP", "CPI", "Trade Balance"]},
+    "India": {"country": "IN", "currency": "INR", "central_bank": "Reserve Bank of India", "economic_indicators": ["GDP", "CPI", "RBI Rate", "Trade Balance", "Industrial Production"]},
+    "New Zealand": {"country": "NZ", "currency": "NZD", "central_bank": "Reserve Bank of New Zealand", "economic_indicators": ["GDP", "CPI", "Employment", "RBNZ Rate"]},
+    "Malaysia": {"country": "MY", "currency": "MYR", "central_bank": "Bank Negara Malaysia", "economic_indicators": ["GDP", "CPI", "Trade Balance"]},
+    "Thailand": {"country": "TH", "currency": "THB", "central_bank": "Bank of Thailand", "economic_indicators": ["GDP", "CPI", "Trade Balance"]},
+    "Indonesia": {"country": "ID", "currency": "IDR", "central_bank": "Bank Indonesia", "economic_indicators": ["GDP", "CPI", "Trade Balance"]},
+    "Philippines": {"country": "PH", "currency": "PHP", "central_bank": "Bangko Sentral ng Pilipinas", "economic_indicators": ["GDP", "CPI", "Trade Balance"]},
+    
+    # Europe
+    "UK": {"country": "GB", "currency": "GBP", "central_bank": "Bank of England", "economic_indicators": ["GDP", "CPI", "BoE Rate", "Employment", "Retail Sales", "PMI"]},
+    "Germany": {"country": "DE", "currency": "EUR", "central_bank": "European Central Bank", "economic_indicators": ["GDP", "CPI", "ECB Rate", "Industrial Production", "ZEW Sentiment"]},
+    "France": {"country": "FR", "currency": "EUR", "central_bank": "European Central Bank", "economic_indicators": ["GDP", "CPI", "ECB Rate", "Industrial Production", "Business Confidence"]},
+    "Netherlands": {"country": "NL", "currency": "EUR", "central_bank": "European Central Bank", "economic_indicators": ["GDP", "CPI", "ECB Rate", "Trade Balance"]},
+    "Spain": {"country": "ES", "currency": "EUR", "central_bank": "European Central Bank", "economic_indicators": ["GDP", "CPI", "ECB Rate", "Unemployment"]},
+    "Italy": {"country": "IT", "currency": "EUR", "central_bank": "European Central Bank", "economic_indicators": ["GDP", "CPI", "ECB Rate", "Industrial Production"]},
+    "Switzerland": {"country": "CH", "currency": "CHF", "central_bank": "Swiss National Bank", "economic_indicators": ["GDP", "CPI", "SNB Rate", "Trade Balance"]},
+    "Sweden": {"country": "SE", "currency": "SEK", "central_bank": "Sveriges Riksbank", "economic_indicators": ["GDP", "CPI", "Riksbank Rate", "Industrial Production"]},
+    "Norway": {"country": "NO", "currency": "NOK", "central_bank": "Norges Bank", "economic_indicators": ["GDP", "CPI", "Norges Bank Rate", "Oil Production"]},
+    "Denmark": {"country": "DK", "currency": "DKK", "central_bank": "Danmarks Nationalbank", "economic_indicators": ["GDP", "CPI", "Trade Balance"]},
+    "Belgium": {"country": "BE", "currency": "EUR", "central_bank": "European Central Bank", "economic_indicators": ["GDP", "CPI", "ECB Rate"]},
+    "Austria": {"country": "AT", "currency": "EUR", "central_bank": "European Central Bank", "economic_indicators": ["GDP", "CPI", "ECB Rate"]},
+    "Russia": {"country": "RU", "currency": "RUB", "central_bank": "Central Bank of Russia", "economic_indicators": ["GDP", "CPI", "CBR Rate", "Oil Production"]},
+    
+    # Middle East & Africa
+    "Israel": {"country": "IL", "currency": "ILS", "central_bank": "Bank of Israel", "economic_indicators": ["GDP", "CPI", "BoI Rate"]},
+    "South Africa": {"country": "ZA", "currency": "ZAR", "central_bank": "South African Reserve Bank", "economic_indicators": ["GDP", "CPI", "SARB Rate", "Mining Production"]},
+    "Egypt": {"country": "EG", "currency": "EGP", "central_bank": "Central Bank of Egypt", "economic_indicators": ["GDP", "CPI"]},
+    "Turkey": {"country": "TR", "currency": "TRY", "central_bank": "Central Bank of Turkey", "economic_indicators": ["GDP", "CPI", "CBRT Rate"]},
+    
+    # Americas
+    "Canada": {"country": "CA", "currency": "CAD", "central_bank": "Bank of Canada", "economic_indicators": ["GDP", "CPI", "BoC Rate", "Employment", "Oil Production"]},
+    "Mexico": {"country": "MX", "currency": "MXN", "central_bank": "Bank of Mexico", "economic_indicators": ["GDP", "CPI", "Banxico Rate"]},
+    "Brazil": {"country": "BR", "currency": "BRL", "central_bank": "Central Bank of Brazil", "economic_indicators": ["GDP", "CPI", "Selic Rate", "Trade Balance"]},
+    "Argentina": {"country": "AR", "currency": "ARS", "central_bank": "Central Bank of Argentina", "economic_indicators": ["GDP", "CPI"]},
+    "Chile": {"country": "CL", "currency": "CLP", "central_bank": "Central Bank of Chile", "economic_indicators": ["GDP", "CPI", "BCCh Rate", "Copper Production"]},
+    
+    # Global Markets
+    "Global": {"country": "GLOBAL", "currency": "USD", "central_bank": "Multiple", "economic_indicators": ["Global PMI", "Commodity Prices", "Crypto Market Cap"]}
+}
+
+# Economic events that typically impact markets globally
+MAJOR_ECONOMIC_EVENTS = {
+    "high_impact": [
+        "FOMC Rate Decision", "ECB Rate Decision", "BoE Rate Decision", "BoJ Rate Decision",
+        "Non-Farm Payrolls", "CPI", "GDP", "Retail Sales", "Industrial Production",
+        "PMI", "Consumer Confidence", "Trade Balance", "Current Account"
+    ],
+    "market_sessions": [
+        "Tokyo Open", "Hong Kong Open", "London Open", "New York Open",
+        "Tokyo Close", "Hong Kong Close", "London Close", "New York Close"
+    ],
+    "earnings_seasons": ["Q1 Earnings", "Q2 Earnings", "Q3 Earnings", "Q4 Earnings"]
 }
 
 # Period configuration for global market coverage
@@ -1185,6 +1310,206 @@ def is_market_open_at_hour(hour: int, market: str, check_date: datetime = None) 
     else:
         return market_hours["open"] <= hour <= market_hours["close"]
 
+# === ECONOMIC DATA & MARKET ANNOUNCEMENTS FUNCTIONS ===
+
+async def get_economic_events_for_markets(symbols: List[str], date_from: datetime, date_to: datetime) -> List[EconomicEvent]:
+    """Get economic events relevant to the selected markets within date range"""
+    events = []
+    countries_to_fetch = set()
+    
+    # Map symbols to countries
+    for symbol in symbols:
+        if symbol in SYMBOLS_DB:
+            market = SYMBOLS_DB[symbol].market
+            if market in MARKET_COUNTRY_MAPPING:
+                countries_to_fetch.add(market)
+    
+    # Generate economic events for each relevant country
+    for market in countries_to_fetch:
+        country_info = MARKET_COUNTRY_MAPPING[market]
+        country_events = await generate_economic_events_for_country(
+            country_info, date_from, date_to, symbols
+        )
+        events.extend(country_events)
+    
+    # Add global events that affect all markets
+    global_events = await generate_global_economic_events(date_from, date_to, symbols)
+    events.extend(global_events)
+    
+    # Sort events by timestamp
+    events.sort(key=lambda x: x.timestamp)
+    
+    logger.info(f"📅 Generated {len(events)} economic events for {len(countries_to_fetch)} countries/markets")
+    return events
+
+async def generate_economic_events_for_country(country_info: Dict, date_from: datetime, date_to: datetime, symbols: List[str]) -> List[EconomicEvent]:
+    """Generate economic events for a specific country"""
+    events = []
+    country_code = country_info["country"]
+    currency = country_info["currency"]
+    central_bank = country_info["central_bank"]
+    indicators = country_info["economic_indicators"]
+    
+    # Central Bank Rate Decisions (monthly)
+    if "Rate" in " ".join(indicators):
+        rate_decision_event = EconomicEvent(
+            event_id=f"{country_code}_rate_decision_{date_from.strftime('%Y%m')}",
+            title=f"{central_bank} Interest Rate Decision",
+            description=f"Monthly monetary policy decision by {central_bank}",
+            country=country_code,
+            currency=currency,
+            event_type=EconomicEventType.CENTRAL_BANK,
+            importance=EconomicEventImportance.HIGH,
+            timestamp=date_from + timedelta(days=15),  # Mid-month
+            timestamp_ms=int((date_from + timedelta(days=15)).timestamp() * 1000),
+            forecast_value="Hold",
+            impact_markets=[s for s in symbols if SYMBOLS_DB.get(s, {}).market == country_info.get("market", country_code)],
+            source="economic_calendar"
+        )
+        events.append(rate_decision_event)
+    
+    # CPI (Consumer Price Index) - Monthly
+    if "CPI" in indicators:
+        cpi_event = EconomicEvent(
+            event_id=f"{country_code}_cpi_{date_from.strftime('%Y%m')}",
+            title=f"{country_code} Consumer Price Index (CPI)",
+            description=f"Monthly inflation data for {country_code}",
+            country=country_code,
+            currency=currency,
+            event_type=EconomicEventType.ECONOMIC_DATA,
+            importance=EconomicEventImportance.HIGH,
+            timestamp=date_from + timedelta(days=20),
+            timestamp_ms=int((date_from + timedelta(days=20)).timestamp() * 1000),
+            forecast_value="2.1% YoY",
+            impact_markets=[s for s in symbols if SYMBOLS_DB.get(s, {}).market == country_info.get("market", country_code)],
+            source="economic_calendar"
+        )
+        events.append(cpi_event)
+    
+    # GDP - Quarterly  
+    if "GDP" in indicators:
+        gdp_event = EconomicEvent(
+            event_id=f"{country_code}_gdp_q{((date_from.month-1)//3)+1}_{date_from.year}",
+            title=f"{country_code} Gross Domestic Product (GDP)",
+            description=f"Quarterly economic growth data for {country_code}",
+            country=country_code,
+            currency=currency,
+            event_type=EconomicEventType.ECONOMIC_DATA,
+            importance=EconomicEventImportance.CRITICAL,
+            timestamp=date_from + timedelta(days=30),
+            timestamp_ms=int((date_from + timedelta(days=30)).timestamp() * 1000),
+            forecast_value="2.8% YoY",
+            impact_markets=[s for s in symbols if SYMBOLS_DB.get(s, {}).market == country_info.get("market", country_code)],
+            source="economic_calendar"
+        )
+        events.append(gdp_event)
+    
+    return events
+
+async def generate_global_economic_events(date_from: datetime, date_to: datetime, symbols: List[str]) -> List[EconomicEvent]:
+    """Generate global economic events that affect all markets"""
+    events = []
+    
+    # Market Session Open/Close events
+    market_sessions = [
+        ("Tokyo", 0, "Japan"),
+        ("Hong Kong", 1, "Hong Kong"), 
+        ("London", 8, "UK"),
+        ("New York", 14, "US")
+    ]
+    
+    current_date = date_from
+    while current_date <= date_to:
+        for session_name, hour, market in market_sessions:
+            # Market Open
+            open_event = EconomicEvent(
+                event_id=f"{session_name.lower()}_open_{current_date.strftime('%Y%m%d')}",
+                title=f"{session_name} Market Open",
+                description=f"Trading session begins in {session_name}",
+                country=MARKET_COUNTRY_MAPPING.get(market, {}).get("country", "GLOBAL"),
+                currency="USD",
+                event_type=EconomicEventType.MARKET_OPEN_CLOSE,
+                importance=EconomicEventImportance.MEDIUM,
+                timestamp=current_date.replace(hour=hour, minute=0, second=0, microsecond=0),
+                timestamp_ms=int(current_date.replace(hour=hour, minute=0, second=0, microsecond=0).timestamp() * 1000),
+                impact_markets=[s for s in symbols if SYMBOLS_DB.get(s, {}).market == market],
+                source="market_sessions"
+            )
+            events.append(open_event)
+            
+            # Market Close (add 8 hours to open time)
+            close_hour = (hour + 8) % 24
+            close_date = current_date if (hour + 8) < 24 else current_date + timedelta(days=1)
+            close_event = EconomicEvent(
+                event_id=f"{session_name.lower()}_close_{current_date.strftime('%Y%m%d')}",
+                title=f"{session_name} Market Close",
+                description=f"Trading session ends in {session_name}",
+                country=MARKET_COUNTRY_MAPPING.get(market, {}).get("country", "GLOBAL"),
+                currency="USD",
+                event_type=EconomicEventType.MARKET_OPEN_CLOSE,
+                importance=EconomicEventImportance.MEDIUM,
+                timestamp=close_date.replace(hour=close_hour, minute=0, second=0, microsecond=0),
+                timestamp_ms=int(close_date.replace(hour=close_hour, minute=0, second=0, microsecond=0).timestamp() * 1000),
+                impact_markets=[s for s in symbols if SYMBOLS_DB.get(s, {}).market == market],
+                source="market_sessions"
+            )
+            events.append(close_event)
+        
+        current_date += timedelta(days=1)
+    
+    return events
+
+async def get_market_announcements_for_symbols(symbols: List[str], hours_back: int = 24) -> List[MarketAnnouncement]:
+    """Get recent market announcements relevant to selected symbols"""
+    announcements = []
+    
+    # Generate sample market announcements based on selected markets
+    for symbol in symbols[:5]:  # Limit to avoid too many announcements
+        if symbol in SYMBOLS_DB:
+            symbol_info = SYMBOLS_DB[symbol]
+            market = symbol_info.market
+            
+            # Generate relevant announcements for this market
+            if market in MARKET_COUNTRY_MAPPING:
+                country_info = MARKET_COUNTRY_MAPPING[market]
+                
+                # Central bank announcement
+                cb_announcement = MarketAnnouncement(
+                    announcement_id=f"{symbol}_{market}_cb_latest",
+                    title=f"{country_info['central_bank']} Policy Update",
+                    summary=f"Latest monetary policy statement from {country_info['central_bank']} affecting {market} markets",
+                    country=country_info["country"],
+                    markets_affected=[symbol],
+                    announcement_type=EconomicEventType.CENTRAL_BANK,
+                    importance=EconomicEventImportance.HIGH,
+                    timestamp=datetime.now(timezone.utc) - timedelta(hours=random.randint(1, hours_back)),
+                    timestamp_ms=int((datetime.now(timezone.utc) - timedelta(hours=random.randint(1, hours_back))).timestamp() * 1000),
+                    source="central_bank_feed"
+                )
+                announcements.append(cb_announcement)
+                
+                # Economic data release
+                if symbol_info.category == "Index":
+                    econ_announcement = MarketAnnouncement(
+                        announcement_id=f"{symbol}_{market}_econ_latest",
+                        title=f"{market} Economic Data Release",
+                        summary=f"Key economic indicators published for {market} showing market impact",
+                        country=country_info["country"],
+                        markets_affected=[symbol],
+                        announcement_type=EconomicEventType.ECONOMIC_DATA,
+                        importance=EconomicEventImportance.MEDIUM,
+                        timestamp=datetime.now(timezone.utc) - timedelta(hours=random.randint(1, hours_back)),
+                        timestamp_ms=int((datetime.now(timezone.utc) - timedelta(hours=random.randint(1, hours_back))).timestamp() * 1000),
+                        source="economic_data_feed"
+                    )
+                    announcements.append(econ_announcement)
+    
+    # Sort by timestamp (most recent first)
+    announcements.sort(key=lambda x: x.timestamp, reverse=True)
+    
+    logger.info(f"📢 Generated {len(announcements)} market announcements for selected symbols")
+    return announcements
+
 # API Routes
 @app.get("/api")
 @app.get("/api/")
@@ -1587,6 +1912,40 @@ async def analyze_symbols(request: AnalysisRequest):
                     market_groups[market] = {}
                 market_groups[market][symbol] = data_points
         
+        # Fetch economic events and market announcements for selected symbols
+        try:
+            utc_now = datetime.now(timezone.utc)
+            date_from = utc_now - timedelta(hours=48)  # Look back 48 hours
+            date_to = utc_now + timedelta(hours=24)    # Look forward 24 hours
+            
+            economic_events = await get_economic_events_for_markets(request.symbols, date_from, date_to)
+            market_announcements = await get_market_announcements_for_symbols(request.symbols, 48)
+            
+            # Create economic summary
+            countries_covered = list(set(
+                MARKET_COUNTRY_MAPPING.get(SYMBOLS_DB[s].market, {}).get("country", "UNKNOWN")
+                for s in request.symbols if s in SYMBOLS_DB
+            ))
+            
+            economic_summary = {
+                "countries_monitored": countries_covered,
+                "total_economic_events": len(economic_events),
+                "total_announcements": len(market_announcements),
+                "high_impact_events": len([e for e in economic_events if e.importance in [EconomicEventImportance.HIGH, EconomicEventImportance.CRITICAL]]),
+                "date_range": {
+                    "from": date_from.isoformat(),
+                    "to": date_to.isoformat()
+                }
+            }
+            
+            logger.info(f"📊 Added {len(economic_events)} economic events and {len(market_announcements)} announcements to analysis")
+            
+        except Exception as e:
+            logger.warning(f"Failed to fetch economic data: {e}")
+            economic_events = []
+            market_announcements = []
+            economic_summary = {"error": "Economic data unavailable"}
+        
         return AnalysisResponse(
             success=True,
             data=symbol_data,
@@ -1596,7 +1955,10 @@ async def analyze_symbols(request: AnalysisRequest):
             total_symbols=len(request.symbols),
             successful_symbols=len(symbol_data),
             market_hours=MARKET_HOURS,
-            market_groups=market_groups
+            market_groups=market_groups,
+            economic_events=economic_events,
+            market_announcements=market_announcements,
+            economic_summary=economic_summary
         )
     except Exception as e:
         logger.error(f"Failed to generate market data: {str(e)}")
@@ -1858,6 +2220,222 @@ async def analyze_historical_symbols(request: AnalysisRequest, target_date: str 
     except Exception as e:
         logger.error(f"Failed to generate historical data for {target_date}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate historical data: {str(e)}")
+
+@app.get("/api/economic-events")
+async def get_economic_events(
+    symbols: str = Query(..., description="Comma-separated list of market symbols"),
+    hours_back: int = Query(48, description="Hours back from now to fetch events (default: 48h)"),
+    hours_forward: int = Query(24, description="Hours forward from now to fetch events (default: 24h)")
+):
+    """Get economic events and market announcements relevant to selected symbols"""
+    
+    try:
+        # Parse symbols
+        symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+        
+        if not symbol_list:
+            raise HTTPException(status_code=400, detail="No valid symbols provided")
+        
+        # Validate symbols exist in database
+        valid_symbols = [s for s in symbol_list if s in SYMBOLS_DB]
+        if not valid_symbols:
+            raise HTTPException(status_code=400, detail="No valid symbols found in database")
+        
+        # Calculate date range
+        utc_now = datetime.now(timezone.utc)
+        date_from = utc_now - timedelta(hours=hours_back)
+        date_to = utc_now + timedelta(hours=hours_forward)
+        
+        # Get economic events for the selected markets
+        events = await get_economic_events_for_markets(valid_symbols, date_from, date_to)
+        
+        # Get market announcements
+        announcements = await get_market_announcements_for_symbols(valid_symbols, hours_back)
+        
+        # Get countries and markets affected
+        countries_covered = list(set(
+            MARKET_COUNTRY_MAPPING.get(SYMBOLS_DB[s].market, {}).get("country", "UNKNOWN")
+            for s in valid_symbols if s in SYMBOLS_DB
+        ))
+        
+        markets_affected = list(set(SYMBOLS_DB[s].market for s in valid_symbols if s in SYMBOLS_DB))
+        
+        logger.info(f"📊 Retrieved {len(events)} economic events and {len(announcements)} announcements for {len(valid_symbols)} symbols")
+        
+        return EconomicDataResponse(
+            success=True,
+            events=events,
+            announcements=announcements,
+            total_events=len(events) + len(announcements),
+            date_range={
+                "from": date_from.isoformat(),
+                "to": date_to.isoformat()
+            },
+            countries_covered=countries_covered,
+            markets_affected=markets_affected
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching economic events: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch economic events: {str(e)}")
+
+@app.get("/api/market-impact")
+async def get_market_impact_events(
+    symbol: str = Query(..., description="Market symbol to get impact events for"),
+    importance: str = Query("medium", description="Minimum importance level (low, medium, high, critical)")
+):
+    """Get economic events that typically impact a specific market symbol"""
+    
+    try:
+        symbol = symbol.strip().upper()
+        
+        if symbol not in SYMBOLS_DB:
+            raise HTTPException(status_code=404, detail=f"Symbol {symbol} not found in database")
+        
+        symbol_info = SYMBOLS_DB[symbol]
+        market = symbol_info.market
+        
+        if market not in MARKET_COUNTRY_MAPPING:
+            raise HTTPException(status_code=404, detail=f"Market {market} not found in economic mapping")
+        
+        country_info = MARKET_COUNTRY_MAPPING[market]
+        
+        # Create impact analysis
+        impact_events = {
+            "symbol": symbol,
+            "market": market,
+            "country": country_info["country"],
+            "currency": country_info["currency"],
+            "central_bank": country_info["central_bank"],
+            "key_economic_indicators": country_info["economic_indicators"],
+            "typical_high_impact_events": [
+                f"{country_info['central_bank']} Interest Rate Decision",
+                f"{country_info['country']} Consumer Price Index (CPI)",
+                f"{country_info['country']} Gross Domestic Product (GDP)",
+                f"{country_info['country']} Employment Data",
+                f"{country_info['country']} Trade Balance"
+            ],
+            "global_events_affecting_market": [
+                "US Federal Reserve Policy Changes",
+                "Global Risk Sentiment Shifts",
+                "Commodity Price Movements",
+                "Geopolitical Events",
+                "Currency Fluctuations"
+            ],
+            "market_session_times": {
+                "market_hours_utc": MARKET_HOURS.get(market, {"open": 0, "close": 23}),
+                "typical_volatility_periods": [
+                    "Market Open (+/- 1 hour)",
+                    "Economic Data Releases",
+                    "Central Bank Announcements",
+                    "Market Close (+/- 30 minutes)"
+                ]
+            }
+        }
+        
+        logger.info(f"📈 Generated market impact analysis for {symbol} ({market})")
+        
+        return {
+            "success": True,
+            "symbol": symbol,
+            "impact_analysis": impact_events,
+            "recommendation": f"Monitor {country_info['central_bank']} announcements and key economic data releases for {country_info['country']} to anticipate {symbol} movements"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating market impact analysis: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate market impact analysis: {str(e)}")
+
+@app.get("/api/economic-calendar")
+async def get_economic_calendar(
+    date: str = Query(None, description="Date in YYYY-MM-DD format (default: today)"),
+    markets: str = Query(None, description="Comma-separated list of markets (default: all major markets)")
+):
+    """Get economic calendar for a specific date and markets"""
+    
+    try:
+        # Parse date
+        if date:
+            target_date = datetime.strptime(date, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+        else:
+            target_date = datetime.now(timezone.utc)
+        
+        # Parse markets
+        if markets:
+            market_list = [m.strip() for m in markets.split(",") if m.strip()]
+        else:
+            # Default to major markets
+            market_list = ["US", "UK", "Germany", "Japan", "Australia", "China", "Hong Kong"]
+        
+        # Generate calendar events for the date
+        calendar_events = []
+        
+        for market in market_list:
+            if market in MARKET_COUNTRY_MAPPING:
+                country_info = MARKET_COUNTRY_MAPPING[market]
+                
+                # Market sessions
+                market_hours = MARKET_HOURS.get(market, {"open": 0, "close": 23})
+                
+                # Market open event
+                open_time = target_date.replace(hour=market_hours["open"], minute=0, second=0, microsecond=0)
+                calendar_events.append({
+                    "time": open_time.isoformat(),
+                    "market": market,
+                    "event": f"{market} Market Open",
+                    "importance": "medium",
+                    "type": "market_session"
+                })
+                
+                # Market close event
+                close_hour = market_hours["close"]
+                close_time = target_date.replace(hour=close_hour, minute=0, second=0, microsecond=0)
+                if close_hour < market_hours["open"]:  # Next day close
+                    close_time += timedelta(days=1)
+                
+                calendar_events.append({
+                    "time": close_time.isoformat(),
+                    "market": market,
+                    "event": f"{market} Market Close",
+                    "importance": "medium",
+                    "type": "market_session"
+                })
+                
+                # Economic events (sample)
+                for indicator in country_info["economic_indicators"][:3]:  # Top 3 indicators
+                    event_time = target_date.replace(
+                        hour=random.randint(8, 16), 
+                        minute=random.choice([0, 30]), 
+                        second=0, 
+                        microsecond=0
+                    )
+                    calendar_events.append({
+                        "time": event_time.isoformat(),
+                        "market": market,
+                        "event": f"{country_info['country']} {indicator}",
+                        "importance": "high" if indicator in ["GDP", "CPI", "Rate"] else "medium",
+                        "type": "economic_data"
+                    })
+        
+        # Sort by time
+        calendar_events.sort(key=lambda x: x["time"])
+        
+        return {
+            "success": True,
+            "date": target_date.strftime('%Y-%m-%d'),
+            "markets_covered": market_list,
+            "total_events": len(calendar_events),
+            "calendar": calendar_events,
+            "timezone": "UTC"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error generating economic calendar: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate economic calendar: {str(e)}")
 
 # Application startup event
 @app.on_event("startup")
