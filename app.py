@@ -296,9 +296,9 @@ def convert_live_data_to_format(live_points: List[LiveDataPoint], symbol: str, m
     
     # Calculate start time based on period
     if time_period == "48h":
-        # For 48h mode: Start from 2 days back at 10:00 AEST to show complete previous day market data 
-        # for all regions (Australian/Asian, European, US markets)
-        start_aest = (aest_now - timedelta(days=2)).replace(hour=10, minute=0, second=0, microsecond=0)
+        # For 48h mode: Start from 1 day back at 10:00 AEST through to 09:59 AEST the following day
+        # This shows chronological market flow: Nikkei(-1day) → FTSE → S&P → Nikkei(current day)
+        start_aest = (aest_now - timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
         hours = 48
     else:
         # For 24h mode: Start at 10:00 AEST today (or yesterday if it's before 10:00 AEST)  
