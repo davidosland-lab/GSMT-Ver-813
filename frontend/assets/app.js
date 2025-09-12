@@ -24,17 +24,30 @@ class GlobalMarketTracker {
     }
 
     detectApiUrl() {
-        // For sandbox environment, API runs on port 8000
+        // Production API URL detection for deployment
         const currentHost = window.location.hostname;
+        
+        // Production deployment on Netlify
+        if (currentHost.includes('netlify.app')) {
+            // Use Railway backend URL for production
+            return 'https://your-railway-backend-url.railway.app/api';
+        }
+        
+        // For sandbox environment, API runs on port 8000
         if (currentHost.includes('e2b.dev')) {
             // Extract sandbox ID from hostname like "3000-sandbox-id.e2b.dev"
             const sandboxId = currentHost.split('-').slice(1).join('-');
             const apiHost = `8000-${sandboxId}`;
             return `https://${apiHost}/api`;
         }
-        // For local deployment fallback
-        const baseUrl = window.location.origin;
-        return `${baseUrl}/api`;
+        
+        // For localhost development
+        if (currentHost === 'localhost' || currentHost === '127.0.0.1') {
+            return 'http://localhost:8000/api';
+        }
+        
+        // Default fallback - use /api proxy
+        return '/api';
     }
 
     async init() {
