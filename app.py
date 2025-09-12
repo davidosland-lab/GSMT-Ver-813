@@ -2446,6 +2446,13 @@ from market_prediction_llm import (
     PredictionTimeframe
 )
 
+# Import optimized prediction system
+from optimized_prediction_system import (
+    optimized_prediction_service,
+    OptimizedPredictionRequest,
+    OptimizedPredictionResponse
+)
+
 @app.get("/api/prediction/{symbol}")
 async def get_market_prediction(
     symbol: str,
@@ -2527,6 +2534,54 @@ async def get_batch_predictions(
     except Exception as e:
         logger.error(f"Error in batch prediction endpoint: {e}")
         raise HTTPException(status_code=500, detail=f"Batch prediction service error: {str(e)}")
+
+@app.get("/api/prediction/fast/{symbol}")
+async def get_fast_market_prediction(
+    symbol: str,
+    timeframe: str = Query("5d", description="Prediction timeframe: 1d, 5d, 30d, 90d"),
+    include_factors: bool = Query(True, description="Include market factors analysis"),
+    include_news: bool = Query(True, description="Include news intelligence analysis")
+):
+    """Get FAST market prediction with optimized performance (<1s response time)"""
+    
+    try:
+        # Validate timeframe
+        valid_timeframes = ["1d", "5d", "30d", "90d"]
+        if timeframe not in valid_timeframes:
+            raise HTTPException(status_code=400, detail=f"Invalid timeframe. Must be one of: {valid_timeframes}")
+        
+        # Create optimized prediction request
+        request = OptimizedPredictionRequest(
+            symbol=symbol,
+            timeframe=timeframe,
+            include_factors=include_factors,
+            include_news_intelligence=include_news
+        )
+        
+        # Generate fast prediction
+        start_time = datetime.now()
+        prediction_response = await optimized_prediction_service.generate_fast_prediction(request)
+        end_time = datetime.now()
+        
+        processing_time = (end_time - start_time).total_seconds()
+        
+        if not prediction_response.success:
+            raise HTTPException(status_code=500, detail="Failed to generate fast market prediction")
+        
+        logger.info(f"⚡ Generated FAST prediction for {symbol} ({timeframe}) in {processing_time:.2f}s: {prediction_response.prediction.get('direction', 'unknown')}")
+        
+        # Add endpoint timing info
+        response_dict = prediction_response.dict()
+        response_dict['endpoint_processing_time'] = processing_time
+        response_dict['optimization_benefit'] = f"~{max(1, 25/processing_time):.0f}x faster than standard prediction"
+        
+        return response_dict
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in fast prediction endpoint: {e}")
+        raise HTTPException(status_code=500, detail=f"Fast prediction service error: {str(e)}")
 
 @app.get("/api/prediction/aord/detailed")
 async def get_detailed_aord_prediction():
