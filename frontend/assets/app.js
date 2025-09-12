@@ -30,7 +30,7 @@ class GlobalMarketTracker {
         // Production deployment on Netlify
         if (currentHost.includes('netlify.app')) {
             // Use Railway backend URL for production
-            return 'https://gsmt-ver-813-production.up.railway.app';
+            return 'https://gsmt-ver-813-production.up.railway.app/api';
         }
         
         // For sandbox environment, API runs on port 8000
