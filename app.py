@@ -2438,6 +2438,186 @@ async def get_economic_calendar(
         logger.error(f"Error generating economic calendar: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate economic calendar: {str(e)}")
 
+# Import LLM prediction system
+from market_prediction_llm import (
+    prediction_service,
+    PredictionRequest,
+    PredictionResponse,
+    PredictionTimeframe
+)
+
+@app.get("/api/prediction/{symbol}")
+async def get_market_prediction(
+    symbol: str,
+    timeframe: str = Query("5d", description="Prediction timeframe: 1d, 5d, 30d, 90d"),
+    include_factors: bool = Query(True, description="Include market factors analysis")
+):
+    """Get LLM-powered market prediction for specified symbol"""
+    
+    try:
+        # Validate timeframe
+        valid_timeframes = ["1d", "5d", "30d", "90d"]
+        if timeframe not in valid_timeframes:
+            raise HTTPException(status_code=400, detail=f"Invalid timeframe. Must be one of: {valid_timeframes}")
+        
+        # Create prediction request
+        request = PredictionRequest(
+            symbol=symbol,
+            timeframe=timeframe,
+            include_factors=include_factors
+        )
+        
+        # Generate prediction
+        prediction_response = await prediction_service.get_market_prediction(request)
+        
+        if not prediction_response.success:
+            raise HTTPException(status_code=500, detail="Failed to generate market prediction")
+        
+        logger.info(f"🧠 Generated LLM prediction for {symbol} ({timeframe}): {prediction_response.prediction.get('direction', 'unknown')}")
+        
+        return prediction_response.dict()
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in market prediction endpoint: {e}")
+        raise HTTPException(status_code=500, detail=f"Prediction service error: {str(e)}")
+
+@app.post("/api/prediction/batch")
+async def get_batch_predictions(
+    symbols: List[str] = Query(["^AORD"], description="List of symbols to predict"),
+    timeframe: str = Query("5d", description="Prediction timeframe: 1d, 5d, 30d, 90d"),
+    include_factors: bool = Query(True, description="Include market factors analysis")
+):
+    """Get batch predictions for multiple symbols"""
+    
+    try:
+        if len(symbols) > 10:
+            raise HTTPException(status_code=400, detail="Maximum 10 symbols allowed per batch request")
+        
+        predictions = {}
+        
+        for symbol in symbols:
+            try:
+                request = PredictionRequest(
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    include_factors=include_factors
+                )
+                
+                prediction_response = await prediction_service.get_market_prediction(request)
+                predictions[symbol] = prediction_response.dict()
+                
+            except Exception as e:
+                logger.error(f"Error predicting {symbol}: {e}")
+                predictions[symbol] = {
+                    "success": False,
+                    "error": f"Prediction failed: {str(e)}"
+                }
+        
+        return {
+            "success": True,
+            "predictions": predictions,
+            "timeframe": timeframe,
+            "generated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in batch prediction endpoint: {e}")
+        raise HTTPException(status_code=500, detail=f"Batch prediction service error: {str(e)}")
+
+@app.get("/api/prediction/aord/detailed")
+async def get_detailed_aord_prediction():
+    """Get detailed prediction specifically for Australian All Ordinaries with comprehensive analysis"""
+    
+    try:
+        # Generate predictions for multiple timeframes
+        timeframes = ["1d", "5d", "30d", "90d"]
+        predictions = {}
+        
+        for timeframe in timeframes:
+            request = PredictionRequest(
+                symbol="^AORD",
+                timeframe=timeframe,
+                include_factors=True
+            )
+            
+            prediction_response = await prediction_service.get_market_prediction(request)
+            predictions[timeframe] = prediction_response.dict()
+        
+        # Add Australian market context
+        market_context = {
+            "market_name": "Australian All Ordinaries",
+            "symbol": "^AORD",
+            "market_hours": "10:00-16:00 AEST",
+            "key_sectors": ["Mining", "Banking", "Healthcare", "Technology", "Energy"],
+            "major_components": ["BHP", "CBA", "CSL", "ANZ", "WBC", "NAB", "RIO"],
+            "economic_factors": {
+                "rba_cash_rate": 4.35,
+                "aud_usd_rate": 0.67,
+                "iron_ore_price": "Key commodity driver",
+                "china_relationship": "Major trading partner impact"
+            },
+            "market_cap_aud": "2.2T",
+            "average_daily_volume": "1.2B AUD"
+        }
+        
+        return {
+            "success": True,
+            "market_context": market_context,
+            "predictions_by_timeframe": predictions,
+            "analysis_summary": {
+                "consensus_direction": _calculate_consensus_direction(predictions),
+                "average_confidence": _calculate_average_confidence(predictions),
+                "key_risks": [
+                    "China economic slowdown",
+                    "RBA interest rate changes", 
+                    "Commodity price volatility",
+                    "Global market sentiment",
+                    "AUD currency fluctuations"
+                ]
+            },
+            "generated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in detailed AORD prediction: {e}")
+        raise HTTPException(status_code=500, detail=f"Detailed prediction service error: {str(e)}")
+
+def _calculate_consensus_direction(predictions: Dict[str, Any]) -> str:
+    """Calculate consensus direction from multiple timeframe predictions"""
+    directions = []
+    for timeframe_pred in predictions.values():
+        if timeframe_pred.get("success") and "prediction" in timeframe_pred:
+            direction = timeframe_pred["prediction"].get("direction", "neutral")
+            directions.append(direction)
+    
+    if not directions:
+        return "neutral"
+    
+    # Simple majority vote
+    up_votes = directions.count("up")
+    down_votes = directions.count("down")
+    
+    if up_votes > down_votes:
+        return "bullish"
+    elif down_votes > up_votes:
+        return "bearish"
+    else:
+        return "neutral"
+
+def _calculate_average_confidence(predictions: Dict[str, Any]) -> float:
+    """Calculate average confidence score across timeframes"""
+    confidences = []
+    for timeframe_pred in predictions.values():
+        if timeframe_pred.get("success") and "prediction" in timeframe_pred:
+            confidence = timeframe_pred["prediction"].get("confidence_score", 0.5)
+            confidences.append(confidence)
+    
+    return sum(confidences) / len(confidences) if confidences else 0.5
+
 # Application startup event
 @app.on_event("startup")
 async def startup_event():
