@@ -591,19 +591,20 @@ def convert_live_data_to_format(live_points: List[LiveDataPoint], symbol: str, m
     
     # Calculate start time based on period
     if time_period == "48h":
-        # For 48h mode: Start from 1 day back at 10:00 AEST through to 09:59 AEST the following day
-        # This shows chronological market flow: Nikkei(-1day) → FTSE → S&P → Nikkei(current day)
+        # For 48h mode: Show 48h timeline starting from yesterday 10:00 AEST 
+        # This captures full market flow across 2 trading days
         start_aest = (aest_now - timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
-        hours = 48
+        # But ensure we don't go beyond current time
+        end_aest = min(start_aest + timedelta(hours=48), aest_now)
+        actual_hours = int((end_aest - start_aest).total_seconds() / 3600)
+        hours = min(48, actual_hours)
     else:
-        # For 24h mode: Start at 10:00 AEST today (or yesterday if it's before 10:00 AEST)  
-        if aest_now.hour >= 10:
-            start_aest = aest_now.replace(hour=10, minute=0, second=0, microsecond=0)
-        else:
-            start_aest = (aest_now - timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
+        # For 24h mode: Rolling 24h window ending at current time
+        start_aest = aest_now - timedelta(hours=24) 
+        end_aest = aest_now
         hours = 24
     
-    end_aest = start_aest + timedelta(hours=hours)
+    # end_aest is already calculated above for proper time windows
     
     # Convert AEST times to UTC for internal processing
     start_time = start_aest.astimezone(timezone.utc)
