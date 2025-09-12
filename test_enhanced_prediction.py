@@ -1,15 +1,21 @@
 #!/usr/bin/env python3
 """
-Test script for enhanced LLM prediction system with Tier 1 factors
-Validates integration of superannuation flows, options analysis, and social sentiment
+Test script for the enhanced LLM prediction system with Tier 1 factors
 """
 
 import asyncio
 import json
-import time
+import sys
+import logging
 from datetime import datetime
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# Import the enhanced prediction system
 from market_prediction_llm import (
-    prediction_service,
+    MarketPredictionService,
     PredictionRequest,
     PredictionTimeframe
 )
@@ -17,150 +23,143 @@ from market_prediction_llm import (
 async def test_enhanced_prediction():
     """Test the enhanced prediction system with Tier 1 factors"""
     
-    print("🧠 Testing Enhanced LLM Prediction System with Tier 1 Factors")
-    print("=" * 70)
+    print("🧪 Testing Enhanced LLM Market Prediction System with Tier 1 Factors")
+    print("=" * 80)
     
-    # Test configuration
-    test_symbol = "^AORD"  # Australian All Ordinaries
-    test_timeframes = ["1d", "5d", "30d"]
+    # Initialize the service
+    service = MarketPredictionService()
     
-    for timeframe in test_timeframes:
-        print(f"\n📊 Testing {test_symbol} prediction for {timeframe} timeframe...")
+    # Create test request for Australian All Ordinaries
+    request = PredictionRequest(
+        symbol="^AORD",
+        timeframe="5d",
+        include_factors=True,
+        include_news_intelligence=True,
+        news_lookback_hours=48
+    )
+    
+    print(f"📊 Testing prediction for: {request.symbol}")
+    print(f"⏰ Timeframe: {request.timeframe}")
+    print(f"🔍 Include factors: {request.include_factors}")
+    print(f"📰 Include news intelligence: {request.include_news_intelligence}")
+    print()
+    
+    try:
+        # Generate enhanced prediction
+        start_time = datetime.now()
+        response = await service.get_market_prediction(request)
+        end_time = datetime.now()
         
-        try:
-            # Create prediction request
-            request = PredictionRequest(
-                symbol=test_symbol,
-                timeframe=timeframe,
-                include_factors=True,
-                include_news_intelligence=True,
-                news_lookback_hours=48
-            )
+        processing_time = (end_time - start_time).total_seconds()
+        
+        print(f"✅ Prediction generated successfully in {processing_time:.2f} seconds")
+        print()
+        
+        # Display results
+        if response.success:
+            pred = response.prediction
+            print("📈 PREDICTION RESULTS:")
+            print(f"  Symbol: {pred['symbol']}")
+            print(f"  Direction: {pred['direction']}")
+            print(f"  Expected Change: {pred['expected_change_percent']:.2f}%")
+            print(f"  Confidence: {pred['confidence_score']:.1%}")
+            print(f"  Risk Level: {pred['risk_level']}")
+            print(f"  Timeframe: {pred['timeframe']}")
+            print()
             
-            # Measure prediction time
-            start_time = time.time()
+            # Display Tier 1 factors
+            if response.tier1_factors:
+                print("🎯 TIER 1 FACTORS:")
+                for category in ['super', 'options', 'social']:
+                    category_factors = {k: v for k, v in response.tier1_factors.items() if k.startswith(category)}
+                    if category_factors:
+                        print(f"  {category.title()} Factors:")
+                        for factor, value in category_factors.items():
+                            print(f"    • {factor.replace('_', ' ').title()}: {value:+.3f}")
+                print()
             
-            # Generate enhanced prediction
-            response = await prediction_service.get_market_prediction(request)
+            # Display factor attribution
+            if response.factor_attribution:
+                attr = response.factor_attribution
+                overall = attr.get('overall_signal', {})
+                print("📊 FACTOR ATTRIBUTION:")
+                print(f"  Overall Signal: {overall.get('direction', 'N/A').upper()}")
+                print(f"  Bullishness Score: {overall.get('bullishness_score', 0):+.3f}")
+                print(f"  Signal Confidence: {overall.get('confidence', 0):.1%}")
+                
+                consensus = attr.get('factor_consensus', {})
+                print(f"  Factor Consensus: {consensus.get('consensus_strength', 0):.1%}")
+                print(f"  Aligned Factors: {consensus.get('aligned_factors', 0)}/{consensus.get('total_factors', 0)}")
+                print()
             
-            prediction_time = time.time() - start_time
+            # Display model information
+            model_info = response.model_info
+            print("🤖 MODEL INFORMATION:")
+            print(f"  Type: {model_info.get('model_type', 'N/A')}")
+            print(f"  Version: {model_info.get('version', 'N/A')}")
             
-            # Validate response
-            if response.success:
-                print(f"✅ Prediction generated successfully in {prediction_time:.2f}s")
-                
-                # Display prediction results
-                prediction = response.prediction
-                print(f"   🎯 Direction: {prediction['direction'].upper()}")
-                print(f"   📈 Expected Change: {prediction['expected_change_percent']:+.2f}%")
-                print(f"   🎲 Confidence: {prediction['confidence_score']:.1%}")
-                print(f"   ⚠️  Risk Level: {prediction['risk_level'].upper()}")
-                
-                # Display Tier 1 factors
-                if response.tier1_factors:
-                    print(f"\n   🎯 Tier 1 Factors ({len(response.tier1_factors)} factors):")
-                    
-                    # Group factors by category
-                    super_factors = {k: v for k, v in response.tier1_factors.items() if k.startswith('super_')}
-                    options_factors = {k: v for k, v in response.tier1_factors.items() if k.startswith('options_')}
-                    social_factors = {k: v for k, v in response.tier1_factors.items() if k.startswith('social_')}
-                    
-                    if super_factors:
-                        print("      🏦 Super Fund Flows:")
-                        for factor, value in super_factors.items():
-                            signal = "🟢" if value > 0.1 else "🔴" if value < -0.1 else "🟡"
-                            print(f"         {signal} {factor.replace('super_', '').replace('_', ' ').title()}: {value:+.3f}")
-                    
-                    if options_factors:
-                        print("      📊 Options Positioning:")
-                        for factor, value in options_factors.items():
-                            signal = "🟢" if value > 0.1 else "🔴" if value < -0.1 else "🟡"
-                            print(f"         {signal} {factor.replace('options_', '').replace('_', ' ').title()}: {value:+.3f}")
-                    
-                    if social_factors:
-                        print("      🗣️ Social Sentiment:")
-                        for factor, value in social_factors.items():
-                            signal = "🟢" if value > 0.1 else "🔴" if value < -0.1 else "🟡"
-                            print(f"         {signal} {factor.replace('social_', '').replace('_', ' ').title()}: {value:+.3f}")
-                
-                # Display factor attribution
-                if response.factor_attribution:
-                    attribution = response.factor_attribution
-                    overall = attribution.get('overall_signal', {})
-                    
-                    print(f"\n   📈 Factor Attribution Analysis:")
-                    print(f"      Overall Direction: {overall.get('direction', 'unknown').upper()}")
-                    print(f"      Signal Strength: {overall.get('signal_strength', 0):.3f}")
-                    print(f"      Consensus: {attribution.get('factor_consensus', {}).get('consensus_strength', 0):.1%}")
-                
-                # Display model info
-                model_info = response.model_info
-                print(f"\n   🤖 Model Performance:")
-                print(f"      Model Type: {model_info.get('model_type')}")
-                print(f"      Version: {model_info.get('version')}")
-                print(f"      Enhanced Accuracy: {model_info.get('accuracy_metrics', {}).get('enhanced_accuracy', 0):.1%}")
-                print(f"      Tier 1 Contribution: {model_info.get('accuracy_metrics', {}).get('tier1_contribution', 'Unknown')}")
-                
-                # Display reasoning excerpt
-                reasoning = prediction.get('reasoning', '')
-                if len(reasoning) > 200:
-                    reasoning = reasoning[:200] + "..."
-                print(f"\n   💭 Key Reasoning: {reasoning}")
-                
-            else:
-                print(f"❌ Prediction failed")
-                
-        except Exception as e:
-            print(f"❌ Error testing {timeframe}: {e}")
-    
-    print(f"\n🎯 Enhanced Prediction System Test Complete")
-    print("=" * 70)
+            accuracy = model_info.get('accuracy_metrics', {})
+            if accuracy:
+                print("  Enhanced Accuracy Metrics:")
+                print(f"    • Baseline: {accuracy.get('baseline_accuracy', 0):.1%}")
+                print(f"    • Enhanced: {accuracy.get('enhanced_accuracy', 0):.1%}")
+                print(f"    • Directional: {accuracy.get('directional_accuracy', 0):.1%}")
+                print(f"    • Tier 1 Contribution: {accuracy.get('tier1_contribution', 'N/A')}")
+            
+            factor_categories = model_info.get('factor_categories', [])
+            if factor_categories:
+                print(f"  Active Factor Categories: {', '.join(factor_categories)}")
+            
+            print()
+            print("🎉 Enhanced prediction system working correctly!")
+            
+        else:
+            print("❌ Prediction failed")
+            
+    except Exception as e:
+        print(f"❌ Error during testing: {e}")
+        import traceback
+        traceback.print_exc()
 
-async def test_factor_systems_individually():
-    """Test each Tier 1 factor system individually"""
+async def test_individual_factor_systems():
+    """Test individual factor systems"""
     
-    print("\n🔧 Testing Individual Tier 1 Factor Systems")
+    print("\n🔬 Testing Individual Factor Systems")
     print("=" * 50)
     
     try:
+        # Test super fund analyzer
         from super_fund_flow_analyzer import super_fund_analyzer
-        print("\n🏦 Testing Super Fund Flow Analyzer...")
+        print("📊 Testing Super Fund Flow Analyzer...")
         super_factors = await super_fund_analyzer.get_market_prediction_factors()
-        print(f"   ✅ Generated {len(super_factors)} super fund factors")
-        for k, v in list(super_factors.items())[:3]:  # Show first 3
-            print(f"      • {k}: {v:+.3f}")
+        print(f"  ✅ Collected {len(super_factors)} super fund factors")
+        
+        # Test options analyzer  
+        from asx_options_analyzer import OptionsFlowAnalyzer
+        options_analyzer = OptionsFlowAnalyzer()
+        print("📈 Testing ASX Options Analyzer...")
+        options_factors = await options_analyzer.get_market_prediction_factors(['XJO', 'CBA'])
+        print(f"  ✅ Collected {len(options_factors)} options factors")
+        
+        # Test social sentiment analyzer
+        from social_sentiment_tracker import SocialSentimentAnalyzer
+        social_analyzer = SocialSentimentAnalyzer()
+        print("🗣️ Testing Social Sentiment Analyzer...")
+        social_factors = await social_analyzer.get_market_prediction_factors(24)
+        print(f"  ✅ Collected {len(social_factors)} social factors")
+        
+        total_factors = len(super_factors) + len(options_factors) + len(social_factors)
+        print(f"\n🎯 Total Tier 1 factors available: {total_factors}")
         
     except Exception as e:
-        print(f"   ❌ Super fund analyzer error: {e}")
-    
-    try:
-        from asx_options_analyzer import asx_options_analyzer
-        print("\n📊 Testing ASX Options Analyzer...")
-        options_factors = await asx_options_analyzer.get_market_prediction_factors(['XJO', 'CBA'])
-        print(f"   ✅ Generated {len(options_factors)} options factors")
-        for k, v in list(options_factors.items())[:3]:  # Show first 3
-            print(f"      • {k}: {v:+.3f}")
-        
-    except Exception as e:
-        print(f"   ❌ Options analyzer error: {e}")
-    
-    try:
-        from social_sentiment_tracker import social_sentiment_analyzer
-        print("\n🗣️ Testing Social Sentiment Tracker...")
-        social_factors = await social_sentiment_analyzer.get_market_prediction_factors(24)
-        print(f"   ✅ Generated {len(social_factors)} social factors")
-        for k, v in list(social_factors.items())[:3]:  # Show first 3
-            print(f"      • {k}: {v:+.3f}")
-        
-    except Exception as e:
-        print(f"   ❌ Social sentiment analyzer error: {e}")
+        print(f"❌ Error testing factor systems: {e}")
 
 if __name__ == "__main__":
-    print("🚀 Starting Enhanced Prediction System Integration Test")
-    print(f"⏰ Test started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("🚀 Starting Enhanced Market Prediction Tests")
+    print()
     
-    # Run the comprehensive test
-    asyncio.run(test_factor_systems_individually())
+    # Run tests
+    asyncio.run(test_individual_factor_systems())
     asyncio.run(test_enhanced_prediction())
     
-    print(f"\n✅ All tests completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("\n✅ Test suite completed!")
