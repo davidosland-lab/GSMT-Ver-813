@@ -26,6 +26,7 @@ class GlobalMarketTracker {
     detectApiUrl() {
         // Production API URL detection for deployment
         const currentHost = window.location.hostname;
+        const currentPort = window.location.port;
         
         // Production deployment on Netlify
         if (currentHost.includes('netlify.app')) {
@@ -33,17 +34,22 @@ class GlobalMarketTracker {
             return 'https://gsmt-ver-813-production.up.railway.app/api';
         }
         
-        // For sandbox environment, API runs on port 8000
+        // For sandbox environment, API runs on port 8080 (updated)
         if (currentHost.includes('e2b.dev')) {
-            // Extract sandbox ID from hostname like "3000-sandbox-id.e2b.dev"
+            // Extract sandbox ID from hostname like "8080-sandbox-id.e2b.dev"
             const sandboxId = currentHost.split('-').slice(1).join('-');
-            const apiHost = `8000-${sandboxId}`;
+            const apiHost = `8080-${sandboxId}`;
             return `https://${apiHost}/api`;
         }
         
-        // For localhost development
+        // For localhost development - updated to port 8080
         if (currentHost === 'localhost' || currentHost === '127.0.0.1') {
-            return 'http://localhost:8000/api';
+            return 'http://localhost:8080/api';
+        }
+        
+        // If we're already on the correct port, use relative API path
+        if (currentPort === '8080') {
+            return '/api';
         }
         
         // Default fallback - use /api proxy
@@ -241,6 +247,30 @@ class GlobalMarketTracker {
         // Store the indices data for dropdown population
         this.allIndicesData = suggestedIndices;
         console.log('📊 Loaded market data:', Object.keys(suggestedIndices));
+        
+        // Populate region dropdown
+        this.populateRegionDropdown(suggestedIndices);
+    }
+    
+    populateRegionDropdown(suggestedIndices) {
+        const regionDropdown = document.getElementById('region-dropdown');
+        if (!regionDropdown) {
+            console.warn('Region dropdown not found');
+            return;
+        }
+        
+        // Clear existing options except default
+        regionDropdown.innerHTML = '<option value="">Choose a region...</option>';
+        
+        // Populate with available regions
+        Object.keys(suggestedIndices).forEach(region => {
+            const option = document.createElement('option');
+            option.value = region;
+            option.textContent = region;
+            regionDropdown.appendChild(option);
+        });
+        
+        console.log('✅ Populated region dropdown with:', Object.keys(suggestedIndices));
     }
 
     handleRegionChange(event) {
