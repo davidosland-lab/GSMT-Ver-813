@@ -1513,9 +1513,27 @@ async def get_market_announcements_for_symbols(symbols: List[str], hours_back: i
     return announcements
 
 # Root and API Routes
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 async def root():
-    """Root endpoint - Available interfaces"""
+    """Root endpoint - Main landing page with interface selection"""
+    try:
+        # Serve the main landing page
+        landing_path = os.path.join(os.path.dirname(__file__), "main_landing_page.html")
+        if os.path.exists(landing_path):
+            with open(landing_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            # Fallback to JSON if HTML not found
+            return await root_api()
+    except Exception as e:
+        logger.error(f"Error serving landing page: {e}")
+        # Fallback to JSON API response
+        return await root_api()
+
+@app.get("/api/info")
+async def root_api():
+    """API info endpoint - JSON version of root info"""
     return {
         "name": "Advanced Stock Market Prediction System",
         "version": "2.1.0 - Phase 1 Enhanced",
@@ -1526,6 +1544,7 @@ async def root():
             "confidence_calibration": "✅ COMPLETED - Temperature scaling implemented"
         },
         "available_interfaces": {
+            "main_landing": "/ - Main landing page with interface selection",
             "advanced_dashboard": "/dashboard - Phase 1 Enhanced Prediction Interface",
             "enhanced_interface": "/enhanced-interface - Original Enhanced Interface",
             "api_docs": "/docs - FastAPI Documentation",

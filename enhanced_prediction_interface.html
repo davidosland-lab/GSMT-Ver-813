@@ -490,6 +490,28 @@
         <div class="header">
             <h1>🚀 Advanced Market Predictions</h1>
             <p class="subtitle">Next-Generation Financial Forecasting with AI Ensemble Models</p>
+            
+            <!-- Phase 1 Status Banner -->
+            <div style="background: linear-gradient(135deg, #00b894, #00cec9); color: white; padding: 15px; border-radius: 10px; margin: 15px 0;">
+                <strong>🚨 Phase 1 Enhanced:</strong> LSTM Fixes ✅ | Performance Weighting ✅ | Confidence Calibration ✅
+            </div>
+            
+            <!-- Navigation -->
+            <div style="display: flex; justify-content: center; gap: 15px; margin: 20px 0; flex-wrap: wrap;">
+                <a href="/dashboard" style="background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+                    🎯 Phase 1 Dashboard
+                </a>
+                <a href="/enhanced-interface" style="background: linear-gradient(135deg, #00b894, #00cec9); color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+                    📊 Enhanced Interface (Current)
+                </a>
+                <a href="/docs" style="background: linear-gradient(135deg, #74b9ff, #0984e3); color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+                    📚 API Docs
+                </a>
+                <a href="/" style="background: linear-gradient(135deg, #fd79a8, #e84393); color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+                    🏠 Home
+                </a>
+            </div>
+            
             <div class="enhancement-badge">
                 ✨ Enhanced with LSTM Networks, Global Threat Monitoring & Live Social Data
             </div>
@@ -628,8 +650,9 @@
         }
 
         async function fetchAdvancedPrediction(symbol, timeframe) {
-            // Try the enhanced prediction endpoint first
-            const response = await fetch(`/api/prediction/fast/${symbol}?timeframe=${timeframe}&include_factors=true&include_news_intelligence=true`);
+            // Use Phase 1 enhanced prediction endpoint
+            console.log(`🎯 Fetching Phase 1 enhanced prediction for ${symbol} (${timeframe})...`);
+            const response = await fetch(`/api/advanced-prediction/${symbol}?timeframe=${timeframe}&include_social=true&include_conflicts=true`);
             
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
