@@ -20,6 +20,9 @@ import numpy as np
 from collections import defaultdict, Counter
 import hashlib
 
+# Import live news integration
+from live_news_integration import LiveNewsCollector
+
 load_dotenv()
 
 # Configure logging
@@ -223,18 +226,63 @@ class NewsIntelligenceEngine:
 
         articles = []
         
-        # Simulate news fetching (in production, replace with real APIs)
-        sample_articles = await self._generate_sample_news_articles(hours_back)
+        # Collect LIVE news from real sources
+        logger.info("🌐 Fetching LIVE news data from real sources")
+        live_news_collector = LiveNewsCollector()
         
-        for article_data in sample_articles:
-            article = NewsArticle(**article_data)
+        async with live_news_collector as collector:
+            # Get live articles
+            live_articles = await collector.collect_live_news(
+                hours_back=hours_back, 
+                max_articles=50
+            )
             
-            # Analyze each article
-            await self._analyze_article(article)
+            logger.info(f"📰 Received {len(live_articles)} live articles")
             
-            # Filter by relevance
-            if article.market_relevance > 0.3:  # Only include relevant articles
-                articles.append(article)
+            # Convert live articles to NewsArticle objects
+            for article_data in live_articles:
+                try:
+                    # Map live article format to NewsArticle format
+                    mapped_data = {
+                        'title': article_data.get('title', ''),
+                        'content': article_data.get('content', ''),
+                        'source': article_data.get('source_name', 'Live Feed'),
+                        'published_at': article_data.get('published_at', datetime.now(timezone.utc)),
+                        'url': article_data.get('url', '')
+                    }
+                    
+                    article = NewsArticle(**mapped_data)
+                    
+                    # Copy over pre-calculated scores from live collector
+                    if 'market_relevance' in article_data:
+                        article.market_relevance = article_data['market_relevance']
+                    if 'sentiment_score' in article_data:
+                        article.sentiment_score = article_data['sentiment_score']
+                    if 'volatility_score' in article_data:
+                        article.volatility_score = article_data['volatility_score']
+                    if 'australian_relevance' in article_data:
+                        article.australian_relevance = article_data['australian_relevance']
+                    if 'impact_level' in article_data:
+                        # Map impact level to our enum
+                        impact_mapping = {
+                            'high': NewsImpactLevel.HIGH,
+                            'medium': NewsImpactLevel.MODERATE,
+                            'low': NewsImpactLevel.LOW,
+                            'minimal': NewsImpactLevel.MINIMAL
+                        }
+                        article.impact_level = impact_mapping.get(article_data['impact_level'], NewsImpactLevel.LOW)
+                    
+                    # Further analyze if needed (only if scores weren't pre-calculated)
+                    if article.market_relevance == 0.0:
+                        await self._analyze_article(article)
+                    
+                    # Filter by relevance
+                    if article.market_relevance > 0.1:  # Lower threshold for live data
+                        articles.append(article)
+                        
+                except Exception as e:
+                    logger.warning(f"Failed to process live article: {e}")
+                    continue
         
         # Sort by relevance and impact
         articles.sort(key=lambda x: (x.market_relevance * x.volatility_score), reverse=True)
@@ -248,64 +296,7 @@ class NewsIntelligenceEngine:
         logger.info(f"✅ Processed {len(articles)} relevant news articles")
         return articles
 
-    async def _generate_sample_news_articles(self, hours_back: int) -> List[dict]:
-        """Generate realistic sample news articles for testing"""
-        
-        base_time = datetime.now(timezone.utc) - timedelta(hours=hours_back)
-        
-        sample_articles = [
-            {
-                'title': 'RBA Holds Interest Rates Steady Amid Global Economic Uncertainty',
-                'content': 'The Reserve Bank of Australia maintained the official cash rate at 4.35% following its monthly board meeting, citing ongoing inflationary pressures and global economic headwinds from China and Europe.',
-                'source': 'Reuters',
-                'published_at': base_time + timedelta(hours=2),
-                'url': 'https://reuters.com/sample/rba-rates'
-            },
-            {
-                'title': 'Iron Ore Prices Surge 5% on China Infrastructure Stimulus Announcement',
-                'content': 'Iron ore futures jumped to $120/tonne after China announced a $500 billion infrastructure spending package, boosting demand outlook for Australian mining exports.',
-                'source': 'Bloomberg',
-                'published_at': base_time + timedelta(hours=6),
-                'url': 'https://bloomberg.com/sample/iron-ore'
-            },
-            {
-                'title': 'US-China Trade Tensions Escalate with New Tariff Threats',
-                'content': 'Rising trade tensions between the US and China are creating uncertainty for global supply chains, with potential implications for Australian commodity exports and currency stability.',
-                'source': 'AFR',
-                'published_at': base_time + timedelta(hours=8),
-                'url': 'https://afr.com/sample/trade-tensions'
-            },
-            {
-                'title': 'Commonwealth Bank Reports Strong Q4 Earnings Beat Expectations',
-                'content': 'CBA posted quarterly cash earnings of $2.7 billion, beating analyst forecasts driven by strong home lending growth and improved net interest margins.',
-                'source': 'SMH',
-                'published_at': base_time + timedelta(hours=12),
-                'url': 'https://smh.com.au/sample/cba-earnings'
-            },
-            {
-                'title': 'European Energy Crisis Deepens Amid Russian Gas Supply Cuts',
-                'content': 'European natural gas prices soared 15% as Russia further reduced pipeline supplies, raising concerns about global energy security and inflation.',
-                'source': 'Guardian',
-                'published_at': base_time + timedelta(hours=14),
-                'url': 'https://guardian.com/sample/energy-crisis'
-            },
-            {
-                'title': 'Australian Dollar Weakens Against USD on Global Risk-Off Sentiment',
-                'content': 'The AUD/USD pair fell 1.2% to 0.6650 as investors sought safe-haven assets amid concerns about slowing global growth and geopolitical tensions.',
-                'source': 'ABC News',
-                'published_at': base_time + timedelta(hours=18),
-                'url': 'https://abc.net.au/sample/aud-weakens'
-            },
-            {
-                'title': 'BHP Announces Major Copper Discovery in South Australia',
-                'content': 'Mining giant BHP revealed a significant copper deposit discovery that could boost Australian mining output and support the green energy transition.',
-                'source': 'Reuters',
-                'published_at': base_time + timedelta(hours=20),
-                'url': 'https://reuters.com/sample/bhp-copper'
-            }
-        ]
-        
-        return sample_articles
+
 
     async def _analyze_article(self, article: NewsArticle):
         """Comprehensive analysis of news article for market impact"""
