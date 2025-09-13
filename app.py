@@ -824,49 +824,10 @@ def convert_live_data_to_format(live_points: List[LiveDataPoint], symbol: str, m
     
     return data_points
 
-async def generate_historical_24h_data(symbols: List[str], chart_type: ChartType, target_date: datetime, interval_minutes: int = 60) -> Dict[str, List[MarketDataPoint]]:
-    """Generate 24-hour historical market data starting at 10:00 AEST for specified symbols and date"""
-    logger.info(f"📅 Generating historical data for {len(symbols)} symbols on {target_date.strftime('%Y-%m-%d')}")
-    
-    # Convert target_date to AEST and set to 10:00 AEST
-    aest = pytz.timezone('Australia/Sydney')
-    if target_date.tzinfo is None:
-        target_date = target_date.replace(tzinfo=timezone.utc)
-    
-    # Set start time to 10:00 AEST on the target date
-    target_aest = target_date.astimezone(aest).replace(hour=10, minute=0, second=0, microsecond=0)
-    start_aest = target_aest
-    end_aest = start_aest + timedelta(hours=24)
-    
-    # Convert back to UTC for internal processing
-    start_date = start_aest.astimezone(timezone.utc)
-    end_date = end_aest.astimezone(timezone.utc)
-    
-    logger.info(f"🕙 Historical window: {start_aest.strftime('%Y-%m-%d %H:%M')} to {end_aest.strftime('%Y-%m-%d %H:%M')} AEST")
-    
-    all_symbol_data = {}
-    
-    for symbol in symbols:
-        try:
-            
-            # Try to get historical data from providers
-            historical_data = await get_historical_data_for_date(symbol, start_date, end_date)
-            
-            if historical_data:
-                # Process historical data into 24-hour timeline
-                data_points = process_historical_data_to_timeline(symbol, historical_data, target_date, chart_type, interval_minutes)
-                all_symbol_data[symbol] = data_points
-                logger.info(f"✅ Generated {len(data_points)} historical data points for {symbol}")
-            else:
-                # No fallback to demo data - only use real historical data
-                logger.error(f"❌ No historical data available for {symbol} on {target_date.strftime('%Y-%m-%d')}")
-                # Skip this symbol - no demo data allowed
-                
-        except Exception as e:
-            logger.error(f"❌ Error generating historical data for {symbol}: {str(e)}")
-            # Skip this symbol - no demo data fallback allowed
-    
-    return all_symbol_data
+# HISTORICAL DATA GENERATION FUNCTION REMOVED 
+# This function generated synthetic data which violates the "LIVE DATA ONLY" policy
+# Historical requests are now handled by the /api/analyze/historical endpoint
+# which redirects recent dates to live data and rejects old dates with proper error messages
 
 def generate_realistic_historical_data(symbol: str, start_date: datetime, end_date: datetime, base_price: float) -> List[dict]:
     """Generate realistic historical market data for a specific date range"""
@@ -983,56 +944,37 @@ def generate_realistic_historical_data(symbol: str, start_date: datetime, end_da
     return historical_points
 
 async def get_historical_data_for_date(symbol: str, start_date: datetime, end_date: datetime) -> Optional[List]:
-    """Get historical data for a specific date range with realistic simulation as fallback"""
+    """Get historical data for a specific date range - LIVE DATA ONLY (No synthetic data generation)"""
     
     try:
-        logger.info(f"📅 Attempting to fetch historical data for {symbol} from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+        logger.info(f"📅 Attempting to fetch REAL historical data for {symbol} from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
         
-        # Use reasonable baseline prices based on symbol type and historical patterns
-        if symbol in SYMBOLS_DB:
-            symbol_info = SYMBOLS_DB[symbol]
-            # Use realistic baseline prices based on market and category
-            if symbol_info.category == "Index":
-                # Major index baseline prices (approximates)
-                if symbol == "^GSPC":  # S&P 500
-                    base_price = 4500.0
-                elif symbol == "^IXIC":  # NASDAQ
-                    base_price = 15000.0
-                elif symbol == "^DJI":  # Dow Jones
-                    base_price = 35000.0
-                elif symbol == "^RUT":  # Russell 2000
-                    base_price = 2000.0
-                elif symbol == "^N225":  # Nikkei 225
-                    base_price = 32000.0
-                elif symbol == "^FTSE":  # FTSE 100
-                    base_price = 7500.0
-                else:
-                    base_price = 3000.0  # Default index price
+        # 🚨 NO SYNTHETIC DATA GENERATION - LIVE DATA ONLY
+        logger.warning(f"🚨 Historical data generation disabled - synthetic/demo data violates live data policy")
+        
+        # Try to use live data service which may have recent historical data
+        try:
+            live_data = await multi_source_aggregator.get_live_data(symbol)
+            if live_data and live_data.data_points:
+                logger.info(f"✅ Got {len(live_data.data_points)} live data points for {symbol}")
+                return live_data.data_points
             else:
-                # Stock baseline prices
-                if symbol in ["AAPL", "MSFT", "GOOGL", "AMZN"]:
-                    base_price = 150.0  # Major tech stocks
-                elif symbol in ["NVDA", "TSLA"]:
-                    base_price = 220.0  # High-value stocks
-                else:
-                    base_price = 80.0   # Regular stocks
-        else:
-            base_price = 100.0
-            
-        logger.info(f"💰 Using baseline price {base_price} for {symbol}")
-        
-        # Generate realistic historical data based on baseline
-        historical_data = generate_realistic_historical_data(symbol, start_date, end_date, base_price)
-        
-        if historical_data:
-            logger.info(f"✅ Generated {len(historical_data)} simulated historical data points for {symbol}")
-            return historical_data
-        else:
-            logger.error(f"❌ Failed to generate historical data for {symbol}")
+                logger.warning(f"❌ No live data available for {symbol}")
+                return None
+        except Exception as e:
+            logger.error(f"❌ Live data service error for {symbol}: {e}")
             return None
-            
+        
+        # OLD SYNTHETIC CODE REMOVED TO PREVENT FAKE DATA
+        # The following synthetic baseline price generation has been removed:
+        # - No more hardcoded base prices (4500.0 for S&P 500, etc.)
+        # - No more synthetic price generation
+        # - No more fake volume simulation
+        # SYNTHETIC DATA GENERATION COMPLETELY REMOVED
+        # This violates the "NO DEMO DATA" policy
+        
     except Exception as e:
-        logger.error(f"❌ Error processing historical data for {symbol}: {e}")
+        logger.error(f"❌ Error processing real historical data for {symbol}: {e}")
         return None
 
 def process_historical_data_to_timeline(symbol: str, historical_data: List, target_date: datetime, chart_type: ChartType, interval_minutes: int = 60) -> List[MarketDataPoint]:
@@ -2189,7 +2131,7 @@ async def get_suggested_indices():
 
 @app.post("/api/analyze/historical")
 async def analyze_historical_symbols(request: AnalysisRequest, target_date: str = Query(..., description="Date in YYYY-MM-DD format")):
-    """Analyze symbols for a specific historical date with 24-hour timeline"""
+    """Analyze symbols for a specific historical date - LIVE DATA ONLY (No synthetic data)"""
     
     # Validate date format
     try:
@@ -2206,6 +2148,31 @@ async def analyze_historical_symbols(request: AnalysisRequest, target_date: str 
         raise HTTPException(
             status_code=400,
             detail="Cannot request data for future dates."
+        )
+    
+    # Check if requesting yesterday's date - provide live data instead
+    yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).date()
+    today = datetime.now(timezone.utc).date()
+    
+    if parsed_date.date() == yesterday:
+        logger.info(f"📅 Historical request for yesterday ({target_date}) - using live data service")
+        # Use live data service as it may have recent historical data
+        try:
+            return await analyze_symbols(request)
+        except Exception as e:
+            raise HTTPException(
+                status_code=503, 
+                detail=f"Live data service unavailable for recent historical data: {str(e)}"
+            )
+    elif parsed_date.date() == today:
+        logger.info(f"📅 Historical request for today ({target_date}) - redirecting to live data")
+        return await analyze_symbols(request)
+    else:
+        # For older dates, we cannot provide real historical data
+        days_ago = (today - parsed_date.date()).days
+        raise HTTPException(
+            status_code=501,
+            detail=f"Historical data for {target_date} ({days_ago} days ago) not available. This system uses LIVE DATA ONLY to ensure accuracy. Please use current market data or recent dates (yesterday/today) only."
         )
     
     # Validate symbols
@@ -2233,34 +2200,21 @@ async def analyze_historical_symbols(request: AnalysisRequest, target_date: str 
         interval_minutes = 60  # Default to 1 hour
     
     try:
-        # Generate historical 24-hour data for the specified date with intervals
-        symbol_data = await generate_historical_24h_data(request.symbols, chart_type_enum, parsed_date, interval_minutes)
-        symbol_metadata = {symbol: SYMBOLS_DB[symbol] for symbol in request.symbols if symbol in SYMBOLS_DB}
+        # 🚨 HISTORICAL DATA DISABLED - NO SYNTHETIC DATA GENERATION
+        # Historical data generation has been removed to ensure only LIVE DATA is used
         
-        # Check if we have any data at all
-        if not symbol_data:
+        # For yesterday and today, redirect to live data
+        if parsed_date.date() >= yesterday:
+            logger.info(f"📅 Redirecting historical request for {target_date} to live data service")
+            return await analyze_symbols(request)
+        else:
+            # For older dates, reject with proper message
+            days_ago = (today - parsed_date.date()).days
             raise HTTPException(
-                status_code=503, 
-                detail=f"No historical data available for date {target_date}. Historical data providers are not yet implemented - only live data is supported."
+                status_code=501,
+                detail=f"Historical data for {target_date} ({days_ago} days ago) not available. This system uses LIVE DATA ONLY to ensure accuracy. Please use current market data or recent dates (yesterday/today) only."
             )
-        
-        # Calculate daily performance summary
-        performance_summary = calculate_daily_performance_summary(symbol_data, request.symbols)
-        
-        return {
-            "success": True,
-            "data": symbol_data,
-            "metadata": symbol_metadata,
-            "chart_type": request.chart_type,
-            "target_date": target_date,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "total_symbols": len(request.symbols),
-            "successful_symbols": len(symbol_data),
-            "market_hours": MARKET_HOURS,
-            "performance_summary": performance_summary,
-            "is_historical": True,
-            "note": "Historical data support is limited - live data recommended"
-        }
+
     except HTTPException:
         raise
     except Exception as e:

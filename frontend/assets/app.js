@@ -1022,6 +1022,8 @@ class GlobalMarketTracker {
         const markets = Object.keys(data.market_groups);
         const marketCount = markets.length;
         
+        console.log(`📊 Rendering individual market charts for ${marketCount} markets:`, markets);
+        
         // Calculate grid layout for subplots (e.g., 3 markets = 3 rows)
         const gridHeight = Math.floor(90 / marketCount); // Leave 10% for spacing
         const gridSpacing = Math.floor(10 / (marketCount + 1));
@@ -1917,6 +1919,13 @@ class GlobalMarketTracker {
             const timePeriod = document.getElementById('time-period').value;
             const dateStr = this.selectedDate.toISOString().split('T')[0]; // YYYY-MM-DD
             
+            // Calculate days ago for better user messaging
+            const today = new Date();
+            const selectedDate = new Date(dateStr);
+            const daysAgo = Math.floor((today - selectedDate) / (1000 * 60 * 60 * 24));
+            
+            console.log(`📅 Loading historical data for ${dateStr} (${daysAgo} days ago)`);
+            
             const response = await fetch(`${this.apiBaseUrl}/analyze/historical?target_date=${dateStr}`, {
                 method: 'POST',
                 headers: {
@@ -1931,7 +1940,16 @@ class GlobalMarketTracker {
             });
             
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+                const errorData = await response.json().catch(() => ({detail: `HTTP ${response.status}`}));
+                if (response.status === 501) {
+                    // Historical data not available for old dates
+                    this.showToast(`Historical data not available for ${dateStr}. This system uses LIVE DATA ONLY. Please select today or yesterday.`, 'warning');
+                    // Automatically switch back to live data
+                    this.goToToday();
+                    return;
+                } else {
+                    throw new Error(errorData.detail || `HTTP ${response.status}`);
+                }
             }
             
             const data = await response.json();
@@ -1940,7 +1958,14 @@ class GlobalMarketTracker {
                 this.currentData = data;
                 this.updateChart(data);
                 this.updatePerformanceSummaryDisplay(data.performance_summary);
-                this.showToast(`Historical data loaded for ${dateStr}`, 'success');
+                
+                if (daysAgo === 0) {
+                    this.showToast(`Live data loaded for today`, 'success');
+                } else if (daysAgo === 1) {
+                    this.showToast(`Recent data loaded for yesterday`, 'success');
+                } else {
+                    this.showToast(`Data loaded for ${dateStr} (${daysAgo} days ago)`, 'success');
+                }
             } else {
                 throw new Error('Failed to load historical data');
             }
