@@ -588,13 +588,13 @@ class OptionsFlowAnalyzer:
         
         # Large single trades (30% weight) - based on real volume analysis
         # Detect actual large trades by analyzing volume patterns
-        large_trades_detected = await self._detect_large_option_trades(symbol, options_data)
+        large_trades_detected = self._detect_large_option_trades_sync(symbol, options_data)
         if large_trades_detected:
             score += 25  # Fixed score for detected large trades
         
         return min(score, 100)
     
-    async def _detect_large_option_trades(self, symbol: str, options_data: List[OptionContract]) -> bool:
+    def _detect_large_option_trades_sync(self, symbol: str, options_data: List[OptionContract]) -> bool:
         """Detect large option trades based on volume patterns"""
         
         if not options_data:
