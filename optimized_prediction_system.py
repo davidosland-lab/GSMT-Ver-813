@@ -446,6 +446,18 @@ class OptimizedMarketPredictor:
                 'consensus_strength': len([v for v in factor_values if (v > 0) == (overall_bullishness > 0)]) / len(factor_values) if factor_values else 0
             }
         }
+    
+    async def _get_global_volatility_assessment(self) -> Optional[Dict[str, Any]]:
+        """Get global volatility assessment from geopolitical events"""
+        
+        try:
+            if geopolitical_monitor:
+                async with geopolitical_monitor as monitor:
+                    return await monitor.calculate_global_volatility_score()
+        except Exception as e:
+            logger.warning(f"Failed to get global volatility assessment: {e}")
+        
+        return None
 
 # Global optimized service instance
 optimized_prediction_service = OptimizedMarketPredictor()
