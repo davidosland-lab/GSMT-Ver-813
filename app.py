@@ -1512,7 +1512,32 @@ async def get_market_announcements_for_symbols(symbols: List[str], hours_back: i
     logger.info(f"📢 Generated {len(announcements)} market announcements for selected symbols")
     return announcements
 
-# API Routes
+# Root and API Routes
+@app.get("/")
+async def root():
+    """Root endpoint - Available interfaces"""
+    return {
+        "name": "Advanced Stock Market Prediction System",
+        "version": "2.1.0 - Phase 1 Enhanced",
+        "description": "AI-Powered Financial Forecasting with Research-Based Models",
+        "phase1_improvements": {
+            "lstm_fixes": "✅ COMPLETED - Fixed 0% accuracy issue",
+            "performance_weighting": "✅ COMPLETED - Optimal ensemble weights applied", 
+            "confidence_calibration": "✅ COMPLETED - Temperature scaling implemented"
+        },
+        "available_interfaces": {
+            "advanced_dashboard": "/dashboard - Phase 1 Enhanced Prediction Interface",
+            "enhanced_interface": "/enhanced-interface - Original Enhanced Interface",
+            "api_docs": "/docs - FastAPI Documentation",
+            "health_check": "/api/health - Service Health Status"
+        },
+        "api_endpoints": {
+            "advanced_prediction": "/api/advanced-prediction/{symbol}?timeframe={1d|5d|30d|90d}",
+            "social_sentiment": "/api/social-sentiment/{symbol}",
+            "global_conflicts": "/api/global-conflicts"
+        }
+    }
+
 @app.get("/api")
 @app.get("/api/")
 async def api_root():
@@ -3169,9 +3194,43 @@ async def serve_enhanced_interface():
         logger.error(f"Error serving enhanced interface: {e}")
         raise HTTPException(status_code=500, detail="Failed to serve enhanced interface")
 
+# Advanced Prediction Dashboard route (Phase 1 Interface)
+@app.get("/dashboard", response_class=HTMLResponse)
+async def serve_advanced_dashboard():
+    """Serve the advanced prediction dashboard with Phase 1 improvements"""
+    try:
+        # Read and return the advanced dashboard HTML
+        dashboard_path = os.path.join(os.path.dirname(__file__), "advanced_prediction_dashboard.html")
+        if os.path.exists(dashboard_path):
+            with open(dashboard_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="Advanced dashboard not found")
+    except Exception as e:
+        logger.error(f"Error serving advanced dashboard: {e}")
+        raise HTTPException(status_code=500, detail="Failed to serve advanced dashboard")
+
 # Mount static files AFTER all API routes are defined
+# Note: Static files mounted at /static to avoid conflicts with API routes
 if os.path.exists("frontend"):
-    app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
+    app.mount("/static", StaticFiles(directory="frontend", html=True), name="frontend")
+    
+# Alternative root route to serve frontend index.html if available
+@app.get("/frontend", response_class=HTMLResponse, include_in_schema=False)
+async def serve_frontend():
+    """Serve the frontend index.html"""
+    try:
+        index_path = os.path.join("frontend", "index.html")
+        if os.path.exists(index_path):
+            with open(index_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="Frontend not found")
+    except Exception as e:
+        logger.error(f"Error serving frontend: {e}")
+        raise HTTPException(status_code=500, detail="Failed to serve frontend")
 
 if __name__ == "__main__":
     import uvicorn
