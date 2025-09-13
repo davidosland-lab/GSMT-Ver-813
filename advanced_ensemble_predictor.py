@@ -71,6 +71,15 @@ class AdvancedEnsemblePredictor:
         self.model_weights = {}
         self.prediction_cache = {}
         
+        # PHASE 1 CRITICAL FIX: Enhanced confidence calibration
+        try:
+            from phase1_critical_fixes import ImprovedConfidenceCalibration
+            self.confidence_calibrator = ImprovedConfidenceCalibration()
+            logger.info("🎯 Initialized improved confidence calibration system")
+        except ImportError:
+            logger.warning("⚠️ Phase 1 confidence calibration not available, using fallback")
+            self.confidence_calibrator = None
+        
         # Model configurations per horizon
         self.horizon_configs = {
             PredictionHorizon.INTRADAY: {
@@ -139,6 +148,9 @@ class AdvancedEnsemblePredictor:
             horizon = PredictionHorizon(timeframe)
             config = self.horizon_configs[horizon]
             
+            # Store market data for improved LSTM access
+            self._current_market_data = self._convert_market_data_to_dataframe(market_data) if market_data else None
+            
             # Generate synthetic features (in real implementation, these would be calculated from actual data)
             features = await self._generate_features(symbol, horizon, market_data, external_factors)
             
@@ -172,6 +184,18 @@ class AdvancedEnsemblePredictor:
             
             # Uncertainty scoring
             uncertainty_score = np.mean(list(uncertainties.values()))
+            
+            # PHASE 1 CRITICAL FIX: Enhanced confidence calibration
+            if self.confidence_calibrator:
+                calibrated_confidence = self.confidence_calibrator.calibrate_confidence(
+                    ensemble_prediction=ensemble_pred,
+                    model_predictions=predictions,
+                    model_uncertainties=uncertainties,
+                    model_weights=ensemble_weights
+                )
+                # Update uncertainty score based on calibrated confidence
+                uncertainty_score = 1.0 - calibrated_confidence
+                logger.info(f"🎯 Applied confidence calibration: {calibrated_confidence:.3f} (was: {1.0 - np.mean(list(uncertainties.values())):.3f})")
             
             # Direction and probability
             direction = "up" if ensemble_pred > 0 else "down" if ensemble_pred < -0.01 else "sideways"
@@ -298,15 +322,66 @@ class AdvancedEnsemblePredictor:
             return base_prediction, uncertainty
             
         elif model_type == ModelType.LSTM:
-            # LSTM prediction (time series neural network)
-            # Simulate LSTM behavior - better for longer horizons
-            base_prediction = np.random.normal(0, 0.025)
-            
-            if horizon in [PredictionHorizon.MEDIUM_TERM, PredictionHorizon.LONG_TERM]:
-                base_prediction *= 1.2  # LSTM better for medium/long term
-            
-            uncertainty = 0.25
-            return base_prediction, uncertainty
+            # CRITICAL FIX: Use improved LSTM implementation
+            try:
+                from improved_lstm_predictor import improved_lstm_predictor
+                
+                # Check if we have market data for LSTM
+                if hasattr(self, '_current_market_data') and self._current_market_data is not None:
+                    # Use improved LSTM predictor
+                    prediction, uncertainty = improved_lstm_predictor.generate_prediction_with_uncertainty(
+                        self._current_market_data
+                    )
+                    logger.info(f"🔧 Improved LSTM prediction: {prediction:.4f} (uncertainty: {uncertainty:.3f})")
+                    return prediction, uncertainty
+                else:
+                    # Enhanced LSTM simulation based on features
+                    logger.warning("⚠️ No market data for LSTM, using enhanced simulation")
+                    
+                    # Use features for better prediction
+                    lstm_features = [
+                        features.get('momentum', 0),
+                        features.get('volatility', 0.01),
+                        features.get('volume_strength', 0),
+                        features.get('technical_momentum', 0)
+                    ]
+                    
+                    # Enhanced LSTM simulation with feature processing
+                    feature_array = np.array(lstm_features)
+                    
+                    # Multi-layer neural network simulation
+                    # Layer 1: Process features
+                    hidden1 = np.tanh(feature_array * np.array([0.8, -0.4, 0.6, 0.9]))
+                    
+                    # Layer 2: Temporal patterns
+                    temporal_weight = 1.0
+                    if horizon == PredictionHorizon.MEDIUM_TERM:
+                        temporal_weight = 1.2  # LSTM better for medium term
+                    elif horizon == PredictionHorizon.LONG_TERM:
+                        temporal_weight = 1.3  # Even better for long term
+                    
+                    hidden2 = np.tanh(hidden1 * temporal_weight * np.array([0.7, -0.3, 0.5, 0.8]))
+                    
+                    # Final prediction
+                    base_prediction = np.tanh(np.sum(hidden2) * 0.12)
+                    
+                    # Uncertainty based on feature consistency
+                    feature_variance = np.var(lstm_features) if len(lstm_features) > 1 else 0.01
+                    uncertainty = max(0.15, min(0.6, 0.2 + feature_variance * 10 + abs(base_prediction) * 0.3))
+                    
+                    return base_prediction, uncertainty
+                    
+            except ImportError as e:
+                logger.warning(f"⚠️ Improved LSTM predictor not available: {e}")
+                
+                # Fallback to original but improved simulation
+                base_prediction = np.random.normal(0, 0.015)  # Reduced noise
+                
+                if horizon in [PredictionHorizon.MEDIUM_TERM, PredictionHorizon.LONG_TERM]:
+                    base_prediction *= 1.1  # Slight preference for longer horizons
+                
+                uncertainty = 0.4  # Higher uncertainty for fallback
+                return base_prediction, uncertainty
             
         elif model_type == ModelType.QUANTILE_REGRESSION:
             # Quantile regression for uncertainty bounds
@@ -327,28 +402,65 @@ class AdvancedEnsemblePredictor:
                            predictions: Dict[str, float],
                            uncertainties: Dict[str, float],
                            horizon: PredictionHorizon) -> Tuple[float, Dict[str, float]]:
-        """Combine predictions using adaptive weighting"""
+        """Combine predictions using performance-based adaptive weighting"""
         
         if not predictions:
             return 0.0, {}
         
-        # Inverse uncertainty weighting (lower uncertainty = higher weight)
+        # CRITICAL FIX: Performance-based weighting (from backtesting analysis)
+        # Based on actual accuracy results: Quantile: 29.4%, RF: 21.4%, ARIMA: ~20%, LSTM: 0% (bugs)
+        performance_weights = {
+            'quantile_regression': 0.45,    # Best performer: 29.4% accuracy
+            'random_forest': 0.30,         # Solid: 21.4% accuracy  
+            'arima': 0.15,                 # Diversification: ~20% accuracy
+            'lstm': 0.10                   # Lowest: 0% accuracy (post-fix allocation)
+        }
+        
         weights = {}
-        total_inv_uncertainty = 0
+        total_weight = 0
         
-        for model_name, uncertainty in uncertainties.items():
-            inv_uncertainty = 1.0 / (uncertainty + 0.01)  # Add small constant to avoid division by zero
-            weights[model_name] = inv_uncertainty
-            total_inv_uncertainty += inv_uncertainty
+        for model_name in predictions.keys():
+            # Map model names to performance weights
+            weight_key = model_name.lower().replace(' ', '_')
+            if 'quantile' in weight_key:
+                base_weight = performance_weights['quantile_regression']
+            elif 'forest' in weight_key or 'rf' in weight_key:
+                base_weight = performance_weights['random_forest']
+            elif 'arima' in weight_key:
+                base_weight = performance_weights['arima']
+            elif 'lstm' in weight_key:
+                base_weight = performance_weights['lstm']
+            else:
+                base_weight = 0.25  # Default fallback
+            
+            # Apply uncertainty factor as secondary adjustment (not primary)
+            uncertainty = uncertainties.get(model_name, 0.5)
+            uncertainty_factor = 0.8 + 0.4 / (uncertainty + 0.1)  # Reduced uncertainty impact
+            
+            # Horizon-based adjustment
+            horizon_multiplier = {
+                PredictionHorizon.INTRADAY: 1.0,
+                PredictionHorizon.SHORT_TERM: 1.0,
+                PredictionHorizon.MEDIUM_TERM: 1.1 if 'lstm' in weight_key else 1.0,  # LSTM slightly better for medium-term
+                PredictionHorizon.LONG_TERM: 1.2 if 'lstm' in weight_key else 1.0     # LSTM better for long-term
+            }.get(horizon, 1.0)
+            
+            # Final weight calculation
+            final_weight = base_weight * uncertainty_factor * horizon_multiplier
+            
+            weights[model_name] = final_weight
+            total_weight += final_weight
         
-        # Normalize weights
-        for model_name in weights:
-            weights[model_name] /= total_inv_uncertainty
+        # Normalize weights to sum to 1.0
+        if total_weight > 0:
+            for model_name in weights:
+                weights[model_name] /= total_weight
         
         # Calculate weighted prediction
         weighted_prediction = sum(predictions[model] * weights[model] for model in predictions)
         
-        logger.debug(f"Ensemble weights for {horizon.value}: {weights}")
+        logger.info(f"🔧 Performance-based ensemble weights for {horizon.value}: {weights}")
+        logger.info(f"   Weighted prediction: {weighted_prediction:.4f}")
         
         return weighted_prediction, weights
     
@@ -457,6 +569,44 @@ class AdvancedEnsemblePredictor:
             importance = {k: v / total_importance for k, v in importance.items()}
         
         return dict(sorted(importance.items(), key=lambda x: x[1], reverse=True)[:10])
+    
+    def _convert_market_data_to_dataframe(self, market_data: Dict) -> pd.DataFrame:
+        """Convert market data dict to DataFrame for improved LSTM"""
+        
+        try:
+            if not market_data or 'data_points' not in market_data:
+                return None
+            
+            data_points = market_data['data_points']
+            if not data_points:
+                return None
+            
+            # Convert to DataFrame
+            df_data = []
+            for point in data_points:
+                df_data.append({
+                    'Open': point.get('open', 0),
+                    'High': point.get('high', 0),
+                    'Low': point.get('low', 0),
+                    'Close': point.get('close', 0),
+                    'Volume': point.get('volume', 0)
+                })
+            
+            df = pd.DataFrame(df_data)
+            
+            # Create date index (simplified)
+            df.index = pd.date_range(
+                end=datetime.now(), 
+                periods=len(df), 
+                freq='D'
+            )
+            
+            logger.info(f"✅ Converted market data to DataFrame: {len(df)} rows")
+            return df
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to convert market data: {e}")
+            return None
     
     def _create_fallback_prediction(self, symbol: str, timeframe: str) -> PredictionResult:
         """Create a fallback prediction when main prediction fails"""
