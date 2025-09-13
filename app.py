@@ -3235,9 +3235,69 @@ async def serve_advanced_dashboard():
 if os.path.exists("frontend"):
     app.mount("/static", StaticFiles(directory="frontend", html=True), name="frontend")
     
-# Alternative root route to serve frontend index.html if available
-@app.get("/frontend", response_class=HTMLResponse, include_in_schema=False)
-async def serve_frontend():
+# Frontend routes to serve files at root level for easy access
+@app.get("/global-tracker", response_class=HTMLResponse, include_in_schema=False)
+async def serve_global_tracker():
+    """Serve the global tracker frontend"""
+    try:
+        index_path = os.path.join("frontend", "index.html")
+        if os.path.exists(index_path):
+            with open(index_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="Global tracker not found")
+    except Exception as e:
+        logger.error(f"Error serving global tracker: {e}")
+        raise HTTPException(status_code=500, detail="Failed to serve global tracker")
+
+@app.get("/enhanced_predictions.html", response_class=HTMLResponse, include_in_schema=False)
+async def serve_enhanced_predictions():
+    """Serve the enhanced predictions interface from frontend"""
+    try:
+        enhanced_path = os.path.join("frontend", "enhanced_predictions.html")
+        if os.path.exists(enhanced_path):
+            with open(enhanced_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="Enhanced predictions not found")
+    except Exception as e:
+        logger.error(f"Error serving enhanced predictions: {e}")
+        raise HTTPException(status_code=500, detail="Failed to serve enhanced predictions")
+
+@app.get("/advanced_dashboard.html", response_class=HTMLResponse, include_in_schema=False) 
+async def serve_advanced_dashboard_frontend():
+    """Serve the advanced dashboard from frontend"""
+    try:
+        dashboard_path = os.path.join("frontend", "advanced_dashboard.html")
+        if os.path.exists(dashboard_path):
+            with open(dashboard_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="Advanced dashboard not found")
+    except Exception as e:
+        logger.error(f"Error serving advanced dashboard from frontend: {e}")
+        raise HTTPException(status_code=500, detail="Failed to serve advanced dashboard")
+
+@app.get("/prediction.html", response_class=HTMLResponse, include_in_schema=False)
+async def serve_basic_predictions():
+    """Serve the basic predictions interface from frontend"""
+    try:
+        prediction_path = os.path.join("frontend", "prediction.html")
+        if os.path.exists(prediction_path):
+            with open(prediction_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="Basic predictions not found")
+    except Exception as e:
+        logger.error(f"Error serving basic predictions: {e}")
+        raise HTTPException(status_code=500, detail="Failed to serve basic predictions")
+
+@app.get("/index.html", response_class=HTMLResponse, include_in_schema=False)
+async def serve_frontend_index():
     """Serve the frontend index.html"""
     try:
         index_path = os.path.join("frontend", "index.html")
@@ -3246,10 +3306,10 @@ async def serve_frontend():
                 content = f.read()
             return HTMLResponse(content=content, status_code=200)
         else:
-            raise HTTPException(status_code=404, detail="Frontend not found")
+            raise HTTPException(status_code=404, detail="Frontend index not found")
     except Exception as e:
-        logger.error(f"Error serving frontend: {e}")
-        raise HTTPException(status_code=500, detail="Failed to serve frontend")
+        logger.error(f"Error serving frontend index: {e}")
+        raise HTTPException(status_code=500, detail="Failed to serve frontend index")
 
 if __name__ == "__main__":
     import uvicorn

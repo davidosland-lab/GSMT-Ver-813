@@ -70,13 +70,32 @@
                     </h1>
                     <div class="hidden md:block ml-6">
                         <span class="text-sm text-gray-600">24-Hour AEST Timeline • Global Indices</span>
+                        <div class="mt-1">
+                            <span class="inline-flex items-center px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+                                <i class="fas fa-check-circle mr-1"></i>
+                                Phase 1 Enhanced: LSTM + Performance Weighting + Confidence Calibration
+                            </span>
+                        </div>
                     </div>
                     
-                    <!-- LLM Predictions Navigation Link -->
-                    <div class="ml-8">
-                        <a href="/prediction.html" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors shadow-sm">
+                    <!-- Enhanced Prediction Navigation -->
+                    <div class="ml-8 flex items-center space-x-3">
+                        <!-- Advanced Dashboard Link -->
+                        <a href="/advanced_dashboard.html" class="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg transition-all duration-200 shadow-sm">
+                            <i class="fas fa-chart-line mr-2"></i>
+                            Phase 1 Dashboard
+                        </a>
+                        
+                        <!-- Enhanced Predictions Link -->
+                        <a href="/enhanced_predictions.html" class="inline-flex items-center px-3 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 rounded-lg transition-all duration-200 shadow-sm">
                             <i class="fas fa-brain mr-2"></i>
-                            LLM Predictions
+                            Enhanced AI Predictions
+                        </a>
+                        
+                        <!-- Original LLM Link -->
+                        <a href="/prediction.html" class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors shadow-sm">
+                            <i class="fas fa-robot mr-2"></i>
+                            Basic Predictions
                         </a>
                     </div>
                 </div>
