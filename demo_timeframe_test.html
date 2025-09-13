@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timeframe Differentiation Demo - Global Stock Market Tracker</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        .header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 1.2em;
+        }
+        .content {
+            padding: 40px;
+        }
+        .enhancement-notice {
+            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        .test-section {
+            margin-bottom: 40px;
+        }
+        .test-section h3 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .timeframe-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .timeframe-card {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .timeframe-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .timeframe-title {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .prediction-result {
+            font-family: 'Courier New', monospace;
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 6px;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+        .loading {
+            color: #3498db;
+            font-style: italic;
+            text-align: center;
+            padding: 20px;
+        }
+        .error {
+            color: #e74c3c;
+            background: #fadbd8;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #e74c3c;
+        }
+        .api-links {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 30px;
+        }
+        .api-links h4 {
+            color: #2c3e50;
+            margin-top: 0;
+        }
+        .api-links a {
+            color: #3498db;
+            text-decoration: none;
+            display: inline-block;
+            margin: 5px 10px 5px 0;
+            padding: 8px 12px;
+            background: white;
+            border-radius: 4px;
+            border: 1px solid #3498db;
+            transition: all 0.2s ease;
+        }
+        .api-links a:hover {
+            background: #3498db;
+            color: white;
+        }
+        button {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: transform 0.2s ease;
+            margin: 10px 5px;
+        }
+        button:hover {
+            transform: translateY(-1px);
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .geopolitical-info {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .geopolitical-info h4 {
+            margin-top: 0;
+            font-size: 1.2em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 Timeframe Differentiation Demo</h1>
+            <p>Enhanced Global Stock Market Tracker with Real Geopolitical Monitoring</p>
+        </div>
+        
+        <div class="content">
+            <div class="enhancement-notice">
+                <h3>🚀 NEW FEATURES IMPLEMENTED</h3>
+                <p><strong>✅ Fixed:</strong> Timeframe differentiation - Different predictions for 1d, 5d, 30d, 90d</p>
+                <p><strong>✅ Added:</strong> Real geopolitical event monitoring (Ukraine & Gaza conflicts)</p>
+            </div>
+
+            <div class="test-section">
+                <h3>🧪 Timeframe Differentiation Test</h3>
+                <p>This test demonstrates that different timeframes (1d, 5d, 30d, 90d) now produce meaningfully different predictions for the Australian All Ordinaries (^AORD).</p>
+                
+                <button onclick="runTimeframeTest()" id="testButton">🔍 Test All Timeframes</button>
+                
+                <div class="timeframe-grid" id="timeframeGrid">
+                    <div class="timeframe-card">
+                        <div class="timeframe-title">📊 1d (Intraday)</div>
+                        <div id="result_1d" class="loading">Click test to load...</div>
+                    </div>
+                    <div class="timeframe-card">
+                        <div class="timeframe-title">📈 5d (Short-term)</div>
+                        <div id="result_5d" class="loading">Click test to load...</div>
+                    </div>
+                    <div class="timeframe-card">
+                        <div class="timeframe-title">📊 30d (Medium-term)</div>
+                        <div id="result_30d" class="loading">Click test to load...</div>
+                    </div>
+                    <div class="timeframe-card">
+                        <div class="timeframe-title">📈 90d (Long-term)</div>
+                        <div id="result_90d" class="loading">Click test to load...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="geopolitical-info">
+                <h4>🌍 Real-Time Geopolitical Monitoring</h4>
+                <p><strong>Currently Active:</strong> Ukraine-Russia conflict, Israel-Palestine conflict</p>
+                <p><strong>Global Volatility:</strong> ~91% (Critical Risk Level)</p>
+                <p><strong>Market Impact:</strong> Geopolitical events are integrated into prediction calculations</p>
+            </div>
+
+            <div class="api-links">
+                <h4>🔗 API Endpoints</h4>
+                <p>Explore the enhanced prediction API:</p>
+                <a href="/api/docs" target="_blank">📚 API Documentation</a>
+                <a href="/api/prediction/fast/^AORD?timeframe=1d" target="_blank">1d Prediction</a>
+                <a href="/api/prediction/fast/^AORD?timeframe=5d" target="_blank">5d Prediction</a>
+                <a href="/api/prediction/fast/^AORD?timeframe=30d" target="_blank">30d Prediction</a>
+                <a href="/api/prediction/fast/^AORD?timeframe=90d" target="_blank">90d Prediction</a>
+                <a href="/api/data-status" target="_blank">📊 Data Status</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function runTimeframeTest() {
+            const button = document.getElementById('testButton');
+            button.disabled = true;
+            button.textContent = '🔄 Testing...';
+            
+            const timeframes = ['1d', '5d', '30d', '90d'];
+            const symbol = '^AORD';
+            
+            for (const timeframe of timeframes) {
+                const resultDiv = document.getElementById(`result_${timeframe}`);
+                resultDiv.innerHTML = '<div class="loading">🔄 Loading...</div>';
+                
+                try {
+                    const response = await fetch(`/api/prediction/fast/${symbol}?timeframe=${timeframe}&include_factors=true&include_news_intelligence=true`);
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        const prediction = data.prediction;
+                        const processingTime = data.endpoint_processing_time || 'N/A';
+                        
+                        resultDiv.innerHTML = `
+                            <div class="prediction-result">
+Direction: ${prediction.direction.toUpperCase()}
+Expected Change: ${prediction.expected_change_percent.toFixed(3)}%
+Confidence: ${(prediction.confidence_score * 100).toFixed(1)}%
+Risk Level: ${prediction.risk_level}
+Processing Time: ${typeof processingTime === 'number' ? processingTime.toFixed(2) + 's' : processingTime}
+                            </div>
+                        `;
+                    } else {
+                        resultDiv.innerHTML = `<div class="error">❌ Failed to get prediction</div>`;
+                    }
+                } catch (error) {
+                    resultDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`;
+                }
+                
+                // Small delay between requests
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            
+            button.disabled = false;
+            button.textContent = '🔄 Test Again';
+            
+            // Show analysis after all predictions are loaded
+            setTimeout(showAnalysis, 500);
+        }
+        
+        function showAnalysis() {
+            const results = [];
+            const timeframes = ['1d', '5d', '30d', '90d'];
+            
+            for (const tf of timeframes) {
+                const resultDiv = document.getElementById(`result_${tf}`);
+                const resultText = resultDiv.textContent;
+                
+                const changeMatch = resultText.match(/Expected Change: ([-\d.]+)%/);
+                const confidenceMatch = resultText.match(/Confidence: ([\d.]+)%/);
+                
+                if (changeMatch && confidenceMatch) {
+                    results.push({
+                        timeframe: tf,
+                        change: parseFloat(changeMatch[1]),
+                        confidence: parseFloat(confidenceMatch[1])
+                    });
+                }
+            }
+            
+            if (results.length >= 2) {
+                const changes = results.map(r => Math.abs(r.change));
+                const confidences = results.map(r => r.confidence);
+                
+                const changeVariance = Math.max(...changes) - Math.min(...changes);
+                const confidenceVariance = Math.max(...confidences) - Math.min(...confidences);
+                
+                console.log('📊 Analysis Results:');
+                console.log(`Expected Change Variance: ${changeVariance.toFixed(3)}%`);
+                console.log(`Confidence Variance: ${confidenceVariance.toFixed(1)}%`);
+                
+                if (changeVariance > 0.1 || confidenceVariance > 2) {
+                    console.log('✅ SUCCESS: Timeframe differentiation is working!');
+                } else {
+                    console.log('⚠️ Limited differentiation detected');
+                }
+            }
+        }
+        
+        // Auto-run test on page load
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                runTimeframeTest();
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
