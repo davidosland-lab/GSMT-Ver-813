@@ -1,0 +1,54 @@
+{
+  "timestamp": "2025-09-13T05:15:25.132018",
+  "overall_accuracy": 0.23728813559322035,
+  "mean_return_error": 0.01331418709428281,
+  "model_performance": {
+    "lstm": {
+      "average_weight": 0.3134180790960451,
+      "weight_stability": 0.8000195182792724,
+      "dominant_accuracy": 0.0,
+      "dominant_samples": 0
+    },
+    "random_forest": {
+      "average_weight": 0.5391637104191302,
+      "weight_stability": 0.9642750778943641,
+      "dominant_accuracy": 0.21428571428571427,
+      "dominant_samples": 42
+    },
+    "arima": {
+      "average_weight": 0.0,
+      "weight_stability": 1.0,
+      "dominant_accuracy": 0.0,
+      "dominant_samples": 0
+    },
+    "quantile": {
+      "average_weight": 0.14741821048482462,
+      "weight_stability": 0.7682865094603685,
+      "dominant_accuracy": 0.29411764705882354,
+      "dominant_samples": 17
+    }
+  },
+  "timeframe_performance": {
+    "1d": {
+      "accuracy": 0.29411764705882354,
+      "return_error": 0.006737713116494655,
+      "sample_size": 17
+    },
+    "5d": {
+      "accuracy": 0.19047619047619047,
+      "return_error": 0.016274853823286375,
+      "sample_size": 21
+    },
+    "30d": {
+      "accuracy": 0.23809523809523808,
+      "return_error": 0.01567733263301252,
+      "sample_size": 21
+    }
+  },
+  "recommendations": [
+    "\ud83d\udea8 CRITICAL: Ensemble accuracy below 60%. Major revision needed.",
+    "\ud83d\udcc8 Increase weight for quantile model (currently 14.7%)",
+    "\ud83c\udfaf Focus on 5d predictions (accuracy: 19.0%)",
+    "\ud83c\udfb2 Improve confidence calibration - predictions not well-calibrated"
+  ]
+}

@@ -47,6 +47,12 @@ try:
 except ImportError:
     news_intelligence_service = None
 
+try:
+    from geopolitical_events_monitor import GeopoliticalEventsMonitor
+    geopolitical_monitor = GeopoliticalEventsMonitor()
+except ImportError:
+    geopolitical_monitor = None
+
 class PredictionTimeframe(Enum):
     """Prediction timeframes for market analysis"""
     INTRADAY = "1d"      
@@ -325,9 +331,10 @@ class OptimizedMarketPredictor:
                                            request: OptimizedPredictionRequest,
                                            tier1_factors: Dict[str, float],
                                            news_assessment: Optional[Dict]) -> Dict[str, Any]:
-        """Generate prediction with optimized logic (symbol-specific)"""
+        """Generate prediction with optimized logic (symbol AND timeframe-specific)"""
         
         symbol = request.symbol
+        timeframe = request.timeframe
         
         # Fast prediction algorithm based on factor analysis
         factor_values = list(tier1_factors.values()) if tier1_factors else [0]
@@ -338,6 +345,16 @@ class OptimizedMarketPredictor:
         # Apply symbol-specific adjustments to ensure variation
         symbol_hash = hash(symbol) % 1000
         symbol_adjustment = (symbol_hash / 10000.0) - 0.05  # -0.05 to +0.05 variation
+        
+        # CRITICAL FIX: TIMEFRAME-SPECIFIC ADJUSTMENTS
+        timeframe_multipliers = {
+            "1d": {"volatility": 1.8, "change_scale": 0.6, "confidence_adj": -0.1},  # Higher vol, lower change for intraday
+            "5d": {"volatility": 1.0, "change_scale": 1.0, "confidence_adj": 0.0},    # Baseline
+            "30d": {"volatility": 0.7, "change_scale": 2.2, "confidence_adj": 0.15},   # Lower vol, higher change for medium-term
+            "90d": {"volatility": 0.4, "change_scale": 3.5, "confidence_adj": 0.25}   # Lowest vol, highest change for long-term
+        }
+        
+        timeframe_config = timeframe_multipliers.get(timeframe, timeframe_multipliers["5d"])
         
         # Adjust signal with symbol-specific factor
         adjusted_signal = overall_signal + symbol_adjustment
@@ -359,38 +376,78 @@ class OptimizedMarketPredictor:
         else:
             direction = "sideways"
         
-        # Calculate expected change (symbol and time-specific)
-        base_change = final_signal * 3.0  # Increased scale factor
+        # CRITICAL FIX: Calculate expected change with TIMEFRAME SCALING
+        base_change = final_signal * 3.0 * timeframe_config["change_scale"]  # TIMEFRAME SCALING APPLIED
         
         # Apply news sentiment modifier if available
         if news_assessment:
             news_modifier = news_assessment.get('overall_sentiment', 0) * 0.5
             base_change += news_modifier
-            
-        # Volatility adjustment
-        volatility_factor = 1.0
+        
+        # CRITICAL FIX: Get global volatility from geopolitical events
+        global_volatility_assessment = await self._get_global_volatility_assessment()
+        
+        # Enhanced volatility adjustment with geopolitical factors
+        volatility_factor = timeframe_config["volatility"]  # Start with timeframe base
+        
         if news_assessment:
             vol_score = news_assessment.get('volatility_score', 50) / 100
-            volatility_factor = 1 + (vol_score - 0.5)  # Adjust based on volatility
+            volatility_factor *= (1 + (vol_score - 0.5))  # Adjust based on news volatility
+        
+        # CRITICAL FIX: Apply global geopolitical volatility
+        if global_volatility_assessment:
+            global_vol_multiplier = global_volatility_assessment.get('global_volatility_score', 20) / 20.0  # Normalize from 20% baseline
+            volatility_factor *= global_vol_multiplier
+            
+            # Adjust market impact for geopolitical events
+            geopolitical_impact = global_volatility_assessment.get('total_market_impact', 0)
+            base_change += geopolitical_impact * 0.3  # 30% weight for geopolitical events
         
         expected_change = base_change * volatility_factor
         
-        # Risk assessment
+        # CRITICAL FIX: Risk assessment (timeframe-adjusted)
+        risk_thresholds = {
+            "1d": {"medium": 1.5, "high": 3.0},
+            "5d": {"medium": 2.0, "high": 4.0},
+            "30d": {"medium": 3.5, "high": 7.0},
+            "90d": {"medium": 5.0, "high": 10.0}
+        }
+        
+        thresholds = risk_thresholds.get(timeframe, risk_thresholds["5d"])
         risk_level = "low"
-        if abs(expected_change) > 2.0 or signal_strength < 0.4:
+        if abs(expected_change) > thresholds["medium"] or signal_strength < 0.4:
             risk_level = "medium"
-        if abs(expected_change) > 4.0 or signal_strength < 0.3:
+        if abs(expected_change) > thresholds["high"] or signal_strength < 0.3:
             risk_level = "high"
         
-        # Confidence score (enhanced)
-        base_confidence = 0.6 + (signal_strength * 0.3)  # 60-90% range
+        # CRITICAL FIX: Confidence score (enhanced with timeframe adjustment)
+        base_confidence = 0.6 + (signal_strength * 0.3) + timeframe_config["confidence_adj"]  # Timeframe confidence adjustment
         
         # News confidence modifier
         if news_assessment:
             news_confidence = news_assessment.get('confidence', 0.7)
             base_confidence = (base_confidence + news_confidence) / 2
         
+        # Global volatility confidence adjustment (high volatility = lower confidence)
+        if global_volatility_assessment:
+            vol_confidence_penalty = (global_volatility_assessment.get('global_volatility_score', 20) - 20) / 200  # Max 40% penalty
+            base_confidence = max(base_confidence - vol_confidence_penalty, 0.3)  # Min 30% confidence
+        
         confidence_score = min(base_confidence, 0.95)  # Cap at 95%
+        
+        # CRITICAL FIX: Enhanced key factors with timeframe and geopolitical info
+        key_factors = [
+            f"Tier 1 signal strength: {signal_strength:.2f}",
+            f"Timeframe adjustment: {timeframe} (change scale: {timeframe_config['change_scale']:.1f}x)",
+            f"News sentiment: {news_assessment.get('overall_sentiment', 0):+.3f}" if news_assessment else "No news data"
+        ]
+        
+        if global_volatility_assessment:
+            key_factors.append(f"Global volatility: {global_volatility_assessment.get('global_volatility_score', 20):.1f}% ({global_volatility_assessment.get('risk_level', 'unknown')})")
+            if global_volatility_assessment.get('active_conflicts', 0) > 0:
+                key_factors.append(f"Active geopolitical conflicts: {global_volatility_assessment.get('active_conflicts', 0)}")
+        else:
+            key_factors.append("Global volatility: Standard baseline (20%)")
         
         return {
             "symbol": request.symbol,
@@ -398,20 +455,20 @@ class OptimizedMarketPredictor:
             "expected_change_percent": expected_change,
             "confidence_score": confidence_score,
             "timeframe": request.timeframe,
-            "reasoning": f"Factor-based prediction: {len(factor_values)} factors analyzed, overall signal: {overall_signal:+.3f}",
-            "key_factors": [
-                f"Tier 1 signal strength: {signal_strength:.2f}",
-                f"News sentiment: {news_assessment.get('overall_sentiment', 0):+.3f}" if news_assessment else "No news data",
-                f"Market volatility: {news_assessment.get('volatility_score', 50)/100:.2f}" if news_assessment else "Standard volatility"
-            ],
+            "reasoning": f"TIMEFRAME-AWARE prediction for {timeframe}: {len(factor_values)} factors analyzed, timeframe-adjusted signal: {overall_signal:+.3f}",
+            "key_factors": key_factors,
             "risk_level": risk_level,
             "historical_accuracy": 0.85,  # Enhanced with Tier 1 factors
             "market_factors": {
                 "tier1_signal": overall_signal,
                 "signal_strength": signal_strength,
                 "news_impact": news_assessment.get('overall_sentiment', 0) if news_assessment else 0,
-                "volatility_adjusted": volatility_factor
-            }
+                "volatility_adjusted": volatility_factor,
+                "timeframe_multiplier": timeframe_config["change_scale"],
+                "global_volatility": global_volatility_assessment.get('global_volatility_score', 20) if global_volatility_assessment else 20,
+                "geopolitical_impact": global_volatility_assessment.get('total_market_impact', 0) if global_volatility_assessment else 0
+            },
+            "geopolitical_assessment": global_volatility_assessment
         }
     
     def _fast_factor_attribution(self, tier1_factors: Dict[str, float]) -> Dict[str, Any]:

@@ -26,6 +26,7 @@ class GlobalMarketTracker {
     detectApiUrl() {
         // Production API URL detection for deployment
         const currentHost = window.location.hostname;
+        const currentPort = window.location.port;
         
         // Production deployment on Netlify
         if (currentHost.includes('netlify.app')) {
@@ -33,17 +34,22 @@ class GlobalMarketTracker {
             return 'https://gsmt-ver-813-production.up.railway.app/api';
         }
         
-        // For sandbox environment, API runs on port 8000
+        // For sandbox environment, API runs on port 8080 (updated)
         if (currentHost.includes('e2b.dev')) {
-            // Extract sandbox ID from hostname like "3000-sandbox-id.e2b.dev"
+            // Extract sandbox ID from hostname like "8080-sandbox-id.e2b.dev"
             const sandboxId = currentHost.split('-').slice(1).join('-');
-            const apiHost = `8000-${sandboxId}`;
+            const apiHost = `8080-${sandboxId}`;
             return `https://${apiHost}/api`;
         }
         
-        // For localhost development
+        // For localhost development - updated to port 8080
         if (currentHost === 'localhost' || currentHost === '127.0.0.1') {
-            return 'http://localhost:8000/api';
+            return 'http://localhost:8080/api';
+        }
+        
+        // If we're already on the correct port, use relative API path
+        if (currentPort === '8080') {
+            return '/api';
         }
         
         // Default fallback - use /api proxy
@@ -241,6 +247,30 @@ class GlobalMarketTracker {
         // Store the indices data for dropdown population
         this.allIndicesData = suggestedIndices;
         console.log('📊 Loaded market data:', Object.keys(suggestedIndices));
+        
+        // Populate region dropdown
+        this.populateRegionDropdown(suggestedIndices);
+    }
+    
+    populateRegionDropdown(suggestedIndices) {
+        const regionDropdown = document.getElementById('region-dropdown');
+        if (!regionDropdown) {
+            console.warn('Region dropdown not found');
+            return;
+        }
+        
+        // Clear existing options except default
+        regionDropdown.innerHTML = '<option value="">Choose a region...</option>';
+        
+        // Populate with available regions
+        Object.keys(suggestedIndices).forEach(region => {
+            const option = document.createElement('option');
+            option.value = region;
+            option.textContent = region;
+            regionDropdown.appendChild(option);
+        });
+        
+        console.log('✅ Populated region dropdown with:', Object.keys(suggestedIndices));
     }
 
     handleRegionChange(event) {
@@ -991,6 +1021,8 @@ class GlobalMarketTracker {
         
         const markets = Object.keys(data.market_groups);
         const marketCount = markets.length;
+        
+        console.log(`📊 Rendering individual market charts for ${marketCount} markets:`, markets);
         
         // Calculate grid layout for subplots (e.g., 3 markets = 3 rows)
         const gridHeight = Math.floor(90 / marketCount); // Leave 10% for spacing
@@ -1887,6 +1919,13 @@ class GlobalMarketTracker {
             const timePeriod = document.getElementById('time-period').value;
             const dateStr = this.selectedDate.toISOString().split('T')[0]; // YYYY-MM-DD
             
+            // Calculate days ago for better user messaging
+            const today = new Date();
+            const selectedDate = new Date(dateStr);
+            const daysAgo = Math.floor((today - selectedDate) / (1000 * 60 * 60 * 24));
+            
+            console.log(`📅 Loading historical data for ${dateStr} (${daysAgo} days ago)`);
+            
             const response = await fetch(`${this.apiBaseUrl}/analyze/historical?target_date=${dateStr}`, {
                 method: 'POST',
                 headers: {
@@ -1901,7 +1940,16 @@ class GlobalMarketTracker {
             });
             
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
+                const errorData = await response.json().catch(() => ({detail: `HTTP ${response.status}`}));
+                if (response.status === 501) {
+                    // Historical data not available for old dates
+                    this.showToast(`Historical data not available for ${dateStr}. This system uses LIVE DATA ONLY. Please select today or yesterday.`, 'warning');
+                    // Automatically switch back to live data
+                    this.goToToday();
+                    return;
+                } else {
+                    throw new Error(errorData.detail || `HTTP ${response.status}`);
+                }
             }
             
             const data = await response.json();
@@ -1910,7 +1958,14 @@ class GlobalMarketTracker {
                 this.currentData = data;
                 this.updateChart(data);
                 this.updatePerformanceSummaryDisplay(data.performance_summary);
-                this.showToast(`Historical data loaded for ${dateStr}`, 'success');
+                
+                if (daysAgo === 0) {
+                    this.showToast(`Live data loaded for today`, 'success');
+                } else if (daysAgo === 1) {
+                    this.showToast(`Recent data loaded for yesterday`, 'success');
+                } else {
+                    this.showToast(`Data loaded for ${dateStr} (${daysAgo} days ago)`, 'success');
+                }
             } else {
                 throw new Error('Failed to load historical data');
             }
