@@ -6,6 +6,7 @@ Global Stock Market Tracker - Local Deployment
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from typing import List, Dict, Optional, Any
 from datetime import datetime, timedelta, timezone
@@ -2453,6 +2454,46 @@ from optimized_prediction_system import (
     OptimizedPredictionResponse
 )
 
+# Import advanced prediction systems
+try:
+    from advanced_ensemble_predictor import (
+        AdvancedEnsemblePredictor,
+        PredictionHorizon,
+        ModelType,
+        PredictionResult
+    )
+    advanced_predictor = AdvancedEnsemblePredictor()
+    logger.info("🚀 Advanced Ensemble Predictor loaded successfully")
+except ImportError as e:
+    advanced_predictor = None
+    logger.warning(f"Advanced Ensemble Predictor not available: {e}")
+
+try:
+    from global_conflict_monitor import (
+        GlobalConflictMonitor,
+        ConflictType,
+        ThreatLevel,
+        GlobalThreat
+    )
+    conflict_monitor = GlobalConflictMonitor()
+    logger.info("🌍 Global Conflict Monitor loaded successfully")
+except ImportError as e:
+    conflict_monitor = None
+    logger.warning(f"Global Conflict Monitor not available: {e}")
+
+try:
+    from live_social_media_integration import (
+        LiveSocialMediaCollector,
+        SocialPost,
+        SocialSentimentSummary,
+        SocialPlatform
+    )
+    social_media_service = LiveSocialMediaCollector()
+    logger.info("📱 Live Social Media Integration loaded successfully")
+except ImportError as e:
+    social_media_service = None
+    logger.warning(f"Live Social Media Integration not available: {e}")
+
 @app.get("/api/prediction/{symbol}")
 async def get_market_prediction(
     symbol: str,
@@ -2673,6 +2714,403 @@ def _calculate_average_confidence(predictions: Dict[str, Any]) -> float:
     
     return sum(confidences) / len(confidences) if confidences else 0.5
 
+# ============================================================================
+# ADVANCED PREDICTION ENDPOINTS - Research-Based Models
+# ============================================================================
+
+@app.get("/api/advanced-prediction/{symbol}")
+async def get_advanced_prediction(
+    symbol: str,
+    timeframe: str = Query("5d", description="Prediction timeframe: 1d, 5d, 30d, 90d"),
+    include_social: bool = Query(True, description="Include live social media analysis"),
+    include_conflicts: bool = Query(True, description="Include global conflict monitoring")
+):
+    """Get advanced ensemble prediction with LSTM, Random Forest, and real-time data integration"""
+    try:
+        start_time = asyncio.get_event_loop().time()
+        
+        if not advanced_predictor:
+            raise HTTPException(status_code=503, detail="Advanced ensemble predictor not available")
+        
+        logger.info(f"🚀 Generating advanced prediction for {symbol} ({timeframe})")
+        
+        # Convert timeframe to prediction horizon
+        horizon_map = {
+            "1d": PredictionHorizon.INTRADAY,
+            "5d": PredictionHorizon.SHORT_TERM,
+            "30d": PredictionHorizon.MEDIUM_TERM,
+            "90d": PredictionHorizon.LONG_TERM
+        }
+        
+        horizon = horizon_map.get(timeframe, PredictionHorizon.SHORT_TERM)
+        
+        # Gather real-time data
+        market_data = await multi_source_aggregator.get_live_data(symbol)
+        
+        if not market_data or not market_data.data_points:
+            raise HTTPException(status_code=404, detail=f"No live market data available for {symbol}")
+        
+        # Get geopolitical threats if requested
+        geopolitical_impact = 0.0
+        geopolitical_details = {}
+        if include_conflicts and conflict_monitor:
+            try:
+                threats = await conflict_monitor.collect_global_threats(hours_back=48)
+                high_threats = [t for t in threats if t.threat_level == ThreatLevel.HIGH]
+                
+                if high_threats:
+                    # Calculate aggregate geopolitical impact
+                    geopolitical_impact = sum(t.market_impact for t in high_threats[:5]) / 5
+                    geopolitical_details = {
+                        "active_threats": len(high_threats),
+                        "top_threats": [
+                            {
+                                "region": t.region,
+                                "type": t.conflict_type.value,
+                                "threat_level": t.threat_level.value,
+                                "market_impact": t.market_impact,
+                                "description": t.description[:100] + "..." if len(t.description) > 100 else t.description
+                            }
+                            for t in high_threats[:3]
+                        ],
+                        "aggregate_impact": geopolitical_impact
+                    }
+                logger.info(f"🌍 Geopolitical analysis: {len(high_threats)} high-impact threats identified")
+            except Exception as e:
+                logger.warning(f"Geopolitical analysis failed: {e}")
+        
+        # Get social media sentiment if requested
+        social_sentiment = 0.0
+        social_details = {}
+        if include_social and social_media_service:
+            try:
+                social_data = await social_media_service.collect_live_social_data(hours_back=24)
+                # Extract overall sentiment (simplified for now)
+                all_sentiments = []
+                for platform_summary in social_data.values():
+                    if hasattr(platform_summary, 'average_sentiment'):
+                        all_sentiments.append(platform_summary.average_sentiment)
+                
+                social_sentiment = sum(all_sentiments) / len(all_sentiments) if all_sentiments else 0.0
+                
+                sentiment_data = {
+                    "average_sentiment": social_sentiment,
+                    "total_posts": sum(len(getattr(s, 'posts', [])) for s in social_data.values()),
+                    "sentiment_label": "positive" if social_sentiment > 0.1 else "negative" if social_sentiment < -0.1 else "neutral",
+                    "top_keywords": [],
+                    "source_breakdown": {platform: len(getattr(summary, 'posts', [])) for platform, summary in social_data.items()}
+                }
+                
+                social_sentiment = sentiment_data.get("average_sentiment", 0.0)
+                social_details = {
+                    "posts_analyzed": sentiment_data.get("total_posts", 0),
+                    "sentiment_score": social_sentiment,
+                    "sentiment_label": sentiment_data.get("sentiment_label", "neutral"),
+                    "top_keywords": sentiment_data.get("top_keywords", []),
+                    "source_breakdown": sentiment_data.get("source_breakdown", {})
+                }
+                logger.info(f"📱 Social media analysis: {sentiment_data.get('total_posts', 0)} posts, sentiment: {social_sentiment:.3f}")
+            except Exception as e:
+                logger.warning(f"Social media analysis failed: {e}")
+        
+        # Generate advanced prediction
+        external_factors = {
+            "geopolitical_factor": geopolitical_impact,
+            "social_sentiment": social_sentiment
+        }
+        
+        market_data_dict = None
+        if market_data and market_data.data_points:
+            market_data_dict = {
+                "data_points": [
+                    {
+                        "timestamp": dp.timestamp,
+                        "open": dp.open,
+                        "high": dp.high,
+                        "low": dp.low,
+                        "close": dp.close,
+                        "volume": dp.volume
+                    }
+                    for dp in market_data.data_points
+                ]
+            }
+        
+        prediction_result = await advanced_predictor.generate_advanced_prediction(
+            symbol=symbol,
+            timeframe=timeframe,
+            market_data=market_data_dict,
+            external_factors=external_factors
+        )
+        
+        processing_time = asyncio.get_event_loop().time() - start_time
+        
+        # Format comprehensive response
+        response = {
+            "success": True,
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "processing_time": f"{processing_time:.2f}s",
+            "prediction": {
+                "direction": prediction_result.direction,
+                "confidence_score": 1.0 - prediction_result.uncertainty_score,  # Convert uncertainty to confidence
+                "expected_return": prediction_result.expected_return,
+                "probability_up": prediction_result.probability_up,
+                "price_range": {
+                    "lower_bound": prediction_result.confidence_interval[0],
+                    "upper_bound": prediction_result.confidence_interval[1]
+                },
+                "risk_assessment": f"Volatility: {prediction_result.volatility_estimate:.1%}",
+                "risk_adjusted_return": prediction_result.risk_adjusted_return,
+                "model_ensemble": prediction_result.model_ensemble_weights
+            },
+            "real_time_factors": {
+                "geopolitical_analysis": geopolitical_details if include_conflicts else None,
+                "social_media_analysis": social_details if include_social else None,
+                "market_data_quality": {
+                    "data_points": len(market_data.data_points) if market_data and market_data.data_points else 0,
+                    "latest_timestamp": market_data.data_points[-1].timestamp if market_data and market_data.data_points else None,
+                    "source": "Multi-source aggregator"
+                }
+            },
+            "model_metadata": {
+                "ensemble_models": ["LSTM Neural Network", "Random Forest", "ARIMA", "Quantile Regression"],
+                "prediction_horizon": timeframe,
+                "feature_importance": prediction_result.feature_importance,
+                "uncertainty_score": prediction_result.uncertainty_score,
+                "uncertainty_quantification": "95% confidence intervals"
+            }
+        }
+        
+        confidence = 1.0 - prediction_result.uncertainty_score
+        logger.info(f"🎯 Advanced prediction completed for {symbol}: {prediction_result.direction} (confidence: {confidence:.1%})")
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in advanced prediction endpoint: {e}")
+        raise HTTPException(status_code=500, detail=f"Advanced prediction failed: {str(e)}")
+
+@app.get("/api/global-conflicts")
+async def get_global_conflicts():
+    """Get current global conflict monitoring data"""
+    try:
+        if not conflict_monitor:
+            raise HTTPException(status_code=503, detail="Global conflict monitor not available")
+        
+        # Get all current threats
+        threats = await conflict_monitor.collect_global_threats(hours_back=48)
+        
+        # Organize by threat level and region
+        threat_analysis = {
+            "total_threats": len(threats),
+            "threat_breakdown": {
+                "high": len([t for t in threats if t.threat_level == ThreatLevel.HIGH]),
+                "medium": len([t for t in threats if t.threat_level == ThreatLevel.MEDIUM]),
+                "low": len([t for t in threats if t.threat_level == ThreatLevel.LOW])
+            },
+            "regional_analysis": {},
+            "conflict_types": {},
+            "market_impact_summary": {
+                "aggregate_risk_score": sum(t.market_impact for t in threats if t.threat_level == ThreatLevel.HIGH),
+                "high_impact_regions": []
+            },
+            "active_threats": [
+                {
+                    "id": t.threat_id,
+                    "region": t.region,
+                    "type": t.conflict_type.value,
+                    "threat_level": t.threat_level.value,
+                    "market_impact": t.market_impact,
+                    "description": t.description,
+                    "last_updated": t.timestamp.isoformat(),
+                    "source": t.source
+                }
+                for t in sorted(threats, key=lambda x: (x.threat_level.value, abs(x.market_impact)), reverse=True)[:20]
+            ]
+        }
+        
+        # Regional breakdown
+        for threat in threats:
+            region = threat.region
+            if region not in threat_analysis["regional_analysis"]:
+                threat_analysis["regional_analysis"][region] = {
+                    "threat_count": 0,
+                    "max_impact": 0.0,
+                    "threat_levels": {"high": 0, "medium": 0, "low": 0}
+                }
+            
+            threat_analysis["regional_analysis"][region]["threat_count"] += 1
+            threat_analysis["regional_analysis"][region]["max_impact"] = max(
+                threat_analysis["regional_analysis"][region]["max_impact"],
+                abs(threat.market_impact)
+            )
+            threat_analysis["regional_analysis"][region]["threat_levels"][threat.threat_level.value.lower()] += 1
+        
+        # Conflict type breakdown
+        for threat in threats:
+            conflict_type = threat.conflict_type.value
+            if conflict_type not in threat_analysis["conflict_types"]:
+                threat_analysis["conflict_types"][conflict_type] = 0
+            threat_analysis["conflict_types"][conflict_type] += 1
+        
+        # High-impact regions
+        high_impact_regions = [
+            {"region": region, "impact": data["max_impact"]}
+            for region, data in threat_analysis["regional_analysis"].items()
+            if data["max_impact"] > 0.5
+        ]
+        threat_analysis["market_impact_summary"]["high_impact_regions"] = sorted(
+            high_impact_regions, key=lambda x: x["impact"], reverse=True
+        )
+        
+        logger.info(f"🌍 Global conflict analysis: {len(threats)} threats across {len(threat_analysis['regional_analysis'])} regions")
+        
+        return threat_analysis
+        
+    except Exception as e:
+        logger.error(f"Error in global conflicts endpoint: {e}")
+        raise HTTPException(status_code=500, detail=f"Global conflict monitoring failed: {str(e)}")
+
+@app.get("/api/social-sentiment/{symbol}")
+async def get_social_sentiment(
+    symbol: str,
+    hours_back: int = Query(24, description="Hours of historical data to analyze"),
+    platforms: str = Query("reddit,twitter", description="Comma-separated platforms: reddit,twitter")
+):
+    """Get live social media sentiment analysis for a symbol"""
+    try:
+        if not social_media_service:
+            raise HTTPException(status_code=503, detail="Live social media integration not available")
+        
+        # Parse platforms
+        platform_list = [p.strip() for p in platforms.split(",") if p.strip()]
+        
+        # Get sentiment data
+        social_data = await social_media_service.collect_live_social_data(hours_back=hours_back)
+        
+        # Process the data for response format
+        all_sentiments = []
+        total_posts = 0
+        platform_breakdown = {}
+        
+        for platform, summary in social_data.items():
+            if hasattr(summary, 'average_sentiment') and hasattr(summary, 'posts'):
+                all_sentiments.append(summary.average_sentiment)
+                platform_breakdown[platform] = {
+                    "posts": len(summary.posts),
+                    "sentiment": summary.average_sentiment
+                }
+                total_posts += len(summary.posts)
+        
+        sentiment_data = {
+            "average_sentiment": sum(all_sentiments) / len(all_sentiments) if all_sentiments else 0.0,
+            "total_posts": total_posts,
+            "sentiment_label": "positive" if sum(all_sentiments) > 0.1 else "negative" if sum(all_sentiments) < -0.1 else "neutral",
+            "sentiment_confidence": abs(sum(all_sentiments) / len(all_sentiments)) if all_sentiments else 0.5,
+            "platform_breakdown": platform_breakdown,
+            "trending_keywords": [],  # Simplified for now
+            "sentiment_timeline": []  # Simplified for now
+        }
+        
+        # Enhanced response with trending analysis
+        response = {
+            "success": True,
+            "symbol": symbol,
+            "analysis_period": f"{hours_back} hours",
+            "platforms_analyzed": platform_list,
+            "sentiment_analysis": sentiment_data,
+            "trending_keywords": sentiment_data.get("trending_keywords", []),
+            "sentiment_timeline": sentiment_data.get("sentiment_timeline", []),
+            "platform_comparison": sentiment_data.get("platform_breakdown", {}),
+            "recommendation": {
+                "overall_sentiment": sentiment_data.get("sentiment_label", "neutral"),
+                "confidence": sentiment_data.get("sentiment_confidence", 0.5),
+                "market_indication": _interpret_social_sentiment(sentiment_data.get("average_sentiment", 0.0))
+            }
+        }
+        
+        logger.info(f"📱 Social sentiment analysis for {symbol}: {sentiment_data.get('total_posts', 0)} posts, sentiment: {sentiment_data.get('sentiment_label', 'neutral')}")
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error in social sentiment endpoint: {e}")
+        raise HTTPException(status_code=500, detail=f"Social sentiment analysis failed: {str(e)}")
+
+def _interpret_social_sentiment(sentiment_score: float) -> str:
+    """Interpret social sentiment score for market indication"""
+    if sentiment_score >= 0.6:
+        return "Strong bullish sentiment detected"
+    elif sentiment_score >= 0.2:
+        return "Moderately positive sentiment"
+    elif sentiment_score >= -0.2:
+        return "Neutral sentiment - mixed signals"
+    elif sentiment_score >= -0.6:
+        return "Moderately bearish sentiment"
+    else:
+        return "Strong bearish sentiment detected"
+
+@app.get("/api/enhanced-interface/{symbol}")
+async def get_enhanced_interface_data(symbol: str):
+    """Get comprehensive data for the enhanced prediction interface"""
+    try:
+        # Generate predictions for all timeframes using advanced system
+        timeframes = ["1d", "5d", "30d", "90d"]
+        predictions = {}
+        
+        for tf in timeframes:
+            try:
+                # Use the advanced prediction endpoint internally
+                pred_response = await get_advanced_prediction(
+                    symbol=symbol,
+                    timeframe=tf,
+                    include_social=True,
+                    include_conflicts=True
+                )
+                predictions[tf] = pred_response
+            except Exception as e:
+                logger.warning(f"Failed to get {tf} prediction: {e}")
+                predictions[tf] = {"success": False, "error": str(e)}
+        
+        # Get current market data
+        market_data = await multi_source_aggregator.get_live_data(symbol)
+        
+        # Format for enhanced interface
+        interface_data = {
+            "symbol": symbol,
+            "current_price": market_data.data_points[-1].close if market_data and market_data.data_points else None,
+            "last_updated": datetime.now(timezone.utc).isoformat(),
+            "predictions_by_timeframe": predictions,
+            "market_data_24h": [
+                {
+                    "timestamp": dp.timestamp,
+                    "price": dp.close,
+                    "volume": dp.volume
+                }
+                for dp in (market_data.data_points[-24:] if market_data and market_data.data_points else [])
+            ],
+            "interface_metadata": {
+                "total_models": 4,  # LSTM, Random Forest, ARIMA, Quantile Regression
+                "real_time_integrations": 3,  # Market data, Social media, Geopolitical
+                "data_sources": ["Live Market Data", "Social Media APIs", "Global News RSS", "Conflict Monitoring"],
+                "update_frequency": "Real-time"
+            }
+        }
+        
+        logger.info(f"📊 Enhanced interface data prepared for {symbol}")
+        
+        return interface_data
+        
+    except Exception as e:
+        logger.error(f"Error preparing enhanced interface data: {e}")
+        raise HTTPException(status_code=500, detail=f"Enhanced interface data preparation failed: {str(e)}")
+
+# ============================================================================
+# END ADVANCED PREDICTION ENDPOINTS
+# ============================================================================
+
 # Application startup event
 @app.on_event("startup")
 async def startup_event():
@@ -2713,6 +3151,23 @@ async def startup_event():
     logger.info("   ALPHA_VANTAGE_API_KEY=your_key")
     logger.info("   TWELVE_DATA_API_KEY=your_key") 
     logger.info("   FINNHUB_API_KEY=your_key")
+
+# Enhanced interface route
+@app.get("/enhanced-interface", response_class=HTMLResponse)
+async def serve_enhanced_interface():
+    """Serve the enhanced prediction interface"""
+    try:
+        # Read and return the enhanced interface HTML
+        interface_path = os.path.join(os.path.dirname(__file__), "enhanced_prediction_interface.html")
+        if os.path.exists(interface_path):
+            with open(interface_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="Enhanced interface not found")
+    except Exception as e:
+        logger.error(f"Error serving enhanced interface: {e}")
+        raise HTTPException(status_code=500, detail="Failed to serve enhanced interface")
 
 # Mount static files AFTER all API routes are defined
 if os.path.exists("frontend"):
