@@ -4937,6 +4937,51 @@ async def serve_enhanced_predictions():
         logger.error(f"Error serving enhanced predictions: {e}")
         raise HTTPException(status_code=500, detail="Failed to serve enhanced predictions")
 
+@app.get("/enhanced_candlestick_interface.html", response_class=HTMLResponse, include_in_schema=False)
+async def serve_enhanced_candlestick():
+    """Serve the enhanced candlestick trading interface"""
+    try:
+        candlestick_path = "enhanced_candlestick_interface.html"
+        if os.path.exists(candlestick_path):
+            with open(candlestick_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="Enhanced candlestick interface not found")
+    except Exception as e:
+        logger.error(f"Error serving enhanced candlestick interface: {e}")
+        raise HTTPException(status_code=500, detail="Failed to serve enhanced candlestick interface")
+
+@app.get("/unified_trading_dashboard.html", response_class=HTMLResponse, include_in_schema=False)
+async def serve_unified_dashboard():
+    """Serve the unified trading dashboard"""
+    try:
+        dashboard_path = "unified_trading_dashboard.html"
+        if os.path.exists(dashboard_path):
+            with open(dashboard_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="Unified trading dashboard not found")
+    except Exception as e:
+        logger.error(f"Error serving unified trading dashboard: {e}")
+        raise HTTPException(status_code=500, detail="Failed to serve unified trading dashboard")
+
+@app.get("/frontend/index.html", response_class=HTMLResponse, include_in_schema=False)
+async def serve_global_market_tracker():
+    """Serve the global market tracker interface"""
+    try:
+        tracker_path = os.path.join("frontend", "index.html")
+        if os.path.exists(tracker_path):
+            with open(tracker_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="Global market tracker not found")
+    except Exception as e:
+        logger.error(f"Error serving global market tracker: {e}")
+        raise HTTPException(status_code=500, detail="Failed to serve global market tracker")
+
 @app.get("/advanced_dashboard.html", response_class=HTMLResponse, include_in_schema=False) 
 async def serve_advanced_dashboard_frontend():
     """Serve the advanced dashboard from frontend"""
