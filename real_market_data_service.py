@@ -381,10 +381,13 @@ class RealMarketDataAggregator:
                     cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
                     recent_points = [p for p in data_points if p.timestamp >= cutoff]
                     
-                    if len(recent_points) >= 10:  # Need minimum data points
+                    # Apply smart data quality filtering to remove aberrant data
+                    quality_filtered_points = self._filter_aberrant_data(recent_points, symbol)
+                    
+                    if len(quality_filtered_points) >= 10:  # Need minimum data points
                         market_data = RealMarketData(
                             symbol=symbol,
-                            data_points=recent_points,
+                            data_points=quality_filtered_points,
                             sources_used=[api_name],
                             last_updated=datetime.now()
                         )
@@ -392,10 +395,10 @@ class RealMarketDataAggregator:
                         # Cache the result
                         self.cache[cache_key] = (market_data, datetime.now())
                         
-                        logger.info(f"✅ Got {len(recent_points)} real data points for {symbol} from {api_name}")
+                        logger.info(f"✅ Got {len(quality_filtered_points)} quality data points for {symbol} from {api_name} (filtered from {len(recent_points)})")
                         return market_data
                     else:
-                        logger.warning(f"⚠️ {api_name}: Only got {len(recent_points)} recent points for {symbol}")
+                        logger.warning(f"⚠️ {api_name}: Only got {len(quality_filtered_points)} quality points for {symbol} (from {len(recent_points)} raw points)")
                 
             except Exception as e:
                 logger.error(f"❌ {api_name} failed for {symbol}: {e}")
@@ -403,6 +406,48 @@ class RealMarketDataAggregator:
         
         logger.error(f"❌ All real data APIs failed for {symbol}")
         return None
+    
+    def _filter_aberrant_data(self, data_points: List[RealMarketDataPoint], symbol: str) -> List[RealMarketDataPoint]:
+        """Filter out aberrant data points that indicate poor data quality"""
+        if not data_points:
+            return []
+            
+        filtered_points = []
+        rejected_count = 0
+        
+        for point in data_points:
+            # Skip data points with aberrant characteristics
+            is_aberrant = False
+            
+            # Check for identical OHLC values (indicates stale/bad data)
+            if point.open == point.high == point.low == point.close:
+                logger.debug(f"Rejecting {symbol} point {point.timestamp}: Identical OHLC values {point.close}")
+                is_aberrant = True
+            
+            # Check for zero or negative prices (invalid data)
+            if any(price <= 0 for price in [point.open, point.high, point.low, point.close]):
+                logger.debug(f"Rejecting {symbol} point {point.timestamp}: Invalid price data")
+                is_aberrant = True
+            
+            # Check for impossible OHLC relationships
+            if point.high < point.low or point.high < max(point.open, point.close) or point.low > min(point.open, point.close):
+                logger.debug(f"Rejecting {symbol} point {point.timestamp}: Impossible OHLC relationships")
+                is_aberrant = True
+            
+            # For indices like ^AORD, zero volume during trading hours is suspicious but acceptable
+            # We'll keep zero volume points but flag them
+            if point.volume == 0:
+                logger.debug(f"Zero volume detected for {symbol} at {point.timestamp} (keeping but flagged)")
+            
+            if not is_aberrant:
+                filtered_points.append(point)
+            else:
+                rejected_count += 1
+        
+        if rejected_count > 0:
+            logger.info(f"🔍 Data quality filter: Rejected {rejected_count}/{len(data_points)} aberrant points for {symbol}")
+        
+        return filtered_points
 
 # Global instance
 real_market_aggregator = RealMarketDataAggregator()

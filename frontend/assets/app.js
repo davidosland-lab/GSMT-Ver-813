@@ -852,13 +852,17 @@ class GlobalMarketTracker {
             // Define exact market open times in AEST hours (24-hour format)
             const marketOpenTimes = {
                 'Japan': { hour: 9, minute: 0 },        // 09:00 AEST (JST 09:00 market open)
-                'Australia': { hour: 10, minute: 0 }    // 10:00 AEST (10:00 AM market open)
+                'Australia': { hour: 10, minute: 0 },   // 10:00 AEST (ASX opens 10:00am AEST)
+                'UK': { hour: 18, minute: 0 },          // 18:00 AEST (UK opens 08:00 GMT / 07:00 BST)
+                'US': { hour: 0, minute: 30 }           // 00:30 AEST next day (US opens 14:30 UTC / 13:30 EDT)
             };
             
             // Define exact market close times in AEST hours (24-hour format)
             const marketCloseTimes = {
                 'Japan': { hour: 16, minute: 30 },      // 16:30 AEST (JST 15:30 market close)
-                'Australia': { hour: 16, minute: 0 }    // 16:00 AEST (4:00 PM market close)  
+                'Australia': { hour: 16, minute: 0 },   // 16:00 AEST (ASX closes 4:00pm AEST)
+                'UK': { hour: 3, minute: 0 },           // 03:00 AEST next day (UK closes 17:00 GMT / 16:00 BST)
+                'US': { hour: 8, minute: 0 }            // 08:00 AEST next day (US closes 22:00 UTC / 21:00 EDT)
             };
             
             // Calculate exact market open position based on timeline
