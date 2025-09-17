@@ -395,9 +395,13 @@
                 this.chart = null;
                 this.volumeChart = null;
                 this.websocket = null;
-                this.currentSymbol = '^GSPC';
-                this.currentInterval = 60;
-                this.currentPeriod = '24h';
+                
+                // Check for URL parameters
+                const urlParams = new URLSearchParams(window.location.search);
+                this.currentSymbol = urlParams.get('symbol') || '^GSPC';
+                this.currentInterval = parseInt(urlParams.get('interval')) || 60;
+                this.currentPeriod = urlParams.get('period') || '24h';
+                
                 this.updateCount = 0;
                 this.lastData = null;
                 this.autoRefreshInterval = null;
@@ -413,6 +417,11 @@
                 
                 // Setup event handlers
                 this.setupEventHandlers();
+                
+                // Set initial UI values from URL parameters
+                document.getElementById('symbol-select').value = this.currentSymbol;
+                document.getElementById('interval-select').value = this.currentInterval;
+                document.getElementById('period-select').value = this.currentPeriod;
                 
                 // Load initial data
                 this.loadCandlestickData();
@@ -894,22 +903,37 @@
             updateCurrentPriceDisplay(data) {
                 if (!data || data.length === 0) return;
                 
-                // Find the best data point to display
+                // Find the best data point to display with multi-tier selection
                 let displayPoint = null;
+                let selectionReason = '';
                 
-                // Look for the most recent complete candle with volume > 0 and different OHLC values
+                // Tier 1: Look for candles with volume > 0 AND different OHLC values (active trading)
                 for (let i = data.length - 1; i >= 0; i--) {
                     const point = data[i];
                     if (point && point.volume > 0 && 
                         (point.open !== point.high || point.high !== point.low || point.low !== point.close)) {
                         displayPoint = point;
+                        selectionReason = 'active trading candle';
                         break;
                     }
                 }
                 
-                // Fallback to latest point if no complete candle found
+                // Tier 2: Look for candles with different OHLC values (even with zero volume for closed markets)
+                if (!displayPoint) {
+                    for (let i = data.length - 1; i >= 0; i--) {
+                        const point = data[i];
+                        if (point && (point.open !== point.high || point.high !== point.low || point.low !== point.close)) {
+                            displayPoint = point;
+                            selectionReason = 'market closed but different OHLC';
+                            break;
+                        }
+                    }
+                }
+                
+                // Tier 3: Fallback to latest point if no good candle found
                 if (!displayPoint && data.length > 0) {
                     displayPoint = data[data.length - 1];
+                    selectionReason = 'latest available';
                 }
                 
                 if (displayPoint) {
@@ -948,7 +972,7 @@
                     document.getElementById('market-status').textContent = latest.market_open ? 'Open' : 'Closed';
                     document.getElementById('trading-session').textContent = new Date(displayPoint.timestamp_ms).toLocaleTimeString();
                     
-                    console.log(`💰 Current price display updated using ${displayPoint === latest ? 'latest' : 'previous complete'} candle`);
+                    console.log(`💰 Current price display updated using ${selectionReason} candle`);
                 }
                 
                 console.log('💰 Current price display updated');
