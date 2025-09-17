@@ -593,9 +593,10 @@ class GlobalMarketTracker {
                 // Map data points to fixed x-axis positions based on their actual timestamps
                 points.forEach((point, index) => {
                     // Parse the actual timestamp to determine correct x-axis position
-                    const timestampStr = point.timestamp.replace(' AEST', '');
-                    const [datePart, timePart] = timestampStr.split(' ');
-                    const [hourNum, minuteNum] = timePart.split(':').map(Number);
+                    // Handle ISO format: "2025-09-16T13:30:00+00:00"
+                    const timestamp = new Date(point.timestamp);
+                    const hourNum = timestamp.getUTCHours();
+                    const minuteNum = timestamp.getUTCMinutes();
                     
                     // Calculate the correct x-axis index based on time relative to 9:00 AM start
                     let xAxisIndex = -1;
@@ -715,15 +716,13 @@ class GlobalMarketTracker {
                 
                 points.forEach((point, index) => {
                     // Parse timestamp and determine x-axis position
-                    const timestampStr = point.timestamp.replace(' AEST', '');
+                    // Handle ISO format: "2025-09-16T13:30:00+00:00"
+                    const timestamp = new Date(point.timestamp);
+                    const hourNum = timestamp.getUTCHours();
+                    const minuteNum = timestamp.getUTCMinutes();
                     
                     // For market hours, we should show data until the market closes
-                    // Australian market closes at 16:00 AEST (4:00 PM)
                     // Don't filter based on current time for now - let all market data through
-                    
-                    // Parse time to determine correct x-axis position
-                    const [datePart, timePart] = timestampStr.split(' ');
-                    const [hourNum, minuteNum] = timePart.split(':').map(Number);
                     
                     // Calculate the correct x-axis index based on time relative to 9:00 AM start
                     let xAxisIndex = -1;
@@ -1159,9 +1158,10 @@ class GlobalMarketTracker {
                     
                     points.forEach((point, index) => {
                         // Parse timestamp to determine correct x-axis position
-                        const timestampStr = point.timestamp.replace(' AEST', '');
-                        const [datePart, timePart] = timestampStr.split(' ');
-                        const [hourNum, minuteNum] = timePart.split(':').map(Number);
+                        // Handle ISO format: "2025-09-16T13:30:00+00:00"
+                        const timestamp = new Date(point.timestamp);
+                        const hourNum = timestamp.getUTCHours();
+                        const minuteNum = timestamp.getUTCMinutes();
                         
                         // Calculate x-axis index
                         let xAxisIndex = -1;
@@ -1204,9 +1204,10 @@ class GlobalMarketTracker {
                     
                     points.forEach((point, index) => {
                         // Parse timestamp to determine correct x-axis position
-                        const timestampStr = point.timestamp.replace(' AEST', '');
-                        const [datePart, timePart] = timestampStr.split(' ');
-                        const [hourNum, minuteNum] = timePart.split(':').map(Number);
+                        // Handle ISO format: "2025-09-16T13:30:00+00:00"
+                        const timestamp = new Date(point.timestamp);
+                        const hourNum = timestamp.getUTCHours();
+                        const minuteNum = timestamp.getUTCMinutes();
                         
                         // Calculate x-axis index
                         let xAxisIndex = -1;
