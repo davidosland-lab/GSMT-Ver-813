@@ -828,25 +828,36 @@ class GlobalMarketTracker {
             let marketCloseEnd = -1;
             
             // Filter points to only include past/present data (no future)
-            // Get current AEST time for proper comparison
+            // Get current time for proper comparison with API timestamps
             const nowUTC = new Date();
-            const aestOffsetHours = 10; // AEST is UTC+10
-            const nowAEST = new Date(nowUTC.getTime() + (aestOffsetHours * 60 * 60 * 1000));
-            
-            // Format current AEST time to match our timestamp format
-            const currentAESTStr = nowAEST.getUTCFullYear() + '-' + 
-                String(nowAEST.getUTCMonth() + 1).padStart(2, '0') + '-' + 
-                String(nowAEST.getUTCDate()).padStart(2, '0') + ' ' +
-                String(nowAEST.getUTCHours()).padStart(2, '0') + ':' + 
-                String(nowAEST.getUTCMinutes()).padStart(2, '0') + ':' +
-                String(nowAEST.getUTCSeconds()).padStart(2, '0');
-            
-
             
             const validPoints = points.filter((point) => {
-                const timestampStr = point.timestamp.replace(' AEST', '');
-                const isValid = timestampStr <= currentAESTStr;
-                return isValid;
+                // Handle different timestamp formats from API
+                let pointTime;
+                
+                if (typeof point.timestamp === 'string') {
+                    if (point.timestamp.includes('T')) {
+                        // ISO 8601 format: 2025-09-17T06:10:00+00:00
+                        pointTime = new Date(point.timestamp);
+                    } else if (point.timestamp.includes(' AEST')) {
+                        // AEST string format: 2025-09-17 16:10:00 AEST
+                        const cleanTimestamp = point.timestamp.replace(' AEST', '');
+                        // Parse as AEST (UTC+10) and convert to UTC
+                        pointTime = new Date(cleanTimestamp + '+10:00');
+                    } else {
+                        // Fallback: try direct parsing
+                        pointTime = new Date(point.timestamp);
+                    }
+                } else {
+                    // Already a Date object or timestamp
+                    pointTime = new Date(point.timestamp);
+                }
+                
+                // Only include points that are not in the future (with 5 minute buffer for real-time data)
+                const bufferMs = 5 * 60 * 1000; // 5 minutes
+                const isValid = pointTime.getTime() <= (nowUTC.getTime() + bufferMs);
+                
+                return isValid && !isNaN(pointTime.getTime()); // Also filter out invalid dates
             });
             
             // Define exact market open times in AEST hours (24-hour format)
