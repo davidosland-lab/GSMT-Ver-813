@@ -538,6 +538,9 @@ class GlobalMarketTracker {
         
         // LOCKED X-AXIS: Generate fixed x-axis starting at 9:00 AM AEST regardless of actual data
         // This ensures consistent timeline display that doesn't change based on current time or data availability
+        // 
+        // IMPORTANT: All timestamps from the API are in UTC format, but we convert them to AEST
+        // for proper alignment with the Australian market opening time (9:00 AM AEST)
         
         const startHour = 9; // Always start at 9:00 AM AEST
         const totalHours = 24; // Full 24-hour cycle from 9 AM to 8:59 AM next day
@@ -595,8 +598,18 @@ class GlobalMarketTracker {
                     // Parse the actual timestamp to determine correct x-axis position
                     // Handle ISO format: "2025-09-16T13:30:00+00:00"
                     const timestamp = new Date(point.timestamp);
-                    const hourNum = timestamp.getUTCHours();
-                    const minuteNum = timestamp.getUTCMinutes();
+                    
+                    // Convert UTC time to AEST (Australian Eastern Standard Time)
+                    // AEST is UTC+10 (standard time) or UTC+11 (daylight saving time)
+                    // For simplicity, we'll use UTC+10. For full DST support, we'd need to check the date
+                    const aestOffset = 10; // Hours to add to UTC to get AEST
+                    const utcHours = timestamp.getUTCHours();
+                    const utcMinutes = timestamp.getUTCMinutes();
+                    
+                    // Convert to AEST by adding the offset
+                    const aestTotalMinutes = (utcHours * 60) + utcMinutes + (aestOffset * 60);
+                    const hourNum = Math.floor((aestTotalMinutes / 60) % 24);
+                    const minuteNum = aestTotalMinutes % 60;
                     
                     // Calculate the correct x-axis index based on time relative to 9:00 AM start
                     let xAxisIndex = -1;
@@ -630,11 +643,11 @@ class GlobalMarketTracker {
                         candlestickData[xAxisIndex] = ohlc;
                         
                         if (index >= 14 && index <= 21) {
-                            console.log(`📊 Hour ${hourNum}:${minuteNum} -> xIndex ${xAxisIndex}: OHLC% = [${ohlc.map(v => v.toFixed(2)).join(', ')}]%, market_open: ${point.market_open}`);
+                            console.log(`📊 AEST ${hourNum.toString().padStart(2,'0')}:${minuteNum.toString().padStart(2,'0')} (UTC ${utcHours.toString().padStart(2,'0')}:${utcMinutes.toString().padStart(2,'0')}) -> xIndex ${xAxisIndex}: OHLC% = [${ohlc.map(v => v.toFixed(2)).join(', ')}]%, market_open: ${point.market_open}`);
                         }
                     } else {
                         if (index >= 14 && index <= 21) {
-                            console.log(`⏸️ Hour ${hourNum}:${minuteNum} -> xIndex ${xAxisIndex}: Market closed or null data, market_open: ${point.market_open}`);
+                            console.log(`⏸️ AEST ${hourNum.toString().padStart(2,'0')}:${minuteNum.toString().padStart(2,'0')} (UTC ${utcHours.toString().padStart(2,'0')}:${utcMinutes.toString().padStart(2,'0')}) -> xIndex ${xAxisIndex}: Market closed or null data, market_open: ${point.market_open}`);
                         }
                     }
                 });
