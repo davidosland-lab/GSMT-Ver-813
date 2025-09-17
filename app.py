@@ -515,7 +515,7 @@ def get_dynamic_market_hours():
         "Japan": {"open": 0, "close": 6},           # 00:00-06:00 UTC → 09:00-15:00 JST
         "Hong Kong": {"open": 1, "close": 8},       # 01:30-08:00 UTC → 09:30-16:00 HKT
         "China": {"open": 1, "close": 7},           # 01:30-07:00 UTC → 09:30-15:00 CST
-        "Australia": {"open": 0, "close": 6},       # 00:00-06:00 UTC → 10:00-16:00 AEST
+        "Australia": {"open": 0, "close": 6},       # 00:00-06:00 UTC → 10:00-16:00 AEST (ASX opens 10:00am AEST)
         "New Zealand": {"open": 22, "close": 4},    # 22:00-04:00 UTC → 10:00-16:00 NZST
         "South Korea": {"open": 0, "close": 6},     # 00:00-06:30 UTC → 09:00-15:30 KST
         "Taiwan": {"open": 1, "close": 5},          # 01:00-05:30 UTC → 09:00-13:30 CST
@@ -750,7 +750,7 @@ def convert_simulated_data_to_format(simulated_points, symbol: str, market: str,
     return market_data_points
 
 def convert_live_data_to_format(live_points: List[LiveDataPoint], symbol: str, market: str, chart_type: ChartType, interval_minutes: int = 60, previous_close: Optional[float] = None, time_period: str = "24h") -> List[MarketDataPoint]:
-    """Convert live data points to rolling time window format starting at 10:00 AEST"""
+    """Convert live data points to rolling time window format starting at 9:00 AEST"""
     
     # Set up AEST timezone
     aest = pytz.timezone('Australia/Sydney')
@@ -759,9 +759,9 @@ def convert_live_data_to_format(live_points: List[LiveDataPoint], symbol: str, m
     
     # Calculate start time based on period
     if time_period == "48h":
-        # For 48h mode: Show 48h timeline starting from yesterday 10:00 AEST 
-        # This captures full market flow across 2 trading days
-        start_aest = (aest_now - timedelta(days=1)).replace(hour=10, minute=0, second=0, microsecond=0)
+        # For 48h mode: Show 48h timeline starting from yesterday 9:00 AEST 
+        # This captures full market flow across 2 trading days starting 1 hour before market open
+        start_aest = (aest_now - timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
         # But ensure we don't go beyond current time
         end_aest = min(start_aest + timedelta(hours=48), aest_now)
         actual_hours = int((end_aest - start_aest).total_seconds() / 3600)
@@ -1656,8 +1656,8 @@ async def get_previous_day_data(symbol: str, chart_type: ChartType, interval_min
         aest_now = utc_now.astimezone(aest)
         
         # Calculate the exact previous day relative to the 48h window
-        # Current 48h window: starts at (now - 1 day) at 10:00 AEST
-        # Previous day: should be (now - 2 days) at 10:00 AEST
+        # Current 48h window: starts at (now - 1 day) at 9:00 AEST
+        # Previous day: should be (now - 2 days) at 9:00 AEST
         current_48h_start = aest_now - timedelta(days=1)
         prev_day = current_48h_start - timedelta(days=1)  # One more day back
         
@@ -1665,8 +1665,8 @@ async def get_previous_day_data(symbol: str, chart_type: ChartType, interval_min
         while prev_day.weekday() >= 5:  # Saturday = 5, Sunday = 6
             prev_day = prev_day - timedelta(days=1)
         
-        # Ensure we're using the date at 10:00 AEST for consistency with live data
-        prev_day_target = prev_day.replace(hour=10, minute=0, second=0, microsecond=0)
+        # Ensure we're using the date at 9:00 AEST for consistency with live data
+        prev_day_target = prev_day.replace(hour=9, minute=0, second=0, microsecond=0)
         
         logger.info(f"📅 Getting previous day historical data for {symbol} on {prev_day_target.strftime('%Y-%m-%d %H:%M')} AEST")
         logger.info(f"📊 Current time: {aest_now.strftime('%Y-%m-%d %H:%M')} AEST")

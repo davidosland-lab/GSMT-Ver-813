@@ -551,8 +551,8 @@ class GlobalMarketTracker {
             (data.metadata[symbol] && data.metadata[symbol].market === 'Australia')
         );
         
-        // Set start time based on market type
-        const startHour = hasAustralianMarkets ? 10 : 9; // ASX opens at 10:00 AM AEST, others at 9:00 AM AEST
+        // Set start time consistently to 9:00 AM AEST for all charts (1 hour before ASX opens)
+        const startHour = 9; // Always start timeline at 9:00 AM AEST for consistency
         const totalHours = 24; // Full 24-hour cycle from 9 AM to 8:59 AM next day
         
         if (selectedInterval === 5) {
@@ -594,6 +594,12 @@ class GlobalMarketTracker {
             // Check if this is previous day data
             const isPreviousDay = symbol.endsWith('_prev_day');
             const baseName = isPreviousDay ? symbolInfo.name.replace(' (Previous Day)', '') : symbolInfo.name;
+            
+            // Skip previous day data to avoid duplicate series (user request: remove duplicate data for cleaner charts)
+            if (isPreviousDay) {
+                console.log(`⏭️ Skipping previous day data for ${symbol} to avoid duplicate series`);
+                return;
+            }
             
             if (chartType === 'candlestick') {
                 // For candlestick charts, preserve all 24 time slots with null for market-closed periods
@@ -1158,8 +1164,8 @@ class GlobalMarketTracker {
                 (data.metadata[symbol] && data.metadata[symbol].market === 'Australia')
             );
             
-            // Set start time based on market type
-            const startHour = hasAustralianMarkets ? 10 : 9; // ASX opens at 10:00 AM AEST, others at 9:00 AM AEST
+            // Set start time consistently to 9:00 AM AEST for all charts (1 hour before ASX opens)
+            const startHour = 9; // Always start timeline at 9:00 AM AEST for consistency
             const totalHours = 24; // Full 24-hour cycle
             
             if (selectedInterval === 5) {
@@ -1194,6 +1200,12 @@ class GlobalMarketTracker {
             // Create series for each symbol in this market
             Object.entries(marketSymbols).forEach(([symbol, points]) => {
                 const symbolInfo = data.metadata[symbol];
+                
+                // Skip previous day data to avoid duplicate series (user request: remove duplicate data for cleaner charts)
+                if (symbol.endsWith('_prev_day')) {
+                    console.log(`⏭️ Skipping previous day data for ${symbol} in market chart to avoid duplicate series`);
+                    return;
+                }
                 
                 if (chartType === 'candlestick') {
                     const candlestickData = new Array(marketXAxisData.length).fill(null);
