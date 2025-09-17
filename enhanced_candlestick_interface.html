@@ -548,7 +548,7 @@
                     
                     // Build API URL
                     const baseUrl = 'https://8000-ibk6l44w5p7m34y5uzj0a-6532622b.e2b.dev'; // Use correct API server URL
-                    const apiUrl = `${baseUrl}/api/enhanced-candlestick/${this.currentSymbol}?interval=${this.currentInterval}&period=${this.currentPeriod}&indicators=${includeIndicators}&volume_profile=${includeVolumeProfile}`;
+                    const apiUrl = `${baseUrl}/api/candlestick/enhanced/${this.currentSymbol}?interval=${this.currentInterval}&period=${this.currentPeriod}&indicators=${includeIndicators}&volume_profile=${includeVolumeProfile}`;
                     
                     console.log('🌐 API URL:', apiUrl);
                     
@@ -602,21 +602,30 @@
                     return;
                 }
                 
-                // Prepare candlestick data for ECharts
-                const chartData = data.data.map(point => [
-                    point.timestamp_ms,
-                    point.open || 0,
-                    point.close || 0,
-                    point.low || 0,
-                    point.high || 0,
-                    point.volume || 0
-                ]);
+                // Prepare candlestick data for ECharts - include all data but mark incomplete candles
+                const chartData = data.data.map(point => {
+                    // Check if this is an incomplete candle (all OHLC same + zero volume)
+                    const isIncomplete = (point.open === point.high && point.high === point.low && 
+                                        point.low === point.close && point.volume === 0);
+                    
+                    return [
+                        point.timestamp_ms,
+                        point.open || 0,
+                        point.close || 0,
+                        point.low || 0,
+                        point.high || 0,
+                        point.volume || 0,
+                        isIncomplete ? 1 : 0  // Flag for incomplete candles
+                    ];
+                });
                 
-                // Prepare volume data
-                const volumeData = data.data.map(point => [
-                    point.timestamp_ms,
-                    point.volume || 0
-                ]);
+                // Prepare volume data - filter out zero volume points for cleaner display
+                const volumeData = data.data
+                    .filter(point => point.volume > 0)  // Only include points with actual volume
+                    .map(point => [
+                        point.timestamp_ms,
+                        point.volume
+                    ]);
                 
                 // Chart configuration
                 const option = {
@@ -793,7 +802,15 @@
                         type: 'value',
                         axisLabel: {
                             formatter: function(value) {
-                                return (value / 1000).toFixed(0) + 'K';
+                                if (value >= 1000000000) {
+                                    return (value / 1000000000).toFixed(1) + 'B';
+                                } else if (value >= 1000000) {
+                                    return (value / 1000000).toFixed(1) + 'M';
+                                } else if (value >= 1000) {
+                                    return (value / 1000).toFixed(0) + 'K';
+                                } else {
+                                    return value.toString();
+                                }
                             }
                         }
                     },
@@ -877,19 +894,47 @@
             updateCurrentPriceDisplay(data) {
                 if (!data || data.length === 0) return;
                 
-                // Get the latest data point
-                const latest = data[data.length - 1];
+                // Find the best data point to display
+                let displayPoint = null;
                 
-                if (latest) {
-                    document.getElementById('current-open').textContent = latest.open?.toFixed(4) || '--';
-                    document.getElementById('current-high').textContent = latest.high?.toFixed(4) || '--';
-                    document.getElementById('current-low').textContent = latest.low?.toFixed(4) || '--';
-                    document.getElementById('current-close').textContent = latest.close?.toFixed(4) || '--';
-                    document.getElementById('current-volume').textContent = latest.volume?.toLocaleString() || '--';
+                // Look for the most recent complete candle with volume > 0 and different OHLC values
+                for (let i = data.length - 1; i >= 0; i--) {
+                    const point = data[i];
+                    if (point && point.volume > 0 && 
+                        (point.open !== point.high || point.high !== point.low || point.low !== point.close)) {
+                        displayPoint = point;
+                        break;
+                    }
+                }
+                
+                // Fallback to latest point if no complete candle found
+                if (!displayPoint && data.length > 0) {
+                    displayPoint = data[data.length - 1];
+                }
+                
+                if (displayPoint) {
+                    document.getElementById('current-open').textContent = displayPoint.open?.toFixed(4) || '--';
+                    document.getElementById('current-high').textContent = displayPoint.high?.toFixed(4) || '--';
+                    document.getElementById('current-low').textContent = displayPoint.low?.toFixed(4) || '--';
+                    document.getElementById('current-close').textContent = displayPoint.close?.toFixed(4) || '--';
+                    document.getElementById('current-volume').textContent = displayPoint.volume?.toLocaleString() || '--';
                     
-                    // Update percentage change with color coding
+                    // Calculate percentage change if we have previous data
                     const changeElement = document.getElementById('current-change');
-                    const change = latest.percentage_change;
+                    let change = displayPoint.percentage_change;
+                    
+                    // If no percentage change available, calculate it from previous candle
+                    if ((change === null || change === undefined) && data.length >= 2) {
+                        const currentIndex = data.indexOf(displayPoint);
+                        if (currentIndex > 0) {
+                            const previousPoint = data[currentIndex - 1];
+                            if (previousPoint && previousPoint.close && displayPoint.close) {
+                                change = ((displayPoint.close - previousPoint.close) / previousPoint.close) * 100;
+                            }
+                        }
+                    }
+                    
+                    // Update change display with color coding
                     if (change !== null && change !== undefined) {
                         changeElement.textContent = change.toFixed(2) + '%';
                         changeElement.className = change >= 0 ? 'font-mono font-bold text-green-600' : 'font-mono font-bold text-red-600';
@@ -899,8 +944,11 @@
                     }
                     
                     // Update market status
+                    const latest = data[data.length - 1];
                     document.getElementById('market-status').textContent = latest.market_open ? 'Open' : 'Closed';
-                    document.getElementById('trading-session').textContent = new Date(latest.timestamp_ms).toLocaleTimeString();
+                    document.getElementById('trading-session').textContent = new Date(displayPoint.timestamp_ms).toLocaleTimeString();
+                    
+                    console.log(`💰 Current price display updated using ${displayPoint === latest ? 'latest' : 'previous complete'} candle`);
                 }
                 
                 console.log('💰 Current price display updated');
