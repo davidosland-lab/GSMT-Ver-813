@@ -536,17 +536,27 @@ class GlobalMarketTracker {
         const firstSymbol = Object.keys(data.data)[0];
         const selectedInterval = parseInt(document.getElementById('time-interval').value);
         
-        // LOCKED X-AXIS: Generate fixed x-axis starting at 9:00 AM AEST regardless of actual data
+        // LOCKED X-AXIS: Generate fixed x-axis with market-specific opening times
         // This ensures consistent timeline display that doesn't change based on current time or data availability
         // 
         // IMPORTANT: All timestamps from the API are in UTC format, but we convert them to AEST
-        // for proper alignment with the Australian market opening time (9:00 AM AEST)
+        // Different markets have different opening times:
+        // - Australian markets (ASX): 10:00 AM AEST (^AORD, ^AXJO, *.AX symbols)
+        // - Other markets: 9:00 AM AEST (default)
         
-        const startHour = 9; // Always start at 9:00 AM AEST
+        // Detect if we have Australian market data
+        const symbolsList = Object.keys(data.data);
+        const hasAustralianMarkets = symbolsList.some(symbol => 
+            symbol === '^AORD' || symbol === '^AXJO' || symbol.endsWith('.AX') || 
+            (data.metadata[symbol] && data.metadata[symbol].market === 'Australia')
+        );
+        
+        // Set start time based on market type
+        const startHour = hasAustralianMarkets ? 10 : 9; // ASX opens at 10:00 AM AEST, others at 9:00 AM AEST
         const totalHours = 24; // Full 24-hour cycle from 9 AM to 8:59 AM next day
         
         if (selectedInterval === 5) {
-            // 5-minute intervals: 9:00, 9:05, 9:10, ..., 8:55
+            // 5-minute intervals starting from market opening time
             for (let h = 0; h < totalHours; h++) {
                 for (let m = 0; m < 60; m += 5) {
                     const displayHour = ((startHour + h) % 24);
@@ -556,7 +566,7 @@ class GlobalMarketTracker {
                 }
             }
         } else if (selectedInterval === 30) {
-            // 30-minute intervals: 9:00, 9:30, 10:00, 10:30, ...
+            // 30-minute intervals starting from market opening time
             for (let h = 0; h < totalHours; h++) {
                 for (let m = 0; m < 60; m += 30) {
                     const displayHour = ((startHour + h) % 24);
@@ -566,7 +576,7 @@ class GlobalMarketTracker {
                 }
             }
         } else {
-            // 1-hour intervals: 9:00, 10:00, 11:00, ..., 8:00
+            // 1-hour intervals starting from market opening time
             for (let h = 0; h < totalHours; h++) {
                 const displayHour = ((startHour + h) % 24);
                 const hour = displayHour.toString().padStart(2, '0');
@@ -587,7 +597,9 @@ class GlobalMarketTracker {
             
             if (chartType === 'candlestick') {
                 // For candlestick charts, preserve all 24 time slots with null for market-closed periods
-                console.log(`🕯️ Processing percentage-based candlestick data for ${symbol}, ${points.length} total points`);
+                const isAustralianMarket = symbol === '^AORD' || symbol === '^AXJO' || symbol.endsWith('.AX') || 
+                    (symbolInfo && symbolInfo.market === 'Australia');
+                console.log(`🕯️ Processing ${isAustralianMarket ? 'Australian' : 'Global'} market data for ${symbol} (start: ${startHour}:00 AEST), ${points.length} total points`);
                 
                 // Create candlestick data array - filter to only include market open periods
                 const candlestickData = [];
@@ -611,20 +623,20 @@ class GlobalMarketTracker {
                     const hourNum = Math.floor((aestTotalMinutes / 60) % 24);
                     const minuteNum = aestTotalMinutes % 60;
                     
-                    // Calculate the correct x-axis index based on time relative to 9:00 AM start
+                    // Calculate the correct x-axis index based on time relative to market start
                     let xAxisIndex = -1;
                     
                     if (selectedInterval === 5) {
-                        // 5-minute intervals: calculate position from 9:00 AM
-                        const totalMinutesFromNineAM = ((hourNum >= 9 ? hourNum - 9 : hourNum + 24 - 9) * 60) + minuteNum;
-                        xAxisIndex = Math.floor(totalMinutesFromNineAM / 5);
+                        // 5-minute intervals: calculate position from market opening time
+                        const totalMinutesFromStart = ((hourNum >= startHour ? hourNum - startHour : hourNum + 24 - startHour) * 60) + minuteNum;
+                        xAxisIndex = Math.floor(totalMinutesFromStart / 5);
                     } else if (selectedInterval === 30) {
                         // 30-minute intervals
-                        const totalMinutesFromNineAM = ((hourNum >= 9 ? hourNum - 9 : hourNum + 24 - 9) * 60) + minuteNum;
-                        xAxisIndex = Math.floor(totalMinutesFromNineAM / 30);
+                        const totalMinutesFromStart = ((hourNum >= startHour ? hourNum - startHour : hourNum + 24 - startHour) * 60) + minuteNum;
+                        xAxisIndex = Math.floor(totalMinutesFromStart / 30);
                     } else {
                         // 1-hour intervals
-                        xAxisIndex = hourNum >= 9 ? hourNum - 9 : hourNum + 24 - 9;
+                        xAxisIndex = hourNum >= startHour ? hourNum - startHour : hourNum + 24 - startHour;
                     }
                     
                     // Ensure we have valid data for all time slots in fixed x-axis
@@ -643,11 +655,11 @@ class GlobalMarketTracker {
                         candlestickData[xAxisIndex] = ohlc;
                         
                         if (index >= 14 && index <= 21) {
-                            console.log(`📊 AEST ${hourNum.toString().padStart(2,'0')}:${minuteNum.toString().padStart(2,'0')} (UTC ${utcHours.toString().padStart(2,'0')}:${utcMinutes.toString().padStart(2,'0')}) -> xIndex ${xAxisIndex}: OHLC% = [${ohlc.map(v => v.toFixed(2)).join(', ')}]%, market_open: ${point.market_open}`);
+                            console.log(`📊 AEST ${hourNum.toString().padStart(2,'0')}:${minuteNum.toString().padStart(2,'0')} (UTC ${utcHours.toString().padStart(2,'0')}:${utcMinutes.toString().padStart(2,'0')}) -> xIndex ${xAxisIndex} [Start: ${startHour}:00]: OHLC% = [${ohlc.map(v => v.toFixed(2)).join(', ')}]%, market_open: ${point.market_open}`);
                         }
                     } else {
                         if (index >= 14 && index <= 21) {
-                            console.log(`⏸️ AEST ${hourNum.toString().padStart(2,'0')}:${minuteNum.toString().padStart(2,'0')} (UTC ${utcHours.toString().padStart(2,'0')}:${utcMinutes.toString().padStart(2,'0')}) -> xIndex ${xAxisIndex}: Market closed or null data, market_open: ${point.market_open}`);
+                            console.log(`⏸️ AEST ${hourNum.toString().padStart(2,'0')}:${minuteNum.toString().padStart(2,'0')} (UTC ${utcHours.toString().padStart(2,'0')}:${utcMinutes.toString().padStart(2,'0')}) -> xIndex ${xAxisIndex} [Start: ${startHour}:00]: Market closed or null data, market_open: ${point.market_open}`);
                         }
                     }
                 });
