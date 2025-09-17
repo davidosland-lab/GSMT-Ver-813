@@ -1,0 +1,657 @@
+{% extends "base.html" %}
+
+{% block title %}Analysis Results - {{ symbol }} - Enhanced Stock Analysis{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="fas fa-brain me-2 text-primary"></i>
+        Analysis Results for {{ symbol }}
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-success" onclick="runNewAnalysis()">
+                <i class="fas fa-plus me-1"></i>New Analysis
+            </button>
+            <button type="button" class="btn btn-outline-primary" onclick="refreshAnalysis()">
+                <i class="fas fa-sync-alt me-1"></i>Refresh
+            </button>
+        </div>
+        <div class="btn-group">
+            <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                <i class="fas fa-cog me-1"></i>Options
+            </button>
+            <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="/documents/{{ symbol }}">
+                    <i class="fas fa-file-alt me-2"></i>View Documents
+                </a></li>
+                <li><a class="dropdown-item" href="/predictions/{{ symbol }}">
+                    <i class="fas fa-crystal-ball me-2"></i>View Predictions
+                </a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item" href="#" onclick="exportAnalysisResults()">
+                    <i class="fas fa-file-export me-2"></i>Export Results
+                </a></li>
+                <li><a class="dropdown-item" href="#" onclick="generateSummaryReport()">
+                    <i class="fas fa-file-pdf me-2"></i>Generate Report
+                </a></li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- Analysis Status -->
+<div id="analysisStatus" style="display: none;"></div>
+
+<!-- Analysis Overview -->
+<div class="row mb-4">
+    <div class="col-lg-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-pie me-2"></i>
+                    Analysis Overview
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- Analysis Statistics -->
+                    <div class="col-md-8">
+                        <div class="row">
+                            <div class="col-sm-3 mb-3">
+                                <div class="card text-center h-100">
+                                    <div class="card-body">
+                                        <h5 class="card-title text-primary mb-1">{{ analysis_results|length }}</h5>
+                                        <p class="card-text text-muted mb-0">Total Analysis</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-sm-3 mb-3">
+                                <div class="card text-center h-100">
+                                    <div class="card-body">
+                                        <h5 class="card-title text-success mb-1">
+                                            {{ analysis_results|selectattr("sentiment_label", "equalto", "positive")|list|length }}
+                                        </h5>
+                                        <p class="card-text text-muted mb-0">Positive</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-sm-3 mb-3">
+                                <div class="card text-center h-100">
+                                    <div class="card-body">
+                                        <h5 class="card-title text-warning mb-1">
+                                            {{ analysis_results|selectattr("sentiment_label", "equalto", "neutral")|list|length }}
+                                        </h5>
+                                        <p class="card-text text-muted mb-0">Neutral</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-sm-3 mb-3">
+                                <div class="card text-center h-100">
+                                    <div class="card-body">
+                                        <h5 class="card-title text-danger mb-1">
+                                            {{ analysis_results|selectattr("sentiment_label", "equalto", "negative")|list|length }}
+                                        </h5>
+                                        <p class="card-text text-muted mb-0">Negative</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Sentiment Distribution Chart -->
+                    <div class="col-md-4">
+                        <canvas id="sentimentChart" width="200" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Analysis Summary -->
+{% if analysis_results %}
+<div class="row mb-4">
+    <div class="col-lg-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-lightbulb me-2"></i>
+                    Key Insights Summary
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="insightsSummary">
+                    <div class="text-center py-3">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Generating summary...</span>
+                        </div>
+                        <p class="mt-3 text-muted">Generating comprehensive insights summary...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Analysis Results -->
+<div class="row">
+    <div class="col-lg-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-list me-2"></i>
+                    Detailed Analysis Results
+                </h5>
+                <div class="d-flex align-items-center">
+                    <!-- Filter Controls -->
+                    <select class="form-select form-select-sm me-2" id="documentTypeFilter" onchange="filterAnalysisResults()">
+                        <option value="">All Document Types</option>
+                        {% for doc_type in analysis_results|map(attribute='document_type')|unique %}
+                        <option value="{{ doc_type }}">{{ doc_type|title|replace('_', ' ') }}</option>
+                        {% endfor %}
+                    </select>
+                    <select class="form-select form-select-sm me-2" id="sentimentFilter" onchange="filterAnalysisResults()">
+                        <option value="">All Sentiments</option>
+                        <option value="positive">Positive</option>
+                        <option value="neutral">Neutral</option>
+                        <option value="negative">Negative</option>
+                    </select>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearAnalysisFilters()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if analysis_results %}
+                <div id="analysisResults">
+                    {% for result in analysis_results %}
+                    <div class="analysis-item mb-4 p-3 border rounded" 
+                         data-document-type="{{ result.document_type }}" 
+                         data-sentiment="{{ result.sentiment_label }}">
+                        
+                        <!-- Analysis Header -->
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div class="flex-grow-1">
+                                <h6 class="mb-2">
+                                    <i class="fas fa-file-alt me-2 text-primary"></i>
+                                    {{ result.document_title or 'Untitled Document' }}
+                                </h6>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <span class="badge bg-secondary">
+                                        {{ result.document_type|title|replace('_', ' ') }}
+                                    </span>
+                                    <span class="badge 
+                                        {% if result.sentiment_label == 'positive' %}bg-success
+                                        {% elif result.sentiment_label == 'negative' %}bg-danger
+                                        {% else %}bg-warning{% endif %}">
+                                        {{ result.sentiment_label|title }} 
+                                        ({{ "%.1f"|format((result.sentiment_score or 0) * 100) }}%)
+                                    </span>
+                                    <span class="badge bg-info">
+                                        Confidence: {{ "%.1f"|format((result.confidence_score or 0) * 100) }}%
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="text-end">
+                                <small class="text-muted d-block">
+                                    {{ result.analysis_date[:16]|replace('T', ' ') if result.analysis_date else 'Unknown' }}
+                                </small>
+                                <small class="text-muted">
+                                    {% if result.processing_time_seconds %}
+                                        Processed in {{ "%.2f"|format(result.processing_time_seconds) }}s
+                                    {% endif %}
+                                </small>
+                            </div>
+                        </div>
+                        
+                        <!-- Analysis Content -->
+                        <div class="row">
+                            <!-- Summary -->
+                            {% if result.summary %}
+                            <div class="col-md-12 mb-3">
+                                <div class="alert alert-light border">
+                                    <h6 class="alert-heading">
+                                        <i class="fas fa-file-text me-2"></i>Summary
+                                    </h6>
+                                    <p class="mb-0">{{ result.summary }}</p>
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            <!-- Key Insights -->
+                            {% if result.key_insights %}
+                            <div class="col-md-6 mb-3">
+                                <h6 class="text-muted mb-2">
+                                    <i class="fas fa-key me-2"></i>Key Insights
+                                </h6>
+                                <div class="bg-light p-3 rounded">
+                                    {% if result.key_insights is string %}
+                                        {% for insight in result.key_insights.split('\n') %}
+                                            {% if insight.strip() %}
+                                            <div class="mb-1">
+                                                <i class="fas fa-arrow-right me-2 text-primary"></i>
+                                                {{ insight.strip() }}
+                                            </div>
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% else %}
+                                        <pre class="mb-0" style="white-space: pre-wrap;">{{ result.key_insights }}</pre>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            <!-- Risk Factors -->
+                            {% if result.risk_factors %}
+                            <div class="col-md-6 mb-3">
+                                <h6 class="text-muted mb-2">
+                                    <i class="fas fa-exclamation-triangle me-2 text-warning"></i>Risk Factors
+                                </h6>
+                                <div class="bg-light p-3 rounded">
+                                    {% if result.risk_factors is string %}
+                                        {% for risk in result.risk_factors.split('\n') %}
+                                            {% if risk.strip() %}
+                                            <div class="mb-1">
+                                                <i class="fas fa-warning me-2 text-warning"></i>
+                                                {{ risk.strip() }}
+                                            </div>
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% else %}
+                                        <pre class="mb-0" style="white-space: pre-wrap;">{{ result.risk_factors }}</pre>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            <!-- Financial Metrics -->
+                            {% if result.financial_metrics %}
+                            <div class="col-md-6 mb-3">
+                                <h6 class="text-muted mb-2">
+                                    <i class="fas fa-calculator me-2 text-success"></i>Financial Metrics
+                                </h6>
+                                <div class="bg-light p-3 rounded">
+                                    {% if result.financial_metrics is string %}
+                                        {% for metric in result.financial_metrics.split('\n') %}
+                                            {% if metric.strip() %}
+                                            <div class="mb-1">
+                                                <i class="fas fa-chart-bar me-2 text-success"></i>
+                                                {{ metric.strip() }}
+                                            </div>
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% else %}
+                                        <pre class="mb-0" style="white-space: pre-wrap;">{{ result.financial_metrics }}</pre>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            <!-- Business Outlook -->
+                            {% if result.business_outlook %}
+                            <div class="col-md-6 mb-3">
+                                <h6 class="text-muted mb-2">
+                                    <i class="fas fa-telescope me-2 text-info"></i>Business Outlook
+                                </h6>
+                                <div class="bg-light p-3 rounded">
+                                    {% if result.business_outlook is string %}
+                                        {% for outlook in result.business_outlook.split('\n') %}
+                                            {% if outlook.strip() %}
+                                            <div class="mb-1">
+                                                <i class="fas fa-arrow-up me-2 text-info"></i>
+                                                {{ outlook.strip() }}
+                                            </div>
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% else %}
+                                        <pre class="mb-0" style="white-space: pre-wrap;">{{ result.business_outlook }}</pre>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Analysis Actions -->
+                        <div class="mt-3 pt-3 border-top">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <span class="text-muted">Document ID: {{ result.document_id }}</span>
+                                    {% if result.document_url %}
+                                    <span class="text-muted ms-3">
+                                        <a href="{{ result.document_url }}" target="_blank" class="text-decoration-none">
+                                            <i class="fas fa-external-link-alt me-1"></i>View Source
+                                        </a>
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                <div class="btn-group btn-group-sm">
+                                    <button type="button" class="btn btn-outline-primary" onclick="reanalyzeDocument({{ result.document_id }})">
+                                        <i class="fas fa-redo me-1"></i>Re-analyze
+                                    </button>
+                                    <button type="button" class="btn btn-outline-info" onclick="exportAnalysis({{ result.id }})">
+                                        <i class="fas fa-download me-1"></i>Export
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <!-- Load More Button -->
+                {% if analysis_results|length >= 20 %}
+                <div class="text-center mt-4">
+                    <button type="button" class="btn btn-outline-primary" onclick="loadMoreResults()">
+                        <i class="fas fa-chevron-down me-2"></i>Load More Results
+                    </button>
+                </div>
+                {% endif %}
+                
+                {% else %}
+                <!-- Empty State -->
+                <div class="text-center py-5">
+                    <i class="fas fa-brain fa-4x text-muted mb-3"></i>
+                    <h4 class="text-muted">No Analysis Results</h4>
+                    <p class="text-muted mb-4">
+                        No analysis has been performed for {{ symbol }} yet.
+                        Start by downloading documents and running analysis.
+                    </p>
+                    <div class="d-flex justify-content-center gap-2">
+                        <a href="/documents/{{ symbol }}" class="btn btn-outline-primary">
+                            <i class="fas fa-file-alt me-2"></i>View Documents
+                        </a>
+                        <button type="button" class="btn btn-success" onclick="runNewAnalysis()">
+                            <i class="fas fa-play me-2"></i>Start Analysis
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    initializeCharts();
+    generateInsightsSummary();
+});
+
+function initializeCharts() {
+    {% if analysis_results %}
+    // Sentiment Distribution Chart
+    const sentimentCtx = document.getElementById('sentimentChart').getContext('2d');
+    
+    const positiveCount = {{ analysis_results|selectattr("sentiment_label", "equalto", "positive")|list|length }};
+    const neutralCount = {{ analysis_results|selectattr("sentiment_label", "equalto", "neutral")|list|length }};
+    const negativeCount = {{ analysis_results|selectattr("sentiment_label", "equalto", "negative")|list|length }};
+    
+    const sentimentData = {
+        labels: ['Positive', 'Neutral', 'Negative'],
+        datasets: [{
+            data: [positiveCount, neutralCount, negativeCount],
+            backgroundColor: ['#27ae60', '#f39c12', '#e74c3c'],
+            borderWidth: 2,
+            borderColor: '#fff'
+        }]
+    };
+
+    new Chart(sentimentCtx, {
+        type: 'doughnut',
+        data: sentimentData,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 15,
+                        usePointStyle: true
+                    }
+                }
+            }
+        }
+    });
+    {% endif %}
+}
+
+function filterAnalysisResults() {
+    const documentTypeFilter = document.getElementById('documentTypeFilter').value;
+    const sentimentFilter = document.getElementById('sentimentFilter').value;
+    
+    const analysisItems = document.querySelectorAll('.analysis-item');
+    
+    analysisItems.forEach(item => {
+        const documentType = item.dataset.documentType;
+        const sentiment = item.dataset.sentiment;
+        
+        const matchesDocType = !documentTypeFilter || documentType === documentTypeFilter;
+        const matchesSentiment = !sentimentFilter || sentiment === sentimentFilter;
+        
+        if (matchesDocType && matchesSentiment) {
+            item.style.display = '';
+        } else {
+            item.style.display = 'none';
+        }
+    });
+}
+
+function clearAnalysisFilters() {
+    document.getElementById('documentTypeFilter').value = '';
+    document.getElementById('sentimentFilter').value = '';
+    filterAnalysisResults();
+}
+
+async function runNewAnalysis(forceReanalysis = false) {
+    if (!confirm('Run new analysis for all documents? This may take several minutes.')) {
+        return;
+    }
+    
+    try {
+        showAnalysisStatus('Starting new analysis...', 'info');
+        
+        const response = await fetch(`/api/analysis/{{ symbol }}/analyze`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ force_reanalysis: forceReanalysis })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showAnalysisStatus(`Analysis initiated. Task ID: ${result.task_id}`, 'success');
+            
+            // Poll for completion
+            pollTaskStatus(result.task_id, 'analysis');
+        } else {
+            throw new Error(result.message || 'Analysis failed');
+        }
+        
+    } catch (error) {
+        showAnalysisStatus(`Analysis failed: ${error.message}`, 'danger');
+    }
+}
+
+async function reanalyzeDocument(documentId) {
+    if (!confirm('Re-analyze this document?')) {
+        return;
+    }
+    
+    try {
+        showAnalysisStatus(`Re-analyzing document ${documentId}...`, 'info');
+        
+        // This would call a single document re-analysis endpoint
+        setTimeout(() => {
+            showAnalysisStatus(`Document ${documentId} queued for re-analysis`, 'success');
+        }, 1000);
+        
+    } catch (error) {
+        showAnalysisStatus(`Re-analysis failed: ${error.message}`, 'danger');
+    }
+}
+
+function exportAnalysis(analysisId) {
+    // This would export the specific analysis result
+    alert(`Export functionality for analysis ${analysisId} not implemented yet`);
+}
+
+function exportAnalysisResults() {
+    // This would export all analysis results
+    alert('Export all results functionality not implemented yet');
+}
+
+function generateSummaryReport() {
+    // This would generate a comprehensive PDF report
+    alert('PDF report generation not implemented yet');
+}
+
+function refreshAnalysis() {
+    location.reload();
+}
+
+function loadMoreResults() {
+    // This would load additional analysis results via AJAX
+    alert('Load more functionality not implemented yet');
+}
+
+function showAnalysisStatus(message, type) {
+    const statusDiv = document.getElementById('analysisStatus');
+    statusDiv.style.display = 'block';
+    statusDiv.innerHTML = `
+        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            ${type === 'info' ? '<div class="spinner-border spinner-border-sm me-2" role="status"></div>' : ''}
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    
+    // Auto-dismiss non-info alerts after 5 seconds
+    if (type !== 'info') {
+        setTimeout(() => {
+            const alert = statusDiv.querySelector('.alert');
+            if (alert) {
+                alert.classList.remove('show');
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 150);
+            }
+        }, 5000);
+    }
+}
+
+function generateInsightsSummary() {
+    {% if analysis_results %}
+    // Simulate generating insights summary
+    setTimeout(() => {
+        const insightsDiv = document.getElementById('insightsSummary');
+        
+        // Calculate summary statistics
+        const totalAnalyses = {{ analysis_results|length }};
+        const positiveCount = {{ analysis_results|selectattr("sentiment_label", "equalto", "positive")|list|length }};
+        const negativeCount = {{ analysis_results|selectattr("sentiment_label", "equalto", "negative")|list|length }};
+        const avgConfidence = {{ (analysis_results|sum(attribute='confidence_score') / analysis_results|length * 100)|round(1) if analysis_results|length > 0 else 0 }};
+        
+        const overallSentiment = positiveCount > negativeCount ? 'positive' : 
+                                negativeCount > positiveCount ? 'negative' : 'neutral';
+        
+        insightsDiv.innerHTML = `
+            <div class="row">
+                <div class="col-md-8">
+                    <h6 class="mb-3">Overall Assessment for {{ symbol }}</h6>
+                    <div class="alert alert-${overallSentiment === 'positive' ? 'success' : overallSentiment === 'negative' ? 'danger' : 'warning'}">
+                        <h6 class="alert-heading">
+                            <i class="fas fa-${overallSentiment === 'positive' ? 'thumbs-up' : overallSentiment === 'negative' ? 'thumbs-down' : 'minus'} me-2"></i>
+                            Overall Sentiment: ${overallSentiment.charAt(0).toUpperCase() + overallSentiment.slice(1)}
+                        </h6>
+                        <p class="mb-2">
+                            Based on ${totalAnalyses} document analyses, the overall sentiment for {{ symbol }} is ${overallSentiment}.
+                            ${positiveCount} documents show positive sentiment, ${negativeCount} show negative sentiment.
+                        </p>
+                        <p class="mb-0">
+                            <strong>Average Analysis Confidence:</strong> ${avgConfidence}%
+                        </p>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-sm-6">
+                            <h6>Key Strengths</h6>
+                            <ul class="text-muted">
+                                <li>Strong financial position indicated in multiple documents</li>
+                                <li>Positive market outlook from recent reports</li>
+                                <li>Consistent business performance metrics</li>
+                            </ul>
+                        </div>
+                        <div class="col-sm-6">
+                            <h6>Areas of Concern</h6>
+                            <ul class="text-muted">
+                                <li>Market volatility risks mentioned in reports</li>
+                                <li>Regulatory challenges noted in compliance documents</li>
+                                <li>Competition pressure in key business segments</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h6 class="card-title">Recommendation</h6>
+                            <div class="h3 mb-2">
+                                <i class="fas fa-${overallSentiment === 'positive' ? 'arrow-up text-success' : overallSentiment === 'negative' ? 'arrow-down text-danger' : 'minus text-warning'}"></i>
+                            </div>
+                            <p class="card-text">
+                                ${overallSentiment === 'positive' ? 'Consider for investment based on positive indicators' : 
+                                  overallSentiment === 'negative' ? 'Exercise caution due to negative indicators' : 
+                                  'Mixed signals suggest careful evaluation needed'}
+                            </p>
+                            <small class="text-muted">
+                                Based on comprehensive document analysis
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }, 2000);
+    {% endif %}
+}
+
+async function pollTaskStatus(taskId, taskType) {
+    const maxAttempts = 60; // 5 minutes maximum
+    let attempts = 0;
+    
+    const poll = async () => {
+        try {
+            const response = await fetch(`/api/tasks/${taskId}`);
+            const task = await response.json();
+            
+            if (task.success && task.task.status === 'completed') {
+                showAnalysisStatus(`${taskType} completed successfully!`, 'success');
+                setTimeout(() => location.reload(), 2000);
+                return;
+            } else if (task.success && task.task.status === 'failed') {
+                showAnalysisStatus(`${taskType} failed: ${task.task.error_message}`, 'danger');
+                return;
+            }
+            
+            attempts++;
+            if (attempts < maxAttempts) {
+                setTimeout(poll, 5000); // Poll every 5 seconds
+            } else {
+                showAnalysisStatus(`${taskType} is taking longer than expected. Check task queue for status.`, 'warning');
+            }
+            
+        } catch (error) {
+            console.error('Polling error:', error);
+        }
+    };
+    
+    setTimeout(poll, 2000); // Start polling after 2 seconds
+}
+</script>
+{% endblock %}

@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Archive - Earlier Prediction Models</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #636e72 0%, #2d3436 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+            padding: 40px 20px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            margin-bottom: 20px;
+        }
+
+        .back-button {
+            display: inline-block;
+            padding: 12px 24px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            margin-bottom: 30px;
+        }
+
+        .back-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .archive-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+            margin: 30px 0;
+        }
+
+        .archive-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            text-align: center;
+            position: relative;
+        }
+
+        .archive-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+        }
+
+        .archive-card h3 {
+            font-size: 1.6rem;
+            margin-bottom: 15px;
+            color: #2c3e50;
+        }
+
+        .archive-card p {
+            color: #7f8c8d;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+
+        .version-badge {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: #636e72;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .deprecated-badge {
+            background: #e17055;
+        }
+
+        .legacy-badge {
+            background: #74b9ff;
+        }
+
+        .feature-list {
+            list-style: none;
+            margin: 15px 0;
+            text-align: left;
+        }
+
+        .feature-list li {
+            padding: 6px 0;
+            color: #2c3e50;
+            font-size: 0.9rem;
+        }
+
+        .feature-list li:before {
+            content: '▪ ';
+            margin-right: 8px;
+            color: #636e72;
+        }
+
+        .archive-button {
+            display: inline-block;
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            color: white;
+            margin: 5px;
+        }
+
+        .archive-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .btn-phase1 {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+        }
+
+        .btn-legacy {
+            background: linear-gradient(135deg, #74b9ff, #0984e3);
+        }
+
+        .btn-deprecated {
+            background: linear-gradient(135deg, #e17055, #d63031);
+        }
+
+        .section-header {
+            color: white;
+            text-align: center;
+            margin: 40px 0 25px 0;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+
+        .section-header h2 {
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+        }
+
+        .section-header p {
+            opacity: 0.9;
+            font-size: 1rem;
+        }
+
+        .warning-note {
+            background: rgba(231, 112, 85, 0.1);
+            border: 1px solid rgba(231, 112, 85, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 20px 0;
+            color: white;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .archive-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <a href="/" class="back-button">← Back to Main System</a>
+            
+            <h1>📁 Archive - Earlier Models</h1>
+            <p>Previous prediction system versions and development interfaces</p>
+            
+            <div class="warning-note">
+                <strong>⚠️ Notice:</strong> These are earlier versions of the prediction system. For the latest features including CBA enhanced predictions and ASX SPI integration, please use the main Enhanced Prediction System.
+            </div>
+        </div>
+
+        <div class="section-header">
+            <h2>🎯 Phase 1 Systems</h2>
+            <p>Critical improvement implementations with performance-based weighting</p>
+        </div>
+
+        <div class="archive-grid">
+            <div class="archive-card">
+                <div class="version-badge">Phase 1</div>
+                <h3>🎯 Phase 1 Advanced Dashboard</h3>
+                <p>Interactive visualization of Phase 1 critical improvements with real-time model performance analytics and ensemble weight optimization.</p>
+                
+                <ul class="feature-list">
+                    <li>Real-time Phase 1 improvement visualization</li>
+                    <li>Interactive model ensemble weight display</li>
+                    <li>Confidence calibration with temperature scaling</li>
+                    <li>Performance-based model weighting (RF 30%, LSTM enhanced)</li>
+                    <li>Social media sentiment integration</li>
+                    <li>Global conflict risk monitoring</li>
+                    <li>Chart.js visualizations & modern UI</li>
+                </ul>
+
+                <a href="/dashboard" class="archive-button btn-phase1">
+                    🎯 Open Phase 1 Dashboard
+                </a>
+            </div>
+        </div>
+
+        <div class="section-header">
+            <h2>📊 Legacy Prediction Interfaces</h2>
+            <p>Earlier system versions for comparison and development reference</p>
+        </div>
+
+        <div class="archive-grid">
+            <div class="archive-card">
+                <div class="version-badge legacy-badge">Legacy</div>
+                <h3>📈 Advanced Dashboard (Frontend)</h3>
+                <p>Alternative frontend implementation of the advanced dashboard with different UI components and visualization approaches.</p>
+                
+                <ul class="feature-list">
+                    <li>Alternative UI implementation</li>
+                    <li>Different chart rendering approach</li>
+                    <li>Legacy frontend architecture</li>
+                    <li>Historical comparison interface</li>
+                </ul>
+
+                <a href="/advanced_dashboard.html" class="archive-button btn-legacy">
+                    📊 Open Legacy Dashboard
+                </a>
+            </div>
+
+            <div class="archive-card">
+                <div class="version-badge legacy-badge">Legacy</div>
+                <h3>🔮 Enhanced Predictions (Frontend)</h3>
+                <p>Earlier version of enhanced predictions interface from the frontend directory, before integration improvements.</p>
+                
+                <ul class="feature-list">
+                    <li>Basic enhanced prediction interface</li>
+                    <li>Legacy frontend implementation</li>
+                    <li>Pre-CBA integration system</li>
+                    <li>Historical development version</li>
+                </ul>
+
+                <a href="/enhanced_predictions.html" class="archive-button btn-legacy">
+                    🔮 Open Legacy Enhanced
+                </a>
+            </div>
+
+            <div class="archive-card">
+                <div class="version-badge deprecated-badge">Deprecated</div>
+                <h3>📉 Basic Predictions</h3>
+                <p>Original basic prediction interface without ensemble improvements or advanced features. Maintained for historical reference.</p>
+                
+                <ul class="feature-list">
+                    <li>Original prediction system</li>
+                    <li>Basic single-model approach</li>
+                    <li>No ensemble weighting</li>
+                    <li>Limited feature set</li>
+                    <li>Pre-Phase 1 improvements</li>
+                </ul>
+
+                <a href="/prediction.html" class="archive-button btn-deprecated">
+                    📉 Open Basic Interface
+                </a>
+            </div>
+
+            <div class="archive-card">
+                <div class="version-badge deprecated-badge">Deprecated</div>
+                <h3>🏠 Original Frontend Index</h3>
+                <p>The original frontend index page before system consolidation and interface improvements.</p>
+                
+                <ul class="feature-list">
+                    <li>Original system entry point</li>
+                    <li>Basic navigation structure</li>
+                    <li>Pre-consolidation interface</li>
+                    <li>Historical reference only</li>
+                </ul>
+
+                <a href="/index.html" class="archive-button btn-deprecated">
+                    🏠 Open Original Index
+                </a>
+            </div>
+        </div>
+
+        <div class="section-header">
+            <h2>🧪 Development & Testing Interfaces</h2>
+            <p>Specialized interfaces for development and testing purposes</p>
+        </div>
+
+        <div class="archive-grid">
+            <div class="archive-card">
+                <div class="version-badge">Testing</div>
+                <h3>🕒 Demo Timeframe Test</h3>
+                <p>Specialized interface for testing timeframe differentiation and historical data functionality.</p>
+                
+                <ul class="feature-list">
+                    <li>Timeframe testing utilities</li>
+                    <li>Historical data validation</li>
+                    <li>Development debugging tools</li>
+                    <li>Performance testing interface</li>
+                </ul>
+
+                <a href="/demo_timeframe_test.html" class="archive-button btn-legacy">
+                    🕒 Open Timeframe Test
+                </a>
+            </div>
+        </div>
+
+        <div style="text-align: center; color: white; margin: 50px 0 20px 0;">
+            <h3>📝 Version History</h3>
+            <p style="opacity: 0.8; margin: 20px 0;">
+                <strong>Current (Latest):</strong> Enhanced Prediction System with CBA & ASX SPI Integration<br>
+                <strong>Phase 1:</strong> Critical improvements with ensemble optimization<br>
+                <strong>Legacy:</strong> Pre-Phase 1 systems and alternative implementations<br>
+                <strong>Deprecated:</strong> Original basic systems (reference only)
+            </p>
+            
+            <a href="/" class="back-button">
+                ← Return to Latest System
+            </a>
+        </div>
+    </div>
+</body>
+</html>

@@ -7,6 +7,7 @@
     
     <!-- External Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@2.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/date-fns@2.29.0/index.min.js"></script>
     
     <style>
@@ -190,6 +191,17 @@
             font-size: 0.9em;
         }
         
+        .intraday-badge {
+            background: linear-gradient(135deg, #ff9500, #ff6b35) !important;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 149, 0, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(255, 149, 0, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 149, 0, 0); }
+        }
+        
         .direction-indicator {
             display: flex;
             align-items: center;
@@ -362,6 +374,59 @@
             margin-bottom: 20px;
         }
         
+        .chart-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 10px;
+            border: 1px solid rgba(102, 126, 234, 0.2);
+        }
+        
+        .chart-controls label {
+            font-weight: 600;
+            color: #495057;
+        }
+        
+        .chart-controls select {
+            padding: 8px 12px;
+            border: 2px solid rgba(102, 126, 234, 0.2);
+            border-radius: 8px;
+            background: white;
+            color: #495057;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .chart-controls select:hover {
+            border-color: rgba(102, 126, 234, 0.4);
+        }
+        
+        .chart-controls select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .btn-secondary {
+            padding: 8px 16px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-secondary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+        
         .loading-overlay {
             position: fixed;
             top: 0;
@@ -520,18 +585,32 @@
         <!-- Control Panel -->
         <div class="control-panel">
             <div class="symbol-input-group">
-                <input type="text" class="input-field" id="symbolInput" placeholder="Enter symbol (e.g., ^AORD, CBA, BHP)" value="^AORD">
+                <input type="text" class="input-field" id="symbolInput" placeholder="Enter symbol (e.g., CBA.AX, BHP.AX, ^AORD)" value="CBA.AX">
                 <button class="analyze-btn" onclick="runAdvancedAnalysis()" id="analyzeBtn">
                     🎯 Generate Advanced Predictions
                 </button>
             </div>
             
             <div class="timeframe-selector">
-                <div class="timeframe-btn active" data-timeframe="1d" onclick="selectTimeframe('1d')">1 Day</div>
-                <div class="timeframe-btn" data-timeframe="5d" onclick="selectTimeframe('5d')">5 Days</div>
-                <div class="timeframe-btn" data-timeframe="30d" onclick="selectTimeframe('30d')">30 Days</div>
-                <div class="timeframe-btn" data-timeframe="90d" onclick="selectTimeframe('90d')">90 Days</div>
-                <div class="timeframe-btn" data-timeframe="all" onclick="selectTimeframe('all')">All Horizons</div>
+                <!-- Intraday Predictions -->
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; border-right: 2px solid #e9ecef; padding-right: 15px; margin-right: 15px;">
+                    <div class="timeframe-btn" data-timeframe="15min" onclick="selectTimeframe('15min')">15 Min</div>
+                    <div class="timeframe-btn" data-timeframe="30min" onclick="selectTimeframe('30min')">30 Min</div>
+                    <div class="timeframe-btn" data-timeframe="1h" onclick="selectTimeframe('1h')">1 Hour</div>
+                </div>
+                <!-- Daily Predictions -->
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <div class="timeframe-btn active" data-timeframe="1d" onclick="selectTimeframe('1d')">1 Day</div>
+                    <div class="timeframe-btn" data-timeframe="5d" onclick="selectTimeframe('5d')">5 Days</div>
+                    <div class="timeframe-btn" data-timeframe="30d" onclick="selectTimeframe('30d')">30 Days</div>
+                    <div class="timeframe-btn" data-timeframe="90d" onclick="selectTimeframe('90d')">90 Days</div>
+                    <div class="timeframe-btn" data-timeframe="all" onclick="selectTimeframe('all')">All Horizons</div>
+                </div>
+            </div>
+            
+            <!-- Intraday Mode Notice -->
+            <div id="intradayNotice" style="display: none; background: linear-gradient(135deg, #ff9500, #ff6b35); color: white; padding: 10px 15px; border-radius: 8px; margin-top: 15px; font-size: 0.9em;">
+                🕒 <strong>Intraday Mode Active:</strong> Real-time predictions for short-term trading opportunities
             </div>
         </div>
 
@@ -547,6 +626,46 @@
         <!-- Charts Section -->
         <div class="charts-section" id="chartsSection" style="display: none;">
             <h2>📊 Prediction Analytics</h2>
+            
+            <!-- Time Series Chart -->
+            <div class="chart-container">
+                <h3>📈 Price vs Predictions Over Time</h3>
+                <div class="chart-controls">
+                    <label>Historical Period:</label>
+                    <select id="historicalPeriod">
+                        <option value="30">30 days</option>
+                        <option value="60" selected>60 days</option>
+                        <option value="90">90 days</option>
+                        <option value="180">6 months</option>
+                    </select>
+                    <button onclick="loadTimeSeriesData()" class="btn-secondary">📊 Load Historical</button>
+                </div>
+                <canvas id="timeSeriesChart" style="height: 400px;"></canvas>
+            </div>
+            
+            <!-- Future Prediction Chart -->
+            <div class="chart-container">
+                <h3>🔮 Future Prediction Timeline</h3>
+                <div class="chart-controls">
+                    <label>Prediction Timeframe:</label>
+                    <select id="futureTimeframe">
+                        <option value="1d">1 Day</option>
+                        <option value="5d" selected>5 Days</option>
+                        <option value="15d">15 Days</option>
+                        <option value="30d">30 Days</option>
+                    </select>
+                    <label>Detail Level:</label>
+                    <select id="futureIntervals">
+                        <option value="5">5 points</option>
+                        <option value="10" selected>10 points</option>
+                        <option value="15">15 points</option>
+                        <option value="20">20 points</option>
+                    </select>
+                    <button onclick="loadFuturePredictionData()" class="btn-secondary">🔮 Load Future</button>
+                </div>
+                <canvas id="futurePredictionChart" style="height: 400px;"></canvas>
+            </div>
+            
             <div class="chart-container">
                 <canvas id="predictionChart"></canvas>
             </div>
@@ -584,7 +703,7 @@
     </div>
 
     <script>
-        let currentSymbol = '^AORD';
+        let currentSymbol = 'CBA.AX';
         let selectedTimeframes = ['1d'];
         let predictionData = {};
         let predictionChart = null;
@@ -595,6 +714,11 @@
             document.querySelectorAll('.timeframe-btn').forEach(btn => {
                 btn.classList.remove('active');
             });
+            
+            // Show/hide intraday notice
+            const intradayNotice = document.getElementById('intradayNotice');
+            const isIntraday = ['15min', '30min', '1h'].includes(timeframe);
+            intradayNotice.style.display = isIntraday ? 'block' : 'none';
             
             if (timeframe === 'all') {
                 selectedTimeframes = ['1d', '5d', '30d', '90d'];
@@ -607,12 +731,15 @@
 
         async function runAdvancedAnalysis() {
             const symbol = document.getElementById('symbolInput').value.trim();
+            console.log(`🔍 DEBUG: Input symbol read: '${symbol}', current symbol was: '${currentSymbol}'`);
+            
             if (!symbol) {
                 showAlert('Please enter a symbol', 'warning');
                 return;
             }
 
             currentSymbol = symbol;
+            console.log(`✅ DEBUG: Current symbol updated to: '${currentSymbol}'`);
             showLoadingOverlay(true);
             
             try {
@@ -624,22 +751,80 @@
                 document.getElementById('chartsSection').style.display = 'none';
                 document.getElementById('comparisonSection').style.display = 'none';
 
-                // Fetch predictions for each selected timeframe
+                // Load charts immediately (independent of main prediction)
+                displayCharts();
+                
+                // Fetch predictions for each selected timeframe (this might take time for CBA.AX)
                 for (const timeframe of selectedTimeframes) {
-                    const prediction = await fetchAdvancedPrediction(symbol, timeframe);
-                    predictionData[timeframe] = prediction;
+                    try {
+                        const prediction = await Promise.race([
+                            fetchAdvancedPrediction(symbol, timeframe),
+                            new Promise((_, reject) => 
+                                setTimeout(() => reject(new Error('Prediction timeout')), 15000)  // Reduced from 45s to 15s for faster fallback
+                            )
+                        ]);
+                        predictionData[timeframe] = prediction;
+                    } catch (error) {
+                        console.warn(`Prediction failed for ${timeframe}:`, error);
+                        
+                        // Create meaningful fallback prediction with actual price prediction
+                        try {
+                            // Use the working real-time prediction API as fallback
+                            const realtimePredictionUrl = `/api/prediction/realtime/${symbol}?horizon=${timeframe}`;
+                            console.log(`🔄 Using real-time prediction fallback: ${realtimePredictionUrl}`);
+                            
+                            const realtimeResponse = await fetch(realtimePredictionUrl);
+                            const realtimeData = await realtimeResponse.json();
+                            
+                            if (realtimeData.success && realtimeData.prediction && realtimeData.prediction.predicted_price) {
+                                predictionData[timeframe] = {
+                                    success: true,
+                                    prediction: {
+                                        predicted_price: realtimeData.prediction.predicted_price,
+                                        current_price: realtimeData.prediction.current_price,
+                                        direction: realtimeData.prediction.direction,
+                                        confidence_score: realtimeData.prediction.confidence_score,
+                                        expected_change_percent: realtimeData.prediction.expected_change_percent,
+                                        confidence_interval: realtimeData.prediction.confidence_interval,
+                                        probability_up: realtimeData.prediction.probability_up || 0.5,
+                                        model_type: 'realtime_statistical'
+                                    },
+                                    current_price: realtimeData.prediction.current_price,
+                                    data_source: realtimeData.data_source,
+                                    processing_time: realtimeData.processing_time,
+                                    note: 'Using real-time market data prediction'
+                                };
+                                console.log(`✅ Real-time prediction fallback successful for ${timeframe}: $${realtimeData.prediction.predicted_price} (current: $${realtimeData.prediction.current_price})`);
+                            } else {
+                                throw new Error('Fast prediction also failed');
+                            }
+                        } catch (fallbackError) {
+                            console.warn(`Real-time prediction fallback also failed:`, fallbackError);
+                            // Final fallback with minimal data
+                            predictionData[timeframe] = {
+                                success: false,
+                                error: error.message,
+                                prediction: {
+                                    direction: 'unknown',
+                                    confidence_score: 0.3,
+                                    expected_change_percent: 0,
+                                    predicted_price: 0,
+                                    note: 'All prediction services unavailable'
+                                }
+                            };
+                        }
+                    }
                 }
 
-                // Display results
+                // Display results (even if predictions failed)
                 displayPredictionResults();
                 displayFactorAnalysis();
-                displayCharts();
                 
                 if (selectedTimeframes.length > 1) {
                     displayComparison();
                 }
 
-                showAlert(`Advanced analysis complete for ${symbol}`, 'success');
+                showAlert(`Analysis complete for ${symbol}`, 'success');
 
             } catch (error) {
                 console.error('Analysis failed:', error);
@@ -650,9 +835,33 @@
         }
 
         async function fetchAdvancedPrediction(symbol, timeframe) {
-            // Use Phase 1 enhanced prediction endpoint
-            console.log(`🎯 Fetching Phase 1 enhanced prediction for ${symbol} (${timeframe})...`);
-            const response = await fetch(`/api/advanced-prediction/${symbol}?timeframe=${timeframe}&include_social=true&include_conflicts=true`);
+            // Route to appropriate enhanced prediction endpoint
+            console.log(`🎯 Fetching enhanced prediction for ${symbol} (${timeframe})...`);
+            
+            let url;
+            
+            // Check if it's an intraday timeframe
+            const isIntraday = ['15min', '30min', '1h'].includes(timeframe);
+            
+            if (isIntraday) {
+                // Intraday predictions - use specialized endpoint
+                url = `/api/prediction/intraday/${symbol}?timeframe=${timeframe}`;
+            } else if (symbol === 'CBA.AX' || symbol === 'CBA') {
+                // CBA Real-time Prediction (optimized for live market data)
+                url = `/api/prediction/realtime/${symbol}?horizon=${timeframe}`;
+            } else if (symbol === '^AXJO' || symbol === 'AXJO') {
+                // ASX SPI Enhanced Prediction
+                url = `/api/prediction/asx-spi/%5EAXJO?horizon=${timeframe}`;
+            } else if (symbol === '^AORD' || symbol === 'AORD') {
+                // Use ASX SPI for All Ordinaries as fallback
+                url = `/api/prediction/asx-spi/%5EAXJO?horizon=${timeframe}`;
+            } else {
+                // For other symbols, use the basic prediction endpoint
+                url = `/api/prediction/${symbol}`;
+            }
+            
+            console.log(`📡 API URL: ${url}`);
+            const response = await fetch(url);
             
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -681,19 +890,48 @@
             const card = document.createElement('div');
             card.className = 'prediction-card';
             
-            const direction = prediction.direction || 'sideways';
+            // Handle enhanced prediction data format
+            const predictedPrice = prediction.predicted_price || prediction.price || 0;
+            const currentPrice = fullData.current_price || prediction.current_price || 0;
+            const expectedReturn = prediction.expected_return || 0;
+            const confidenceInterval = prediction.confidence_interval || {};
+            const probabilityUp = prediction.probability_up || 0;
+            const riskScore = prediction.risk_score || 0;
+            
+            // Calculate percentage changes
+            let percentageChange = 0;
+            let absoluteChange = 0;
+            if (currentPrice > 0 && predictedPrice > 0) {
+                absoluteChange = predictedPrice - currentPrice;
+                percentageChange = ((predictedPrice - currentPrice) / currentPrice) * 100;
+            } else if (expectedReturn !== 0) {
+                // Use expected return as percentage change if available
+                percentageChange = expectedReturn * 100;
+                if (currentPrice > 0) {
+                    absoluteChange = (expectedReturn / 100) * currentPrice;
+                }
+            }
+            
+            // Determine direction based on probability
+            const direction = probabilityUp > 0.6 ? 'up' : probabilityUp < 0.4 ? 'down' : 'sideways';
             const directionClass = `direction-${direction}`;
             const directionIcon = direction === 'up' ? '📈' : direction === 'down' ? '📉' : '➡️';
             
-            const expectedReturn = prediction.expected_change_percent || 0;
-            const confidence = prediction.confidence_score || 0;
-            const riskLevel = prediction.risk_level || 'medium';
+            // Calculate confidence percentage
+            const confidence = Math.max(probabilityUp, 1 - probabilityUp);
+            const riskLevel = riskScore < 0.5 ? 'low' : riskScore < 1.5 ? 'medium' : 'high';
             
-            // Get enhanced data if available
-            const marketFactors = prediction.market_factors || {};
-            const volatility = marketFactors.global_volatility || 20;
-            const geopoliticalImpact = marketFactors.geopolitical_impact || 0;
+            // Enhanced data extraction
+            const publicationsAnalysis = fullData.publications_analysis || {};
+            const bankingSectorAnalysis = fullData.banking_sector_analysis || {};
+            const spiInfluence = prediction.spi_influence || 0;
             const processingTime = fullData.endpoint_processing_time || 'N/A';
+            
+            // Intraday-specific data
+            const isIntraday = ['15min', '30min', '1h'].includes(timeframe);
+            const marketHours = prediction.market_hours || 'Unknown';
+            const volumeProfile = prediction.volume_profile || 'Standard';
+            const liquidityScore = prediction.liquidity_score || 0;
 
             card.innerHTML = `
                 <div class="prediction-header">
@@ -707,10 +945,18 @@
                 
                 <div class="prediction-metrics">
                     <div class="metric-item">
-                        <div class="metric-value ${expectedReturn >= 0 ? 'direction-up' : 'direction-down'}">
-                            ${expectedReturn >= 0 ? '+' : ''}${expectedReturn.toFixed(3)}%
+                        <div class="metric-value direction-up">
+                            ${(currentSymbol === '^AORD' || currentSymbol === 'AORD') ? 
+                                predictedPrice.toFixed(2) : 
+                                `$${predictedPrice.toFixed(2)}`}
                         </div>
-                        <div class="metric-label">Expected Return</div>
+                        <div class="metric-label">Predicted Price</div>
+                        ${currentPrice > 0 ? `
+                        <div style="font-size: 0.8em; color: #666; margin-top: 5px;">
+                            Current: ${(currentSymbol === '^AORD' || currentSymbol === 'AORD') ? 
+                                currentPrice.toFixed(2) : 
+                                `$${currentPrice.toFixed(2)}`}
+                        </div>` : ''}
                     </div>
                     <div class="metric-item">
                         <div class="metric-value">${(confidence * 100).toFixed(1)}%</div>
@@ -721,27 +967,81 @@
                     </div>
                 </div>
                 
+                ${percentageChange !== 0 ? `
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
                     <div class="metric-item">
-                        <div class="metric-value">${volatility.toFixed(1)}%</div>
-                        <div class="metric-label">Global Volatility</div>
+                        <div class="metric-value ${percentageChange >= 0 ? 'direction-up' : 'direction-down'}">
+                            ${percentageChange >= 0 ? '+' : ''}${percentageChange.toFixed(2)}%
+                        </div>
+                        <div class="metric-label">Expected Change</div>
+                    </div>
+                    ${absoluteChange !== 0 ? `
+                    <div class="metric-item">
+                        <div class="metric-value ${absoluteChange >= 0 ? 'direction-up' : 'direction-down'}">
+                            ${absoluteChange >= 0 ? '+' : ''}${(currentSymbol === '^AORD' || currentSymbol === 'AORD') ? 
+                                absoluteChange.toFixed(2) : 
+                                `$${absoluteChange.toFixed(2)}`}
+                        </div>
+                        <div class="metric-label">Absolute Change</div>
+                    </div>` : ''}
+                </div>` : ''}
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                    <div class="metric-item">
+                        <div class="metric-value">${riskScore.toFixed(3)}</div>
+                        <div class="metric-label">Risk Score</div>
                     </div>
                     <div class="metric-item">
-                        <div class="metric-value ${geopoliticalImpact >= 0 ? 'direction-up' : 'direction-down'}">
-                            ${geopoliticalImpact >= 0 ? '+' : ''}${geopoliticalImpact.toFixed(2)}
+                        <div class="metric-value direction-up">
+                            ${(probabilityUp * 100).toFixed(1)}%
                         </div>
-                        <div class="metric-label">Geopolitical Impact</div>
+                        <div class="metric-label">Upward Probability</div>
+                        <div style="font-size: 0.8em; color: #666; margin-top: 5px;">
+                            Downward: ${((1 - probabilityUp) * 100).toFixed(1)}%
+                        </div>
                     </div>
                 </div>
                 
-                <div style="display: flex; justify-content: space-between; align-items: center;">
+                ${spiInfluence > 0 ? `
+                <div style="margin-bottom: 15px;">
+                    <div class="metric-item">
+                        <div class="metric-value">${(spiInfluence * 100).toFixed(1)}%</div>
+                        <div class="metric-label">SPI Influence</div>
+                    </div>
+                </div>
+                ` : ''}
+                
+                ${publicationsAnalysis.publications_analyzed ? `
+                <div style="margin-bottom: 15px;">
+                    <div class="metric-item">
+                        <div class="metric-value">${publicationsAnalysis.publications_analyzed}</div>
+                        <div class="metric-label">Publications Analyzed</div>
+                    </div>
+                </div>
+                ` : ''}
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 15px; border-top: 2px solid #f8f9fa;">
                     <span class="risk-indicator risk-${riskLevel}">
-                        ${riskLevel} Risk
+                        ${riskLevel.toUpperCase()} Risk
                     </span>
                     <span style="font-size: 0.85em; color: #666;">
-                        ${typeof processingTime === 'number' ? processingTime.toFixed(2) + 's' : processingTime}
+                        ${confidenceInterval.lower && confidenceInterval.upper ? 
+                            (currentSymbol === '^AORD' || currentSymbol === 'AORD') ? 
+                                `CI: ${confidenceInterval.lower.toFixed(0)}-${confidenceInterval.upper.toFixed(0)}` :
+                                `CI: $${confidenceInterval.lower.toFixed(0)}-$${confidenceInterval.upper.toFixed(0)}` :
+                            Array.isArray(confidenceInterval) && confidenceInterval.length === 2 ?
+                            (currentSymbol === '^AORD' || currentSymbol === 'AORD') ? 
+                                `CI: ${confidenceInterval[0].toFixed(0)}-${confidenceInterval[1].toFixed(0)}` :
+                                `CI: $${confidenceInterval[0].toFixed(0)}-$${confidenceInterval[1].toFixed(0)}` :
+                            'Enhanced Analysis'}
                     </span>
                 </div>
+                
+                ${isIntraday ? `
+                <div style="margin-top: 10px; padding: 8px 12px; background: linear-gradient(135deg, #ff9500, #ff6b35); color: white; border-radius: 8px; font-size: 0.8em; text-align: center;">
+                    🕰️ Valid for next ${timeframe} • Real-time market conditions
+                </div>
+                ` : ''}
             `;
             
             return card;
@@ -855,6 +1155,24 @@
 
         function displayCharts() {
             const chartsSection = document.getElementById('chartsSection');
+            
+            console.log(`📊 Displaying charts for symbol: ${currentSymbol}`);
+            
+            // Destroy existing charts to force refresh
+            if (timeSeriesChart) {
+                timeSeriesChart.destroy();
+                timeSeriesChart = null;
+            }
+            if (futurePredictionChart) {
+                futurePredictionChart.destroy();
+                futurePredictionChart = null;
+            }
+            
+            // Load time series data automatically
+            loadTimeSeriesData();
+            
+            // Load future prediction data automatically
+            loadFuturePredictionData();
             
             // Prediction comparison chart
             createPredictionChart();
@@ -1034,6 +1352,394 @@
                     alert.parentNode.removeChild(alert);
                 }
             }, 5000);
+        }
+
+        // Time Series Chart Functions
+        let timeSeriesChart = null;
+        let futurePredictionChart = null;
+
+        async function loadTimeSeriesData() {
+            try {
+                const daysBack = document.getElementById('historicalPeriod').value || 60;
+                const predictionHorizon = selectedTimeframes[0] || '5d';
+                
+                console.log(`📈 Loading historical data for ${currentSymbol} (${daysBack} days)`);
+                console.log(`🔍 API URL: /api/prediction/historical/${currentSymbol}?days_back=${daysBack}&prediction_horizon=${predictionHorizon}`);
+                
+                const response = await fetch(`/api/prediction/historical/${currentSymbol}?days_back=${daysBack}&prediction_horizon=${predictionHorizon}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    console.log(`✅ Time series data loaded for ${data.symbol}: ${data.summary.data_points} prices, ${data.summary.predictions_count} predictions`);
+                    console.log(`📊 Price range: $${data.summary.current_price} (current), sample: ${data.time_series.slice(0,2).map(p => '$' + p.actual_price.toFixed(2))}`);
+                    createTimeSeriesChart(data);
+                } else {
+                    console.error('Failed to load time series data:', data);
+                    showAlert('Failed to load historical data', 'error');
+                }
+            } catch (error) {
+                console.error('Error loading time series data:', error);
+                showAlert('Error loading historical data', 'error');
+            }
+        }
+
+        function createTimeSeriesChart(data) {
+            const ctx = document.getElementById('timeSeriesChart').getContext('2d');
+            
+            if (timeSeriesChart) {
+                timeSeriesChart.destroy();
+            }
+
+            // Prepare datasets
+            const actualPrices = data.time_series.map(point => ({
+                x: new Date(point.date).getTime(),
+                y: point.actual_price
+            }));
+
+            const predictions = data.predictions.map(pred => ({
+                x: new Date(pred.date).getTime(),
+                y: pred.predicted_price
+            }));
+
+            const confidenceBands = data.predictions.map(pred => ({
+                x: new Date(pred.date).getTime(),
+                upper: pred.confidence_interval.upper,
+                lower: pred.confidence_interval.lower
+            }));
+
+            timeSeriesChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [
+                        {
+                            label: 'Actual Price',
+                            data: actualPrices,
+                            borderColor: '#2E86AB',
+                            backgroundColor: 'rgba(46, 134, 171, 0.1)',
+                            borderWidth: 2,
+                            fill: false,
+                            pointRadius: 2,
+                            pointHoverRadius: 6,
+                            tension: 0.1
+                        },
+                        {
+                            label: 'Predictions',
+                            data: predictions,
+                            borderColor: '#A23B72',
+                            backgroundColor: 'rgba(162, 59, 114, 0.1)',
+                            borderWidth: 2,
+                            fill: false,
+                            pointRadius: 4,
+                            pointHoverRadius: 8,
+                            borderDash: [5, 5],
+                            tension: 0.1
+                        },
+                        {
+                            label: 'Confidence Upper',
+                            data: confidenceBands.map(band => ({ x: band.x, y: band.upper })),
+                            borderColor: 'rgba(162, 59, 114, 0.3)',
+                            backgroundColor: 'rgba(162, 59, 114, 0.05)',
+                            borderWidth: 1,
+                            fill: '+1',
+                            pointRadius: 0,
+                            tension: 0.1
+                        },
+                        {
+                            label: 'Confidence Lower',
+                            data: confidenceBands.map(band => ({ x: band.x, y: band.lower })),
+                            borderColor: 'rgba(162, 59, 114, 0.3)',
+                            backgroundColor: 'rgba(162, 59, 114, 0.05)',
+                            borderWidth: 1,
+                            fill: false,
+                            pointRadius: 0,
+                            tension: 0.1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `${data.symbol_info.name} - Historical Price vs Predictions`,
+                            font: { size: 16, weight: 'bold' }
+                        },
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                title: function(context) {
+                                    const date = new Date(context[0].parsed.x);
+                                    return date.toLocaleDateString();
+                                },
+                                label: function(context) {
+                                    const label = context.dataset.label || '';
+                                    const value = context.parsed.y;
+                                    const currency = data.symbol_info.currency === 'AUD' ? '' : '$';
+                                    return `${label}: ${currency}${value.toFixed(2)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'day',
+                                displayFormats: {
+                                    day: 'MMM dd'
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: `Price (${data.symbol_info.currency})`
+                            },
+                            beginAtZero: false
+                        }
+                    }
+                }
+            });
+
+            // Add current prediction if available
+            if (data.current_prediction) {
+                addCurrentPredictionToChart(data.current_prediction);
+            }
+        }
+
+        function addCurrentPredictionToChart(currentPrediction) {
+            if (!timeSeriesChart) return;
+
+            const currentDate = new Date().getTime();
+            const targetDate = new Date(currentPrediction.target_date).getTime();
+
+            // Add current prediction as a highlighted point
+            timeSeriesChart.data.datasets.push({
+                label: 'Live Prediction',
+                data: [{ x: targetDate, y: currentPrediction.predicted_price }],
+                borderColor: '#F18F01',
+                backgroundColor: '#F18F01',
+                borderWidth: 3,
+                pointRadius: 8,
+                pointHoverRadius: 12,
+                showLine: false
+            });
+
+            timeSeriesChart.update();
+        }
+
+        // Future Prediction Chart Functions
+        async function loadFuturePredictionData() {
+            try {
+                const timeframe = document.getElementById('futureTimeframe').value || '5d';
+                const intervals = document.getElementById('futureIntervals').value || 10;
+                
+                console.log(`🔮 Loading future prediction data for ${currentSymbol} (${timeframe}, ${intervals} points)`);
+                console.log(`🔍 API URL: /api/prediction/future/${currentSymbol}?timeframe=${timeframe}&intervals=${intervals}`);
+                
+                const response = await fetch(`/api/prediction/future/${currentSymbol}?timeframe=${timeframe}&intervals=${intervals}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    console.log(`✅ Future prediction data loaded for ${data.symbol}: ${data.summary.intervals_count} prediction points`);
+                    console.log(`🔮 Current price: $${data.current_price.toFixed(2)}, target: $${data.summary.price_range.target_predicted.toFixed(2)}`);
+                    createFuturePredictionChart(data);
+                } else {
+                    console.error('Failed to load future prediction data:', data);
+                    showAlert('Failed to load future prediction data', 'error');
+                }
+            } catch (error) {
+                console.error('Error loading future prediction data:', error);
+                showAlert('Error loading future prediction data', 'error');
+            }
+        }
+
+        function createFuturePredictionChart(data) {
+            const ctx = document.getElementById('futurePredictionChart').getContext('2d');
+            
+            if (futurePredictionChart) {
+                futurePredictionChart.destroy();
+            }
+
+            // Prepare datasets for future predictions
+            const predictionLine = data.future_timeline.map(point => ({
+                x: new Date(point.date).getTime(),
+                y: point.predicted_price
+            }));
+
+            const confidenceBands = data.future_timeline.map(point => ({
+                x: new Date(point.date).getTime(),
+                upper: point.confidence_interval.upper,
+                lower: point.confidence_interval.lower
+            }));
+
+            // Highlight current price and target prediction
+            const currentPoint = data.future_timeline.find(p => p.is_current);
+            const targetPoint = data.future_timeline.find(p => p.is_target);
+
+            futurePredictionChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [
+                        {
+                            label: 'Prediction Timeline',
+                            data: predictionLine,
+                            borderColor: '#8E44AD',
+                            backgroundColor: 'rgba(142, 68, 173, 0.1)',
+                            borderWidth: 3,
+                            fill: false,
+                            pointRadius: 6,
+                            pointHoverRadius: 10,
+                            pointBackgroundColor: predictionLine.map((point, index) => {
+                                const timelinePoint = data.future_timeline[index];
+                                if (timelinePoint.is_current) return '#2ECC71';
+                                if (timelinePoint.is_target) return '#E74C3C';
+                                return '#8E44AD';
+                            }),
+                            pointBorderColor: '#FFFFFF',
+                            pointBorderWidth: 2,
+                            tension: 0.2
+                        },
+                        {
+                            label: 'Confidence Upper',
+                            data: confidenceBands.map(band => ({ x: band.x, y: band.upper })),
+                            borderColor: 'rgba(142, 68, 173, 0.4)',
+                            backgroundColor: 'rgba(142, 68, 173, 0.1)',
+                            borderWidth: 1,
+                            fill: '+1',
+                            pointRadius: 0,
+                            tension: 0.2
+                        },
+                        {
+                            label: 'Confidence Lower',
+                            data: confidenceBands.map(band => ({ x: band.x, y: band.lower })),
+                            borderColor: 'rgba(142, 68, 173, 0.4)',
+                            backgroundColor: 'rgba(142, 68, 173, 0.1)',
+                            borderWidth: 1,
+                            fill: false,
+                            pointRadius: 0,
+                            tension: 0.2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `${data.symbol_info.name} - Future Prediction Timeline (${data.timeframe.toUpperCase()})`,
+                            font: { size: 16, weight: 'bold' }
+                        },
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                filter: function(legendItem, chartData) {
+                                    // Hide confidence band labels for cleaner legend
+                                    return !legendItem.text.includes('Confidence');
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                title: function(context) {
+                                    const date = new Date(context[0].parsed.x);
+                                    const point = data.future_timeline.find(p => 
+                                        Math.abs(new Date(p.date).getTime() - date.getTime()) < 86400000
+                                    );
+                                    let title = date.toLocaleDateString();
+                                    if (point) {
+                                        if (point.is_current) title += " (Current)";
+                                        else if (point.is_target) title += " (Target)";
+                                        else title += ` (+${point.days_ahead.toFixed(1)} days)`;
+                                    }
+                                    return title;
+                                },
+                                label: function(context) {
+                                    const label = context.dataset.label || '';
+                                    const value = context.parsed.y;
+                                    const currency = data.symbol_info.currency === 'AUD' ? '' : '$';
+                                    
+                                    if (label === 'Prediction Timeline') {
+                                        const point = data.future_timeline.find(p => 
+                                            Math.abs(new Date(p.date).getTime() - context.parsed.x) < 86400000
+                                        );
+                                        const confidence = point ? `(${(point.confidence_score * 100).toFixed(0)}% confidence)` : '';
+                                        return `Predicted: ${currency}${value.toFixed(2)} ${confidence}`;
+                                    }
+                                    return `${label}: ${currency}${value.toFixed(2)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: data.horizon_days <= 5 ? 'day' : 'week',
+                                displayFormats: {
+                                    day: 'MMM dd',
+                                    week: 'MMM dd'
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Future Date'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: `Price (${data.symbol_info.currency})`
+                            },
+                            beginAtZero: false
+                        }
+                    }
+                }
+            });
+
+            // Add enhanced prediction marker if available
+            if (data.enhanced_prediction) {
+                addEnhancedPredictionToFutureChart(data.enhanced_prediction);
+            }
+        }
+
+        function addEnhancedPredictionToFutureChart(enhancedPrediction) {
+            if (!futurePredictionChart) return;
+
+            const targetDate = new Date(enhancedPrediction.target_date).getTime();
+
+            // Add enhanced prediction as a special marker
+            futurePredictionChart.data.datasets.push({
+                label: 'Enhanced Banking Prediction',
+                data: [{ x: targetDate, y: enhancedPrediction.predicted_price }],
+                borderColor: '#F39C12',
+                backgroundColor: '#F39C12',
+                borderWidth: 3,
+                pointRadius: 12,
+                pointHoverRadius: 16,
+                showLine: false,
+                pointStyle: 'star'
+            });
+
+            futurePredictionChart.update();
         }
 
         // Initialize on page load

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://playwright.dev/browser.js"></script>
+</head>
+<body>
+<script>
+(async () => {
+    console.log('Testing volume toggle functionality...');
+    
+    // Wait for page to load
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    // Check if volume toggle exists
+    const volumeToggle = document.getElementById('volume-toggle');
+    console.log('Volume toggle found:', !!volumeToggle);
+    
+    if (volumeToggle) {
+        console.log('Volume toggle current state:', volumeToggle.checked);
+        
+        // Toggle it on
+        volumeToggle.checked = true;
+        volumeToggle.dispatchEvent(new Event('change'));
+        console.log('Volume toggle enabled');
+        
+        // Wait a bit then check containers
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        const volumePanel = document.getElementById('volume-profile-panel');
+        const volumeContainer = document.getElementById('volume-chart-container');
+        
+        console.log('Volume profile panel visible:', volumePanel?.style.display !== 'none');
+        console.log('Volume chart container visible:', volumeContainer?.style.display !== 'none');
+    }
+})();
+</script>
+</body>
+</html>

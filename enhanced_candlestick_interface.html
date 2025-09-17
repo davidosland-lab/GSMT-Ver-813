@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Candlestick Trader - GSMT Professional</title>
+    
+    <!-- External Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        .trading-container { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); }
+        .chart-container { height: 600px; background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .indicator-panel { max-height: 400px; overflow-y: auto; }
+        .websocket-status { 
+            width: 12px; 
+            height: 12px; 
+            border-radius: 50%; 
+            display: inline-block; 
+            margin-right: 8px; 
+        }
+        .connected { background-color: #10b981; }
+        .disconnected { background-color: #ef4444; }
+        .connecting { background-color: #f59e0b; animation: pulse 1s infinite; }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .live-update {
+            animation: highlightUpdate 0.5s ease-in-out;
+        }
+        
+        @keyframes highlightUpdate {
+            0% { background-color: rgba(34, 197, 94, 0.2); }
+            100% { background-color: transparent; }
+        }
+        
+        .technical-indicator {
+            transition: all 0.3s ease;
+        }
+        
+        .technical-indicator:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+    <!-- Header -->
+    <header class="bg-white shadow-lg border-b">
+        <div class="max-w-7xl mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-900">
+                        📈 Enhanced Candlestick Trader
+                    </h1>
+                    <p class="text-gray-600 mt-1">
+                        Professional REAL Market Data Trading Interface - Yahoo Finance API Integration
+                        <span class="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded">REAL MARKET DATA</span>
+                    </p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center">
+                        <span class="websocket-status disconnected" id="ws-status"></span>
+                        <span class="text-sm font-medium" id="ws-status-text">Disconnected</span>
+                    </div>
+                    <button id="export-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                        <i class="fas fa-download mr-2"></i>Export Data
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Trading Interface -->
+    <main class="max-w-7xl mx-auto px-6 py-6">
+        
+        <!-- Trading Controls -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+                
+                <!-- Symbol Selection -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-chart-line mr-1"></i>Symbol
+                    </label>
+                    <select id="symbol-select" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="^GSPC">S&P 500 (^GSPC)</option>
+                        <option value="^IXIC">NASDAQ (^IXIC)</option>
+                        <option value="^DJI">Dow Jones (^DJI)</option>
+                        <option value="^FTSE">FTSE 100 (^FTSE)</option>
+                        <option value="^GDAXI">DAX (^GDAXI)</option>
+                        <option value="^N225">Nikkei 225 (^N225)</option>
+                        <option value="^AORD">ASX All Ords (^AORD)</option>
+                    </select>
+                </div>
+                
+                <!-- Interval Selection -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-clock mr-1"></i>Interval
+                    </label>
+                    <select id="interval-select" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="1">1 Minute</option>
+                        <option value="3">3 Minutes</option>
+                        <option value="5">5 Minutes</option>
+                        <option value="15">15 Minutes</option>
+                        <option value="30">30 Minutes</option>
+                        <option value="60" selected>1 Hour</option>
+                        <option value="240">4 Hours</option>
+                        <option value="1440">1 Day</option>
+                    </select>
+                </div>
+                
+                <!-- Time Period -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-calendar mr-1"></i>Period
+                    </label>
+                    <select id="period-select" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="24h" selected>24 Hours</option>
+                        <option value="48h">48 Hours</option>
+                        <option value="7d">7 Days</option>
+                        <option value="30d">30 Days</option>
+                    </select>
+                </div>
+                
+                <!-- Technical Indicators Toggle -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-chart-area mr-1"></i>Indicators
+                    </label>
+                    <div class="flex items-center space-x-2">
+                        <input type="checkbox" id="indicators-toggle" class="rounded text-blue-600 focus:ring-blue-500">
+                        <span class="text-sm">Enable</span>
+                    </div>
+                </div>
+                
+                <!-- Volume Profile Toggle -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-chart-bar mr-1"></i>Volume
+                    </label>
+                    <div class="flex items-center space-x-2">
+                        <input type="checkbox" id="volume-toggle" class="rounded text-blue-600 focus:ring-blue-500">
+                        <span class="text-sm">Profile</span>
+                    </div>
+                </div>
+                
+                <!-- Real-time Toggle -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-satellite-dish mr-1"></i>Live Updates
+                    </label>
+                    <div class="flex items-center space-x-2">
+                        <input type="checkbox" id="realtime-toggle" class="rounded text-blue-600 focus:ring-blue-500" checked>
+                        <span class="text-sm">Enable</span>
+                    </div>
+                </div>
+                
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
+                <button id="load-data-btn" class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors">
+                    <i class="fas fa-refresh mr-2"></i>Load Candlestick Data
+                </button>
+                
+                <div class="flex space-x-2">
+                    <button id="zoom-reset-btn" class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors">
+                        <i class="fas fa-expand-arrows-alt mr-1"></i>Reset Zoom
+                    </button>
+                    <button id="fullscreen-btn" class="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors">
+                        <i class="fas fa-expand mr-1"></i>Fullscreen
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Chart and Analysis Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            
+            <!-- Main Chart Area -->
+            <div class="lg:col-span-3">
+                <div class="bg-white rounded-lg shadow-md p-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h2 class="text-xl font-semibold text-gray-900">
+                            <span id="chart-title">Candlestick Chart</span>
+                        </h2>
+                        <div class="flex items-center space-x-2 text-sm text-gray-600">
+                            <span>Last Updated:</span>
+                            <span id="last-updated" class="font-mono">--:--:--</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Main Candlestick Chart -->
+                    <div id="candlestick-chart" class="chart-container"></div>
+                </div>
+                
+                <!-- Volume Chart -->
+                <div class="bg-white rounded-lg shadow-md p-4 mt-6" id="volume-chart-container" style="display: none;">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Volume Analysis</h3>
+                    <div id="volume-chart" class="chart-container" style="height: 200px;"></div>
+                </div>
+            </div>
+            
+            <!-- Technical Analysis Panel -->
+            <div class="lg:col-span-1">
+                
+                <!-- Current Price Info -->
+                <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                        <i class="fas fa-info-circle mr-2"></i>Current Price
+                    </h3>
+                    
+                    <div class="space-y-3">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Open:</span>
+                            <span id="current-open" class="font-mono">--</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">High:</span>
+                            <span id="current-high" class="font-mono text-green-600">--</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Low:</span>
+                            <span id="current-low" class="font-mono text-red-600">--</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Close:</span>
+                            <span id="current-close" class="font-mono font-bold">--</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Volume:</span>
+                            <span id="current-volume" class="font-mono">--</span>
+                        </div>
+                        <div class="flex justify-between pt-2 border-t">
+                            <span class="text-gray-600">Change:</span>
+                            <span id="current-change" class="font-mono font-bold">--%</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Technical Indicators Panel -->
+                <div class="bg-white rounded-lg shadow-md p-4 mb-6" id="indicators-panel" style="display: none;">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                        <i class="fas fa-chart-area mr-2"></i>Technical Indicators
+                    </h3>
+                    
+                    <div class="indicator-panel space-y-4">
+                        
+                        <!-- Moving Averages -->
+                        <div class="technical-indicator bg-blue-50 p-3 rounded-lg">
+                            <h4 class="font-medium text-blue-800 mb-2">Moving Averages</h4>
+                            <div class="space-y-1 text-sm">
+                                <div class="flex justify-between">
+                                    <span>SMA 5:</span>
+                                    <span id="sma-5" class="font-mono">--</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span>SMA 10:</span>
+                                    <span id="sma-10" class="font-mono">--</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span>SMA 20:</span>
+                                    <span id="sma-20" class="font-mono">--</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span>EMA 12:</span>
+                                    <span id="ema-12" class="font-mono">--</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Momentum Indicators -->
+                        <div class="technical-indicator bg-purple-50 p-3 rounded-lg">
+                            <h4 class="font-medium text-purple-800 mb-2">Momentum</h4>
+                            <div class="space-y-1 text-sm">
+                                <div class="flex justify-between">
+                                    <span>MACD:</span>
+                                    <span id="macd" class="font-mono">--</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span>RSI:</span>
+                                    <span id="rsi" class="font-mono">--</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Volume Analysis -->
+                        <div class="technical-indicator bg-green-50 p-3 rounded-lg">
+                            <h4 class="font-medium text-green-800 mb-2">Volume Analysis</h4>
+                            <div class="space-y-1 text-sm">
+                                <div class="flex justify-between">
+                                    <span>Avg Volume:</span>
+                                    <span id="avg-volume" class="font-mono">--</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span>Trend:</span>
+                                    <span id="volume-trend" class="font-mono">--</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Support & Resistance -->
+                        <div class="technical-indicator bg-orange-50 p-3 rounded-lg">
+                            <h4 class="font-medium text-orange-800 mb-2">Support & Resistance</h4>
+                            <div class="space-y-1 text-sm">
+                                <div class="flex justify-between">
+                                    <span>Support:</span>
+                                    <span id="support" class="font-mono text-red-600">--</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span>Resistance:</span>
+                                    <span id="resistance" class="font-mono text-green-600">--</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                    </div>
+                </div>
+                
+                <!-- Volume Profile Panel -->
+                <div class="bg-white rounded-lg shadow-md p-4 mb-6" id="volume-profile-panel" style="display: none;">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                        <i class="fas fa-chart-bar mr-2"></i>Volume Profile
+                    </h3>
+                    
+                    <div class="space-y-3 text-sm">
+                        <div class="bg-yellow-50 p-3 rounded-lg">
+                            <h4 class="font-medium text-yellow-800 mb-2">Point of Control</h4>
+                            <div class="flex justify-between">
+                                <span>Price:</span>
+                                <span id="poc-price" class="font-mono">--</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Volume %:</span>
+                                <span id="poc-percentage" class="font-mono">--%</span>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-gray-50 p-3 rounded-lg">
+                            <h4 class="font-medium text-gray-800 mb-2">Value Area</h4>
+                            <div class="flex justify-between">
+                                <span>High:</span>
+                                <span id="va-high" class="font-mono">--</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Low:</span>
+                                <span id="va-low" class="font-mono">--</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Range:</span>
+                                <span id="va-range" class="font-mono">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Market Status -->
+                <div class="bg-white rounded-lg shadow-md p-4">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                        <i class="fas fa-globe mr-2"></i>Market Status
+                    </h3>
+                    
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span>Market:</span>
+                            <span id="market-status" class="font-semibold">--</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Session:</span>
+                            <span id="trading-session" class="font-mono">--</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span>Updates:</span>
+                            <span id="update-count" class="font-mono">0</span>
+                        </div>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+    </main>
+
+    <!-- JavaScript Application -->
+    <script>
+        class EnhancedCandlestickTrader {
+            constructor() {
+                this.chart = null;
+                this.volumeChart = null;
+                this.websocket = null;
+                
+                // Check for URL parameters
+                const urlParams = new URLSearchParams(window.location.search);
+                this.currentSymbol = urlParams.get('symbol') || '^GSPC';
+                this.currentInterval = parseInt(urlParams.get('interval')) || 60;
+                this.currentPeriod = urlParams.get('period') || '24h';
+                
+                this.updateCount = 0;
+                this.lastData = null;
+                this.autoRefreshInterval = null;
+                
+                this.init();
+            }
+            
+            init() {
+                console.log('🚀 Initializing Enhanced Candlestick Trader...');
+                
+                // Initialize charts
+                this.initializeCharts();
+                
+                // Setup event handlers
+                this.setupEventHandlers();
+                
+                // Set initial UI values from URL parameters
+                document.getElementById('symbol-select').value = this.currentSymbol;
+                document.getElementById('interval-select').value = this.currentInterval;
+                document.getElementById('period-select').value = this.currentPeriod;
+                
+                // Load initial data
+                this.loadCandlestickData();
+                
+                // Auto-connect WebSocket if real-time toggle is enabled
+                setTimeout(() => {
+                    const realtimeToggle = document.getElementById('realtime-toggle');
+                    if (realtimeToggle.checked) {
+                        console.log('🔌 Auto-connecting WebSocket...');
+                        this.connectWebSocket();
+                    }
+                }, 2000); // Wait 2 seconds for initial data to load
+                
+                // Setup auto-refresh timer (every 5 minutes)
+                this.autoRefreshInterval = setInterval(() => {
+                    console.log('🔄 Auto-refreshing candlestick data...');
+                    this.loadCandlestickData();
+                }, 5 * 60 * 1000); // 5 minutes
+                
+                console.log('✅ Enhanced Candlestick Trader initialized successfully');
+            }
+            
+            initializeCharts() {
+                // Initialize main candlestick chart
+                const chartContainer = document.getElementById('candlestick-chart');
+                this.chart = echarts.init(chartContainer);
+                
+                // Initialize volume chart
+                const volumeContainer = document.getElementById('volume-chart');
+                this.volumeChart = echarts.init(volumeContainer);
+                
+                // Setup chart resize handler
+                window.addEventListener('resize', () => {
+                    this.chart?.resize();
+                    this.volumeChart?.resize();
+                });
+                
+                console.log('📊 Charts initialized');
+            }
+            
+            setupEventHandlers() {
+                // Load data button
+                document.getElementById('load-data-btn').addEventListener('click', () => {
+                    this.loadCandlestickData();
+                });
+                
+                // Symbol change
+                document.getElementById('symbol-select').addEventListener('change', (e) => {
+                    this.currentSymbol = e.target.value;
+                    this.loadCandlestickData();
+                });
+                
+                // Interval change
+                document.getElementById('interval-select').addEventListener('change', (e) => {
+                    this.currentInterval = parseInt(e.target.value);
+                    this.loadCandlestickData();
+                });
+                
+                // Period change
+                document.getElementById('period-select').addEventListener('change', (e) => {
+                    this.currentPeriod = e.target.value;
+                    this.loadCandlestickData();
+                });
+                
+                // Technical indicators toggle
+                document.getElementById('indicators-toggle').addEventListener('change', (e) => {
+                    const panel = document.getElementById('indicators-panel');
+                    panel.style.display = e.target.checked ? 'block' : 'none';
+                    if (e.target.checked) {
+                        this.loadCandlestickData(); // Reload with indicators
+                    }
+                });
+                
+                // Volume profile toggle
+                document.getElementById('volume-toggle').addEventListener('change', (e) => {
+                    const panel = document.getElementById('volume-profile-panel');
+                    const container = document.getElementById('volume-chart-container');
+                    const isEnabled = e.target.checked;
+                    
+                    panel.style.display = isEnabled ? 'block' : 'none';
+                    container.style.display = isEnabled ? 'block' : 'none';
+                    
+                    if (isEnabled) {
+                        this.loadCandlestickData(); // Reload with volume profile
+                    }
+                });
+                
+                // Real-time updates toggle
+                document.getElementById('realtime-toggle').addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        this.connectWebSocket();
+                    } else {
+                        this.disconnectWebSocket();
+                    }
+                });
+                
+                // Export button
+                document.getElementById('export-btn').addEventListener('click', () => {
+                    this.exportData();
+                });
+                
+                // Zoom reset button
+                document.getElementById('zoom-reset-btn').addEventListener('click', () => {
+                    this.chart?.dispatchAction({
+                        type: 'dataZoom',
+                        start: 0,
+                        end: 100
+                    });
+                });
+                
+                // Fullscreen button
+                document.getElementById('fullscreen-btn').addEventListener('click', () => {
+                    const chartContainer = document.getElementById('candlestick-chart');
+                    if (chartContainer.requestFullscreen) {
+                        chartContainer.requestFullscreen();
+                    }
+                });
+                
+                console.log('🎛️ Event handlers setup complete');
+            }
+            
+            async loadCandlestickData() {
+                console.log(`📥 Loading candlestick data for ${this.currentSymbol} - ${this.currentInterval}min - ${this.currentPeriod}`);
+                
+                try {
+                    // Update UI
+                    document.getElementById('load-data-btn').disabled = true;
+                    document.getElementById('load-data-btn').innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Loading...';
+                    
+                    // Check if indicators and volume profile are enabled
+                    const includeIndicators = document.getElementById('indicators-toggle').checked;
+                    const includeVolumeProfile = document.getElementById('volume-toggle').checked;
+                    
+                    // Build API URL
+                    const baseUrl = 'https://8000-ibk6l44w5p7m34y5uzj0a-6532622b.e2b.dev'; // Use correct API server URL
+                    const apiUrl = `${baseUrl}/api/candlestick/enhanced/${this.currentSymbol}?interval=${this.currentInterval}&period=${this.currentPeriod}&indicators=${includeIndicators}&volume_profile=${includeVolumeProfile}`;
+                    
+                    console.log('🌐 API URL:', apiUrl);
+                    
+                    const response = await fetch(apiUrl);
+                    
+                    if (!response.ok) {
+                        throw new Error(`API Error: ${response.status} - ${response.statusText}`);
+                    }
+                    
+                    const data = await response.json();
+                    console.log('📊 Received data:', data);
+                    
+                    // Store data for WebSocket updates
+                    this.lastData = data;
+                    
+                    // Update charts
+                    this.updateCandlestickChart(data);
+                    
+                    // Update technical indicators if available
+                    if (data.technical_indicators) {
+                        this.updateTechnicalIndicators(data.technical_indicators);
+                    }
+                    
+                    // Update volume profile if available
+                    if (data.volume_profile) {
+                        this.updateVolumeProfile(data.volume_profile);
+                    }
+                    
+                    // Update current price display
+                    this.updateCurrentPriceDisplay(data.data);
+                    
+                    // Update chart title
+                    document.getElementById('chart-title').textContent = `${data.symbol} - ${this.currentInterval}min Real Market Data`;
+                    
+                    // Update last updated time
+                    document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
+                    
+                } catch (error) {
+                    console.error('❌ Error loading candlestick data:', error);
+                    this.showError(`Failed to load live data: ${error.message}`);
+                } finally {
+                    // Reset button
+                    document.getElementById('load-data-btn').disabled = false;
+                    document.getElementById('load-data-btn').innerHTML = '<i class="fas fa-refresh mr-2"></i>Load Candlestick Data';
+                }
+            }
+            
+            updateCandlestickChart(data) {
+                if (!data.data || data.data.length === 0) {
+                    console.warn('⚠️ No data to display in chart');
+                    return;
+                }
+                
+                // Prepare candlestick data for ECharts - include all data but mark incomplete candles
+                const chartData = data.data.map(point => {
+                    // Check if this is an incomplete candle (all OHLC same + zero volume)
+                    const isIncomplete = (point.open === point.high && point.high === point.low && 
+                                        point.low === point.close && point.volume === 0);
+                    
+                    return [
+                        point.timestamp_ms,
+                        point.open || 0,
+                        point.close || 0,
+                        point.low || 0,
+                        point.high || 0,
+                        point.volume || 0,
+                        isIncomplete ? 1 : 0  // Flag for incomplete candles
+                    ];
+                });
+                
+                // Prepare volume data - filter out zero volume points for cleaner display
+                const volumeData = data.data
+                    .filter(point => point.volume > 0)  // Only include points with actual volume
+                    .map(point => [
+                        point.timestamp_ms,
+                        point.volume
+                    ]);
+                
+                // Chart configuration
+                const option = {
+                    title: {
+                        text: `${data.symbol} Candlestick Chart`,
+                        left: 'center',
+                        textStyle: {
+                            color: '#374151',
+                            fontSize: 16,
+                            fontWeight: 'bold'
+                        }
+                    },
+                    tooltip: {
+                        trigger: 'axis',
+                        axisPointer: {
+                            type: 'cross'
+                        },
+                        formatter: function(params) {
+                            const point = params[0];
+                            if (point && point.data) {
+                                const [timestamp, open, close, low, high, volume] = point.data;
+                                const date = new Date(timestamp).toLocaleString();
+                                return `
+                                    <strong>${date}</strong><br/>
+                                    Open: <span style="color: #3B82F6">${open?.toFixed(4) || 'N/A'}</span><br/>
+                                    High: <span style="color: #10B981">${high?.toFixed(4) || 'N/A'}</span><br/>
+                                    Low: <span style="color: #EF4444">${low?.toFixed(4) || 'N/A'}</span><br/>
+                                    Close: <span style="color: #6B7280; font-weight: bold">${close?.toFixed(4) || 'N/A'}</span><br/>
+                                    Volume: <span style="color: #8B5CF6">${volume?.toLocaleString() || 'N/A'}</span>
+                                `;
+                            }
+                            return '';
+                        }
+                    },
+                    legend: {
+                        data: ['Candlestick'],
+                        top: 30
+                    },
+                    grid: {
+                        left: '8%',
+                        right: '8%',
+                        bottom: '15%',
+                        top: '10%'
+                    },
+                    xAxis: {
+                        type: 'time',
+                        scale: true,
+                        axisLabel: {
+                            formatter: function(value) {
+                                return new Date(value).toLocaleTimeString();
+                            }
+                        }
+                    },
+                    yAxis: {
+                        scale: true,
+                        splitArea: {
+                            show: true
+                        },
+                        axisLabel: {
+                            formatter: function(value) {
+                                return value.toFixed(2) + '%';
+                            }
+                        }
+                    },
+                    dataZoom: [
+                        {
+                            type: 'inside',
+                            start: 50,
+                            end: 100
+                        },
+                        {
+                            show: true,
+                            type: 'slider',
+                            top: '90%',
+                            start: 50,
+                            end: 100
+                        }
+                    ],
+                    series: [
+                        {
+                            name: 'Candlestick',
+                            type: 'candlestick',
+                            data: chartData,
+                            itemStyle: {
+                                color: '#10B981',    // Green for rising
+                                color0: '#EF4444',   // Red for falling
+                                borderColor: '#10B981',
+                                borderColor0: '#EF4444'
+                            },
+                            markPoint: {
+                                label: {
+                                    formatter: function(param) {
+                                        return param != null ? Math.round(param.value) + '' : '';
+                                    }
+                                },
+                                data: [
+                                    {
+                                        name: 'Highest',
+                                        type: 'max',
+                                        valueDim: 'highest'
+                                    },
+                                    {
+                                        name: 'Lowest',
+                                        type: 'min',
+                                        valueDim: 'lowest'
+                                    }
+                                ],
+                                tooltip: {
+                                    formatter: function(param) {
+                                        return param.name + '<br>' + (param.data.coord || '');
+                                    }
+                                }
+                            },
+                            markLine: {
+                                symbol: ['none', 'none'],
+                                data: [
+                                    [
+                                        { name: 'from lowest to highest', type: 'min', valueDim: 'lowest', symbol: 'circle', symbolSize: 10, label: { show: false }, emphasis: { label: { show: false } } },
+                                        { type: 'max', valueDim: 'highest', symbol: 'circle', symbolSize: 10, label: { show: false }, emphasis: { label: { show: false } } }
+                                    ]
+                                ]
+                            }
+                        }
+                    ]
+                };
+                
+                // Set chart option
+                this.chart.setOption(option, true);
+                
+                // Update volume chart if visible
+                if (document.getElementById('volume-chart-container').style.display !== 'none') {
+                    this.updateVolumeChart(volumeData);
+                }
+                
+                console.log('📈 Candlestick chart updated successfully');
+            }
+            
+            updateVolumeChart(volumeData) {
+                const volumeOption = {
+                    title: {
+                        text: 'Volume',
+                        textStyle: {
+                            fontSize: 14,
+                            color: '#374151'
+                        }
+                    },
+                    tooltip: {
+                        trigger: 'axis',
+                        formatter: function(params) {
+                            const point = params[0];
+                            if (point && point.data) {
+                                const [timestamp, volume] = point.data;
+                                const date = new Date(timestamp).toLocaleString();
+                                return `${date}<br/>Volume: ${volume.toLocaleString()}`;
+                            }
+                            return '';
+                        }
+                    },
+                    grid: {
+                        left: '8%',
+                        right: '8%',
+                        bottom: '15%',
+                        top: '15%'
+                    },
+                    xAxis: {
+                        type: 'time',
+                        axisLabel: {
+                            formatter: function(value) {
+                                return new Date(value).toLocaleTimeString();
+                            }
+                        }
+                    },
+                    yAxis: {
+                        type: 'value',
+                        axisLabel: {
+                            formatter: function(value) {
+                                if (value >= 1000000000) {
+                                    return (value / 1000000000).toFixed(1) + 'B';
+                                } else if (value >= 1000000) {
+                                    return (value / 1000000).toFixed(1) + 'M';
+                                } else if (value >= 1000) {
+                                    return (value / 1000).toFixed(0) + 'K';
+                                } else {
+                                    return value.toString();
+                                }
+                            }
+                        }
+                    },
+                    series: [{
+                        name: 'Volume',
+                        type: 'bar',
+                        data: volumeData,
+                        itemStyle: {
+                            color: '#8B5CF6'
+                        }
+                    }]
+                };
+                
+                this.volumeChart.setOption(volumeOption, true);
+            }
+            
+            updateTechnicalIndicators(indicators) {
+                if (!indicators) return;
+                
+                // Moving Averages
+                if (indicators.moving_averages) {
+                    document.getElementById('sma-5').textContent = indicators.moving_averages.sma_5?.toFixed(4) || '--';
+                    document.getElementById('sma-10').textContent = indicators.moving_averages.sma_10?.toFixed(4) || '--';
+                    document.getElementById('sma-20').textContent = indicators.moving_averages.sma_20?.toFixed(4) || '--';
+                    document.getElementById('ema-12').textContent = indicators.moving_averages.ema_12?.toFixed(4) || '--';
+                }
+                
+                // Momentum Indicators
+                if (indicators.momentum_indicators) {
+                    document.getElementById('macd').textContent = indicators.momentum_indicators.macd?.toFixed(4) || '--';
+                    const rsi = indicators.momentum_indicators.rsi;
+                    const rsiElement = document.getElementById('rsi');
+                    rsiElement.textContent = rsi?.toFixed(2) || '--';
+                    
+                    // Color code RSI
+                    if (rsi) {
+                        if (rsi > 70) {
+                            rsiElement.className = 'font-mono text-red-600';
+                        } else if (rsi < 30) {
+                            rsiElement.className = 'font-mono text-green-600';
+                        } else {
+                            rsiElement.className = 'font-mono text-gray-600';
+                        }
+                    }
+                }
+                
+                // Volume Analysis
+                if (indicators.volume_analysis) {
+                    document.getElementById('avg-volume').textContent = indicators.volume_analysis.average_volume?.toLocaleString() || '--';
+                    document.getElementById('volume-trend').textContent = indicators.volume_analysis.volume_trend || '--';
+                }
+                
+                // Support & Resistance
+                if (indicators.support_resistance) {
+                    document.getElementById('support').textContent = indicators.support_resistance.support?.toFixed(4) || '--';
+                    document.getElementById('resistance').textContent = indicators.support_resistance.resistance?.toFixed(4) || '--';
+                }
+                
+                console.log('📊 Technical indicators updated');
+            }
+            
+            updateVolumeProfile(volumeProfile) {
+                if (!volumeProfile) return;
+                
+                // Point of Control
+                if (volumeProfile.point_of_control) {
+                    document.getElementById('poc-price').textContent = volumeProfile.point_of_control.price?.toFixed(4) || '--';
+                    document.getElementById('poc-percentage').textContent = volumeProfile.point_of_control.percentage?.toFixed(2) + '%' || '--%';
+                }
+                
+                // Value Area
+                if (volumeProfile.value_area) {
+                    document.getElementById('va-high').textContent = volumeProfile.value_area.high?.toFixed(4) || '--';
+                    document.getElementById('va-low').textContent = volumeProfile.value_area.low?.toFixed(4) || '--';
+                    document.getElementById('va-range').textContent = volumeProfile.value_area.range?.toFixed(4) || '--';
+                }
+                
+                console.log('📈 Volume profile updated');
+            }
+            
+            updateCurrentPriceDisplay(data) {
+                if (!data || data.length === 0) return;
+                
+                // Find the best data point to display with multi-tier selection
+                let displayPoint = null;
+                let selectionReason = '';
+                
+                // Tier 1: Look for candles with volume > 0 AND different OHLC values (active trading)
+                for (let i = data.length - 1; i >= 0; i--) {
+                    const point = data[i];
+                    if (point && point.volume > 0 && 
+                        (point.open !== point.high || point.high !== point.low || point.low !== point.close)) {
+                        displayPoint = point;
+                        selectionReason = 'active trading candle';
+                        break;
+                    }
+                }
+                
+                // Tier 2: Look for candles with different OHLC values (even with zero volume for closed markets)
+                if (!displayPoint) {
+                    for (let i = data.length - 1; i >= 0; i--) {
+                        const point = data[i];
+                        if (point && (point.open !== point.high || point.high !== point.low || point.low !== point.close)) {
+                            displayPoint = point;
+                            selectionReason = 'market closed but different OHLC';
+                            break;
+                        }
+                    }
+                }
+                
+                // Tier 3: Fallback to latest point if no good candle found
+                if (!displayPoint && data.length > 0) {
+                    displayPoint = data[data.length - 1];
+                    selectionReason = 'latest available';
+                }
+                
+                if (displayPoint) {
+                    document.getElementById('current-open').textContent = displayPoint.open?.toFixed(4) || '--';
+                    document.getElementById('current-high').textContent = displayPoint.high?.toFixed(4) || '--';
+                    document.getElementById('current-low').textContent = displayPoint.low?.toFixed(4) || '--';
+                    document.getElementById('current-close').textContent = displayPoint.close?.toFixed(4) || '--';
+                    document.getElementById('current-volume').textContent = displayPoint.volume?.toLocaleString() || '--';
+                    
+                    // Calculate percentage change if we have previous data
+                    const changeElement = document.getElementById('current-change');
+                    let change = displayPoint.percentage_change;
+                    
+                    // If no percentage change available, calculate it from previous candle
+                    if ((change === null || change === undefined) && data.length >= 2) {
+                        const currentIndex = data.indexOf(displayPoint);
+                        if (currentIndex > 0) {
+                            const previousPoint = data[currentIndex - 1];
+                            if (previousPoint && previousPoint.close && displayPoint.close) {
+                                change = ((displayPoint.close - previousPoint.close) / previousPoint.close) * 100;
+                            }
+                        }
+                    }
+                    
+                    // Update change display with color coding
+                    if (change !== null && change !== undefined) {
+                        changeElement.textContent = change.toFixed(2) + '%';
+                        changeElement.className = change >= 0 ? 'font-mono font-bold text-green-600' : 'font-mono font-bold text-red-600';
+                    } else {
+                        changeElement.textContent = '--%';
+                        changeElement.className = 'font-mono font-bold text-gray-600';
+                    }
+                    
+                    // Update market status
+                    const latest = data[data.length - 1];
+                    document.getElementById('market-status').textContent = latest.market_open ? 'Open' : 'Closed';
+                    document.getElementById('trading-session').textContent = new Date(displayPoint.timestamp_ms).toLocaleTimeString();
+                    
+                    console.log(`💰 Current price display updated using ${selectionReason} candle`);
+                }
+                
+                console.log('💰 Current price display updated');
+            }
+            
+            connectWebSocket() {
+                console.log('🔌 Connecting to WebSocket...');
+                
+                try {
+                    const wsUrl = `wss://8000-ibk6l44w5p7m34y5uzj0a-6532622b.e2b.dev/ws/candlestick/${this.currentSymbol}?interval=${this.currentInterval}`;
+                    console.log('🌐 WebSocket URL:', wsUrl);
+                    
+                    this.websocket = new WebSocket(wsUrl);
+                    
+                    // Update status
+                    document.getElementById('ws-status').className = 'websocket-status connecting';
+                    document.getElementById('ws-status-text').textContent = 'Connecting...';
+                    
+                    this.websocket.onopen = () => {
+                        console.log('✅ WebSocket connected successfully');
+                        document.getElementById('ws-status').className = 'websocket-status connected';
+                        document.getElementById('ws-status-text').textContent = 'Connected';
+                    };
+                    
+                    this.websocket.onmessage = (event) => {
+                        try {
+                            const update = JSON.parse(event.data);
+                            console.log('📡 WebSocket update received:', update);
+                            
+                            this.handleWebSocketUpdate(update);
+                            
+                        } catch (error) {
+                            console.error('❌ Error parsing WebSocket message:', error);
+                        }
+                    };
+                    
+                    this.websocket.onclose = () => {
+                        console.log('🔌 WebSocket connection closed');
+                        document.getElementById('ws-status').className = 'websocket-status disconnected';
+                        document.getElementById('ws-status-text').textContent = 'Disconnected';
+                    };
+                    
+                    this.websocket.onerror = (error) => {
+                        console.error('❌ WebSocket error:', error);
+                        document.getElementById('ws-status').className = 'websocket-status disconnected';
+                        document.getElementById('ws-status-text').textContent = 'Error';
+                    };
+                    
+                } catch (error) {
+                    console.error('❌ Error connecting WebSocket:', error);
+                    document.getElementById('ws-status').className = 'websocket-status disconnected';
+                    document.getElementById('ws-status-text').textContent = 'Failed';
+                }
+            }
+            
+            disconnectWebSocket() {
+                if (this.websocket) {
+                    console.log('🔌 Disconnecting WebSocket...');
+                    this.websocket.close();
+                    this.websocket = null;
+                }
+                
+                document.getElementById('ws-status').className = 'websocket-status disconnected';
+                document.getElementById('ws-status-text').textContent = 'Disconnected';
+            }
+            
+            handleWebSocketUpdate(update) {
+                if (update.error) {
+                    console.error('❌ WebSocket error:', update.error);
+                    return;
+                }
+                
+                if (update.update_type === 'candlestick_tick' && update.data) {
+                    // Update current price display
+                    const data = update.data;
+                    
+                    // Add live update animation
+                    const priceContainer = document.querySelector('#current-close').parentElement;
+                    priceContainer.classList.add('live-update');
+                    setTimeout(() => priceContainer.classList.remove('live-update'), 500);
+                    
+                    // Update displays
+                    document.getElementById('current-close').textContent = data.close?.toFixed(4) || '--';
+                    document.getElementById('current-volume').textContent = data.volume?.toLocaleString() || '--';
+                    
+                    // Update change with color
+                    const changeElement = document.getElementById('current-change');
+                    const change = data.percentage_change;
+                    if (change !== null && change !== undefined) {
+                        changeElement.textContent = change.toFixed(2) + '%';
+                        changeElement.className = change >= 0 ? 'font-mono font-bold text-green-600' : 'font-mono font-bold text-red-600';
+                    }
+                    
+                    // Update counters
+                    this.updateCount++;
+                    document.getElementById('update-count').textContent = this.updateCount;
+                    document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
+                    
+                    console.log('🔄 Real-time update applied');
+                }
+            }
+            
+            async exportData() {
+                console.log('📤 Exporting candlestick data...');
+                
+                try {
+                    const baseUrl = 'https://8000-ibk6l44w5p7m34y5uzj0a-6532622b.e2b.dev';
+                    const exportUrl = `${baseUrl}/api/candlestick/export/${this.currentSymbol}?interval=${this.currentInterval}&period=${this.currentPeriod}&format=csv`;
+                    
+                    // Create download link
+                    const link = document.createElement('a');
+                    link.href = exportUrl;
+                    link.download = `${this.currentSymbol}_${this.currentInterval}min_${this.currentPeriod}_candlestick.csv`;
+                    
+                    // Trigger download
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    console.log('✅ Export initiated successfully');
+                    
+                } catch (error) {
+                    console.error('❌ Error exporting data:', error);
+                    this.showError(`Export failed: ${error.message}`);
+                }
+            }
+            
+            showError(message) {
+                // Simple error display
+                alert(`Error: ${message}`);
+                console.error('❌', message);
+            }
+            
+            showInfo(message) {
+                // Simple info display
+                alert(`Info: ${message}`);
+                console.info('ℹ️', message);
+            }
+        }
+        
+        // Initialize the application when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            window.candlestickTrader = new EnhancedCandlestickTrader();
+        });
+    </script>
+    
+</body>
+</html>

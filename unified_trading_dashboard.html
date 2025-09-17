@@ -1,0 +1,1257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GSMT Unified Trading Dashboard - Market Tracking, Predictions & Candlestick Analysis</title>
+    
+    <!-- External Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        .dashboard-container {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            min-height: 100vh;
+        }
+        
+        .module-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            transition: all 0.3s ease;
+        }
+        
+        .module-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 35px rgba(0,0,0,0.2);
+        }
+        
+        .chart-container {
+            height: 400px;
+            background: white;
+            border-radius: 8px;
+        }
+        
+        .active-tab {
+            background: #3B82F6;
+            color: white;
+        }
+        
+        .inactive-tab {
+            background: #F3F4F6;
+            color: #6B7280;
+        }
+        
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+        }
+        
+        .status-live { background-color: #10b981; }
+        .status-loading { background-color: #f59e0b; animation: pulse 2s infinite; }
+        .status-error { background-color: #ef4444; }
+        
+        .prediction-badge {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        
+        .metric-card {
+            background: linear-gradient(135deg, #f8fafc, #e2e8f0);
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 16px;
+            transition: all 0.3s ease;
+        }
+        
+        .metric-card:hover {
+            background: linear-gradient(135deg, #e2e8f0, #cbd5e1);
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .sync-indicator {
+            animation: spin 2s linear infinite;
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="dashboard-container">
+
+    <!-- Header -->
+    <header class="bg-white/10 backdrop-blur-md border-b border-white/20">
+        <div class="max-w-7xl mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-white flex items-center">
+                        <i class="fas fa-chart-line mr-3 text-blue-300"></i>
+                        GSMT Unified Trading Dashboard
+                    </h1>
+                    <p class="text-blue-100 mt-1">
+                        Market Tracking • Predictions • Candlestick Analysis - All in One Platform
+                    </p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div id="sync-status" class="flex items-center text-white">
+                        <span class="status-indicator status-live"></span>
+                        <span class="text-sm font-medium">Live Data</span>
+                    </div>
+                    <button id="sync-all-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                        <i id="sync-icon" class="fas fa-sync-alt mr-2"></i>Sync All Modules
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Dashboard -->
+    <main class="max-w-7xl mx-auto px-6 py-6">
+        
+        <!-- Control Panel -->
+        <div class="module-card p-6 mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-cogs mr-2 text-blue-600"></i>
+                Dashboard Control Panel
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <!-- Symbol Selection -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-search mr-1"></i>Primary Symbol
+                    </label>
+                    <select id="primary-symbol" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <option value="^GSPC">S&P 500 (^GSPC)</option>
+                        <option value="^IXIC">NASDAQ (^IXIC)</option>
+                        <option value="^DJI">Dow Jones (^DJI)</option>
+                        <option value="^AORD">ASX All Ords (^AORD)</option>
+                        <option value="^AXJO">ASX 200 (^AXJO)</option>
+                        <option value="^FTSE">FTSE 100 (^FTSE)</option>
+                        <option value="^N225">Nikkei 225 (^N225)</option>
+                        <option value="AAPL">Apple (AAPL)</option>
+                        <option value="GOOGL">Google (GOOGL)</option>
+                        <option value="MSFT">Microsoft (MSFT)</option>
+                        <option value="TSLA">Tesla (TSLA)</option>
+                    </select>
+                </div>
+                
+                <!-- Timeframe -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-clock mr-1"></i>Timeframe
+                    </label>
+                    <select id="timeframe" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <option value="24h">24 Hours</option>
+                        <option value="48h">48 Hours</option>
+                        <option value="7d">7 Days</option>
+                        <option value="30d">30 Days</option>
+                    </select>
+                </div>
+                
+                <!-- Candlestick Interval -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-chart-bar mr-1"></i>Candlestick Interval
+                    </label>
+                    <select id="candlestick-interval" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <option value="1">1 Minute</option>
+                        <option value="5">5 Minutes</option>
+                        <option value="15">15 Minutes</option>
+                        <option value="30">30 Minutes</option>
+                        <option value="60" selected>1 Hour</option>
+                        <option value="240">4 Hours</option>
+                        <option value="1440">1 Day</option>
+                    </select>
+                </div>
+                
+                <!-- Auto Refresh -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-refresh mr-1"></i>Auto Refresh
+                    </label>
+                    <select id="auto-refresh" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <option value="0">Manual</option>
+                        <option value="30">30 Seconds</option>
+                        <option value="60" selected>1 Minute</option>
+                        <option value="300">5 Minutes</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Key Metrics Overview -->
+        <div class="module-card p-6 mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-tachometer-alt mr-2 text-green-600"></i>
+                Real-time Market Overview
+            </h2>
+            
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                <div class="metric-card">
+                    <div class="text-sm text-gray-600">Current Price</div>
+                    <div id="current-price" class="text-2xl font-bold text-blue-600">$0.00</div>
+                    <div id="price-change" class="text-sm">+0.00%</div>
+                </div>
+                
+                <div class="metric-card">
+                    <div class="text-sm text-gray-600">24h High</div>
+                    <div id="high-24h" class="text-2xl font-bold text-green-600">$0.00</div>
+                </div>
+                
+                <div class="metric-card">
+                    <div class="text-sm text-gray-600">24h Low</div>
+                    <div id="low-24h" class="text-2xl font-bold text-red-600">$0.00</div>
+                </div>
+                
+                <div class="metric-card">
+                    <div class="text-sm text-gray-600">Volume</div>
+                    <div id="volume" class="text-2xl font-bold text-purple-600">0</div>
+                </div>
+                
+                <div class="metric-card">
+                    <div class="text-sm text-gray-600">AI Prediction</div>
+                    <div id="prediction-value" class="text-2xl font-bold text-indigo-600">--</div>
+                    <div class="prediction-badge mt-1" id="prediction-confidence">--</div>
+                </div>
+                
+                <div class="metric-card">
+                    <div class="text-sm text-gray-600">Market Status</div>
+                    <div id="market-status" class="text-2xl font-bold">--</div>
+                    <div id="market-hours" class="text-sm text-gray-500">--</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Three Module Layout -->
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            
+            <!-- Module 1: Market Tracking -->
+            <div class="module-card">
+                <div class="p-4 border-b border-gray-200">
+                    <h3 class="text-lg font-bold text-gray-800 flex items-center">
+                        <i class="fas fa-chart-line mr-2 text-blue-600"></i>
+                        Market Tracking
+                        <span class="status-indicator status-live ml-2"></span>
+                    </h3>
+                    <p class="text-sm text-gray-600">Real-time price movements and market data</p>
+                </div>
+                
+                <div class="p-4">
+                    <!-- Market Tracking Controls -->
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Additional Symbols to Track</label>
+                        <div class="flex flex-wrap gap-2">
+                            <button class="tracking-symbol-btn px-3 py-1 text-sm bg-blue-100 text-blue-800 rounded-full hover:bg-blue-200" data-symbol="^IXIC">NASDAQ</button>
+                            <button class="tracking-symbol-btn px-3 py-1 text-sm bg-blue-100 text-blue-800 rounded-full hover:bg-blue-200" data-symbol="^DJI">DOW</button>
+                            <button class="tracking-symbol-btn px-3 py-1 text-sm bg-blue-100 text-blue-800 rounded-full hover:bg-blue-200" data-symbol="^AORD">ASX</button>
+                            <button class="tracking-symbol-btn px-3 py-1 text-sm bg-blue-100 text-blue-800 rounded-full hover:bg-blue-200" data-symbol="AAPL">AAPL</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Market Chart -->
+                    <div class="chart-container">
+                        <div id="market-chart" style="height: 100%;"></div>
+                    </div>
+                    
+                    <!-- Market Data Table -->
+                    <div class="mt-4 max-h-40 overflow-y-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b">
+                                    <th class="text-left py-2">Symbol</th>
+                                    <th class="text-right py-2">Price</th>
+                                    <th class="text-right py-2">Change</th>
+                                </tr>
+                            </thead>
+                            <tbody id="market-data-table">
+                                <!-- Market data rows will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Module 2: Predictions -->
+            <div class="module-card">
+                <div class="p-4 border-b border-gray-200">
+                    <h3 class="text-lg font-bold text-gray-800 flex items-center">
+                        <i class="fas fa-brain mr-2 text-purple-600"></i>
+                        AI Predictions
+                        <span class="status-indicator status-loading ml-2" id="prediction-status"></span>
+                    </h3>
+                    <p class="text-sm text-gray-600">Machine learning forecasts and analysis</p>
+                </div>
+                
+                <div class="p-4">
+                    <!-- Prediction Controls -->
+                    <div class="mb-4">
+                        <div class="flex gap-2 mb-2">
+                            <button id="predict-1d" class="prediction-btn px-3 py-1 text-sm bg-purple-100 text-purple-800 rounded-lg hover:bg-purple-200">1 Day</button>
+                            <button id="predict-7d" class="prediction-btn px-3 py-1 text-sm bg-purple-100 text-purple-800 rounded-lg hover:bg-purple-200">7 Days</button>
+                            <button id="predict-30d" class="prediction-btn px-3 py-1 text-sm bg-purple-100 text-purple-800 rounded-lg hover:bg-purple-200">30 Days</button>
+                        </div>
+                        <button id="run-prediction-btn" class="w-full bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors">
+                            <i class="fas fa-magic mr-2"></i>Generate Prediction
+                        </button>
+                    </div>
+                    
+                    <!-- Prediction Results -->
+                    <div class="chart-container">
+                        <div id="prediction-chart" style="height: 100%;"></div>
+                    </div>
+                    
+                    <!-- Prediction Metrics -->
+                    <div class="mt-4 space-y-2">
+                        <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                            <span class="text-sm text-gray-600">Predicted Price</span>
+                            <span id="predicted-price" class="font-bold">--</span>
+                        </div>
+                        <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                            <span class="text-sm text-gray-600">Confidence</span>
+                            <span id="prediction-confidence-detailed" class="font-bold">--</span>
+                        </div>
+                        <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                            <span class="text-sm text-gray-600">Trend</span>
+                            <span id="prediction-trend" class="font-bold">--</span>
+                        </div>
+                        <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                            <span class="text-sm text-gray-600">Risk Level</span>
+                            <span id="risk-level" class="font-bold">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Module 3: Candlestick Analysis -->
+            <div class="module-card">
+                <div class="p-4 border-b border-gray-200">
+                    <h3 class="text-lg font-bold text-gray-800 flex items-center">
+                        <i class="fas fa-chart-bar mr-2 text-green-600"></i>
+                        Candlestick Analysis
+                        <span class="status-indicator status-live ml-2"></span>
+                    </h3>
+                    <p class="text-sm text-gray-600">OHLCV analysis with technical indicators</p>
+                </div>
+                
+                <div class="p-4">
+                    <!-- Candlestick Controls -->
+                    <div class="mb-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <label class="flex items-center">
+                                <input type="checkbox" id="show-indicators" class="mr-2" checked>
+                                <span class="text-sm">Technical Indicators</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" id="show-volume" class="mr-2">
+                                <span class="text-sm">Volume Profile</span>
+                            </label>
+                        </div>
+                        <button id="export-candlestick-btn" class="w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
+                            <i class="fas fa-download mr-2"></i>Export OHLCV Data
+                        </button>
+                    </div>
+                    
+                    <!-- Candlestick Chart -->
+                    <div class="chart-container">
+                        <div id="candlestick-chart" style="height: 100%;"></div>
+                    </div>
+                    
+                    <!-- Technical Indicators -->
+                    <div class="mt-4 space-y-2" id="indicators-panel">
+                        <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                            <span class="text-sm text-gray-600">RSI (14)</span>
+                            <span id="rsi-value" class="font-bold">--</span>
+                        </div>
+                        <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                            <span class="text-sm text-gray-600">MACD</span>
+                            <span id="macd-value" class="font-bold">--</span>
+                        </div>
+                        <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                            <span class="text-sm text-gray-600">SMA (20)</span>
+                            <span id="sma-20" class="font-bold">--</span>
+                        </div>
+                        <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                            <span class="text-sm text-gray-600">Support/Resistance</span>
+                            <span id="support-resistance" class="font-bold text-xs">--</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cross-Module Analysis Panel -->
+        <div class="module-card p-6 mt-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center">
+                <i class="fas fa-analytics mr-2 text-orange-600"></i>
+                Cross-Module Analysis & Insights
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Market-Prediction Correlation -->
+                <div class="bg-gradient-to-br from-blue-50 to-purple-50 p-4 rounded-lg border border-blue-200">
+                    <h4 class="font-bold text-gray-800 mb-2">Market-Prediction Alignment</h4>
+                    <div id="correlation-analysis" class="text-sm text-gray-600">
+                        Analyzing correlation between current market trends and AI predictions...
+                    </div>
+                    <div class="mt-2">
+                        <div class="bg-white p-2 rounded text-center">
+                            <span id="alignment-score" class="text-lg font-bold text-blue-600">--</span>
+                            <div class="text-xs text-gray-500">Alignment Score</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Technical Signal Summary -->
+                <div class="bg-gradient-to-br from-green-50 to-blue-50 p-4 rounded-lg border border-green-200">
+                    <h4 class="font-bold text-gray-800 mb-2">Technical Signals</h4>
+                    <div id="technical-summary" class="text-sm text-gray-600">
+                        Aggregating signals from candlestick patterns and indicators...
+                    </div>
+                    <div class="mt-2">
+                        <div class="bg-white p-2 rounded text-center">
+                            <span id="signal-strength" class="text-lg font-bold text-green-600">--</span>
+                            <div class="text-xs text-gray-500">Signal Strength</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Trading Recommendation -->
+                <div class="bg-gradient-to-br from-orange-50 to-red-50 p-4 rounded-lg border border-orange-200">
+                    <h4 class="font-bold text-gray-800 mb-2">Trading Recommendation</h4>
+                    <div id="trading-recommendation" class="text-sm text-gray-600">
+                        Combining all signals to generate trading insights...
+                    </div>
+                    <div class="mt-2">
+                        <div class="bg-white p-2 rounded text-center">
+                            <span id="recommendation-action" class="text-lg font-bold text-orange-600">--</span>
+                            <div class="text-xs text-gray-500">Recommended Action</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        class UnifiedTradingDashboard {
+            constructor() {
+                this.baseUrl = 'https://8000-ibk6l44w5p7m34y5uzj0a-6532622b.e2b.dev';
+                this.currentSymbol = '^GSPC';
+                this.currentTimeframe = '24h';
+                this.currentInterval = 60;
+                this.autoRefreshInterval = null;
+                this.charts = {};
+                this.data = {
+                    market: null,
+                    prediction: null,
+                    candlestick: null
+                };
+                
+                this.init();
+            }
+            
+            init() {
+                console.log('🚀 Initializing Unified Trading Dashboard...');
+                this.setupEventListeners();
+                this.initializeCharts();
+                this.loadAllData();
+                this.setupAutoRefresh();
+                console.log('✅ Dashboard initialized successfully');
+            }
+            
+            setupEventListeners() {
+                // Primary symbol change
+                document.getElementById('primary-symbol').addEventListener('change', (e) => {
+                    this.currentSymbol = e.target.value;
+                    this.loadAllData();
+                });
+                
+                // Timeframe change
+                document.getElementById('timeframe').addEventListener('change', (e) => {
+                    this.currentTimeframe = e.target.value;
+                    this.loadAllData();
+                });
+                
+                // Candlestick interval change
+                document.getElementById('candlestick-interval').addEventListener('change', (e) => {
+                    this.currentInterval = parseInt(e.target.value);
+                    this.loadCandlestickData();
+                });
+                
+                // Sync all button
+                document.getElementById('sync-all-btn').addEventListener('click', () => {
+                    this.syncAllModules();
+                });
+                
+                // Prediction buttons
+                document.getElementById('run-prediction-btn').addEventListener('click', () => {
+                    this.loadPredictionData();
+                });
+                
+                // Export candlestick data
+                document.getElementById('export-candlestick-btn').addEventListener('click', () => {
+                    this.exportCandlestickData();
+                });
+                
+                // Technical indicators toggle
+                document.getElementById('show-indicators').addEventListener('change', () => {
+                    this.loadCandlestickData();
+                });
+                
+                // Auto refresh setup
+                document.getElementById('auto-refresh').addEventListener('change', (e) => {
+                    this.setupAutoRefresh(parseInt(e.target.value));
+                });
+            }
+            
+            initializeCharts() {
+                // Initialize Market Chart
+                this.charts.market = echarts.init(document.getElementById('market-chart'));
+                
+                // Initialize Prediction Chart
+                this.charts.prediction = echarts.init(document.getElementById('prediction-chart'));
+                
+                // Initialize Candlestick Chart
+                this.charts.candlestick = echarts.init(document.getElementById('candlestick-chart'));
+                
+                // Handle window resize
+                window.addEventListener('resize', () => {
+                    Object.values(this.charts).forEach(chart => chart?.resize());
+                });
+            }
+            
+            async loadAllData() {
+                console.log(`📊 Loading all data for ${this.currentSymbol}...`);
+                this.updateSyncStatus('loading');
+                
+                try {
+                    await Promise.all([
+                        this.loadMarketData(),
+                        this.loadPredictionData(),
+                        this.loadCandlestickData()
+                    ]);
+                    
+                    this.updateCrossModuleAnalysis();
+                    this.updateSyncStatus('live');
+                    
+                } catch (error) {
+                    console.error('❌ Error loading data:', error);
+                    this.updateSyncStatus('error');
+                }
+            }
+            
+            async loadMarketData() {
+                try {
+                    console.log('📈 Loading market data...');
+                    
+                    const response = await fetch(`${this.baseUrl}/api/analyze`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            symbols: [this.currentSymbol, '^IXIC', '^DJI', '^AORD'],
+                            chart_type: 'percentage',
+                            interval_minutes: 60,
+                            time_period: this.currentTimeframe
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.data.market = data;
+                        this.updateMarketChart(data);
+                        this.updateMarketMetrics(data);
+                        this.updateMarketTable(data);
+                        console.log('✅ Market data loaded');
+                    } else {
+                        throw new Error(`Market API error: ${response.status}`);
+                    }
+                } catch (error) {
+                    console.error('❌ Market data error:', error);
+                }
+            }
+            
+            async loadPredictionData() {
+                try {
+                    console.log('🧠 Loading prediction data...');
+                    document.getElementById('prediction-status').className = 'status-indicator status-loading';
+                    
+                    const response = await fetch(`${this.baseUrl}/api/prediction/${this.currentSymbol}`);
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.data.prediction = data;
+                        this.updatePredictionChart(data);
+                        this.updatePredictionMetrics(data);
+                        document.getElementById('prediction-status').className = 'status-indicator status-live';
+                        console.log('✅ Prediction data loaded');
+                    } else {
+                        throw new Error(`Prediction API error: ${response.status}`);
+                    }
+                } catch (error) {
+                    console.error('❌ Prediction data error:', error);
+                    document.getElementById('prediction-status').className = 'status-indicator status-error';
+                }
+            }
+            
+            async loadCandlestickData() {
+                try {
+                    console.log('📊 Loading candlestick data...');
+                    
+                    const includeIndicators = document.getElementById('show-indicators').checked;
+                    const response = await fetch(
+                        `${this.baseUrl}/api/enhanced-candlestick/${this.currentSymbol}?interval=${this.currentInterval}&period=${this.currentTimeframe}&indicators=${includeIndicators}`
+                    );
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.data.candlestick = data;
+                        this.updateCandlestickChart(data);
+                        this.updateTechnicalIndicators(data);
+                        console.log('✅ Candlestick data loaded');
+                    } else {
+                        throw new Error(`Candlestick API error: ${response.status}`);
+                    }
+                } catch (error) {
+                    console.error('❌ Candlestick data error:', error);
+                }
+            }
+            
+            updateMarketChart(data) {
+                if (!data.data || !data.data[this.currentSymbol]) return;
+                
+                const marketData = data.data[this.currentSymbol];
+                const chartData = marketData.map(point => [
+                    point.timestamp_ms,
+                    point.percentage_change || 0
+                ]);
+                
+                const option = {
+                    title: { text: 'Market Performance', textStyle: { fontSize: 14 } },
+                    tooltip: { trigger: 'axis' },
+                    xAxis: { type: 'time' },
+                    yAxis: { type: 'value', name: 'Change %' },
+                    series: [{
+                        data: chartData,
+                        type: 'line',
+                        smooth: true,
+                        itemStyle: { color: '#3B82F6' },
+                        areaStyle: { opacity: 0.3 }
+                    }]
+                };
+                
+                this.charts.market.setOption(option);
+            }
+            
+            updatePredictionChart(data) {
+                // Extract prediction data from API response
+                const prediction = data.prediction || {};
+                const currentPrice = this.data.market?.data?.[this.currentSymbol]?.[this.data.market.data[this.currentSymbol].length - 1]?.close || 0;
+                const direction = prediction.direction || 'neutral';
+                const expectedChange = prediction.expected_change_percent || 0;
+                const predictedPrice = currentPrice * (1 + expectedChange / 100);
+                
+                const option = {
+                    title: { 
+                        text: `${data.prediction?.symbol || this.currentSymbol} AI Prediction`, 
+                        textStyle: { fontSize: 14, fontWeight: 'bold' },
+                        left: 'center'
+                    },
+                    tooltip: { 
+                        trigger: 'axis',
+                        formatter: function(params) {
+                            const param = params[0];
+                            const isCurrentPrice = param.dataIndex === 0;
+                            const value = param.value;
+                            
+                            return `<div>
+                                <div style="font-size:14px;color:#666;margin-bottom:8px;">${param.name}</div>
+                                <div style="font-size:16px;font-weight:bold;color:${isCurrentPrice ? '#3B82F6' : '#8B5CF6'};">
+                                    $${value.toFixed(2)}
+                                </div>
+                                ${!isCurrentPrice ? `<div style="margin-top:8px;font-size:12px;color:#666;">
+                                    Direction: ${direction}<br>
+                                    Expected Change: ${expectedChange.toFixed(2)}%<br>
+                                    Confidence: ${(prediction.confidence_score * 100).toFixed(1)}%
+                                </div>` : ''}
+                            </div>`;
+                        }
+                    },
+                    grid: {
+                        left: '10%',
+                        right: '10%',
+                        top: '15%',
+                        bottom: '10%'
+                    },
+                    xAxis: { 
+                        type: 'category', 
+                        data: ['Current Price', 'Predicted Price'],
+                        axisLabel: {
+                            fontSize: 12,
+                            color: '#666'
+                        }
+                    },
+                    yAxis: { 
+                        type: 'value', 
+                        name: 'Price ($)',
+                        nameTextStyle: {
+                            color: '#666',
+                            fontSize: 12
+                        },
+                        axisLabel: {
+                            formatter: function(value) {
+                                return '$' + value.toFixed(2);
+                            },
+                            fontSize: 11,
+                            color: '#666'
+                        },
+                        splitLine: {
+                            lineStyle: {
+                                color: '#f0f0f0',
+                                type: 'dashed'
+                            }
+                        }
+                    },
+                    series: [{
+                        name: 'Price',
+                        data: [
+                            {
+                                value: currentPrice,
+                                itemStyle: { color: '#3B82F6' }
+                            },
+                            {
+                                value: predictedPrice,
+                                itemStyle: { 
+                                    color: direction === 'up' ? '#10B981' : direction === 'down' ? '#EF4444' : '#8B5CF6' 
+                                }
+                            }
+                        ],
+                        type: 'bar',
+                        barMaxWidth: 60,
+                        label: {
+                            show: true,
+                            position: 'top',
+                            formatter: function(params) {
+                                return '$' + params.value.toFixed(2);
+                            },
+                            fontSize: 12,
+                            fontWeight: 'bold'
+                        }
+                    }]
+                };
+                
+                this.charts.prediction.setOption(option, true);
+            }
+            
+            updateCandlestickChart(data) {
+                if (!data.data) return;
+                
+                // Prepare candlestick data [timestamp, open, close, low, high]
+                const candlestickData = data.data.map(point => [
+                    point.timestamp_ms,
+                    point.open || 0,
+                    point.close || 0,
+                    point.low || 0,
+                    point.high || 0
+                ]);
+                
+                // Prepare volume data
+                const volumeData = data.data.map(point => ({
+                    name: new Date(point.timestamp_ms).toISOString(),
+                    value: [
+                        point.timestamp_ms,
+                        point.volume || 0
+                    ],
+                    itemStyle: {
+                        color: (point.close >= point.open) ? '#10B981' : '#EF4444'
+                    }
+                }));
+                
+                // Calculate proper Y-axis ranges
+                const prices = data.data.flatMap(point => [point.open, point.high, point.low, point.close].filter(p => p));
+                const volumes = data.data.map(point => point.volume || 0).filter(v => v > 0);
+                
+                const minPrice = Math.min(...prices);
+                const maxPrice = Math.max(...prices);
+                const priceRange = maxPrice - minPrice;
+                
+                // Use adaptive padding: minimum 2% of the price value, maximum 10% of the range
+                const adaptivePadding = Math.max(
+                    priceRange * 0.15,  // 15% of the actual range
+                    minPrice * 0.01     // Or 1% of the minimum price value
+                );
+                
+                const maxVolume = Math.max(...volumes);
+                
+                const option = {
+                    title: { 
+                        text: `${data.symbol} OHLCV Analysis`, 
+                        textStyle: { fontSize: 16, fontWeight: 'bold' },
+                        left: 'center'
+                    },
+                    animation: false,
+                    legend: {
+                        data: ['Candlestick', 'Volume'],
+                        top: 30,
+                        textStyle: { fontSize: 12 }
+                    },
+                    grid: [
+                        {
+                            id: 'candlestick-grid',
+                            left: '50px',
+                            right: '50px', 
+                            top: '60px',
+                            height: '60%'
+                        },
+                        {
+                            id: 'volume-grid',
+                            left: '50px',
+                            right: '50px',
+                            top: '75%',
+                            height: '20%'
+                        }
+                    ],
+                    tooltip: {
+                        trigger: 'axis',
+                        axisPointer: {
+                            type: 'cross',
+                            link: [{ xAxisIndex: 'all' }]
+                        },
+                        formatter: function(params) {
+                            let result = '';
+                            const candleData = params.find(p => p.seriesName === 'Candlestick');
+                            const volumeData = params.find(p => p.seriesName === 'Volume');
+                            
+                            if (candleData && candleData.data) {
+                                const [timestamp, open, close, low, high] = candleData.data;
+                                const date = new Date(timestamp).toLocaleString();
+                                result += `<div style="margin: 0px 0 0px;line-height:1;">
+                                    <div style="font-size:14px;color:#666;font-weight:400;line-height:1;">${date}</div>
+                                    <div style="margin: 10px 0 0 0;line-height:1;">
+                                        <span style="display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:#10B981;"></span>
+                                        <span style="font-size:14px;color:#666;font-weight:400;margin-left:2px">Open: </span>
+                                        <span style="float:right;margin-left:20px;font-size:14px;color:#666;font-weight:900">${open?.toFixed(2)}</span>
+                                        <div style="clear:both"></div>
+                                    </div>
+                                    <div style="margin: 10px 0 0 0;line-height:1;">
+                                        <span style="display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:#10B981;"></span>
+                                        <span style="font-size:14px;color:#666;font-weight:400;margin-left:2px">High: </span>
+                                        <span style="float:right;margin-left:20px;font-size:14px;color:#666;font-weight:900">${high?.toFixed(2)}</span>
+                                        <div style="clear:both"></div>
+                                    </div>
+                                    <div style="margin: 10px 0 0 0;line-height:1;">
+                                        <span style="display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:#EF4444;"></span>
+                                        <span style="font-size:14px;color:#666;font-weight:400;margin-left:2px">Low: </span>
+                                        <span style="float:right;margin-left:20px;font-size:14px;color:#666;font-weight:900">${low?.toFixed(2)}</span>
+                                        <div style="clear:both"></div>
+                                    </div>
+                                    <div style="margin: 10px 0 0 0;line-height:1;">
+                                        <span style="display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:#666;"></span>
+                                        <span style="font-size:14px;color:#666;font-weight:400;margin-left:2px">Close: </span>
+                                        <span style="float:right;margin-left:20px;font-size:14px;color:#666;font-weight:900">${close?.toFixed(2)}</span>
+                                        <div style="clear:both"></div>
+                                    </div>`;
+                            }
+                            
+                            if (volumeData && volumeData.data) {
+                                const volume = volumeData.data[1];
+                                result += `<div style="margin: 10px 0 0 0;line-height:1;">
+                                    <span style="display:inline-block;margin-right:5px;border-radius:10px;width:10px;height:10px;background-color:#8B5CF6;"></span>
+                                    <span style="font-size:14px;color:#666;font-weight:400;margin-left:2px">Volume: </span>
+                                    <span style="float:right;margin-left:20px;font-size:14px;color:#666;font-weight:900">${volume?.toLocaleString()}</span>
+                                    <div style="clear:both"></div>
+                                </div>`;
+                            }
+                            
+                            result += '</div>';
+                            return result;
+                        }
+                    },
+                    xAxis: [
+                        {
+                            type: 'time',
+                            gridIndex: 0,
+                            axisLine: { onZero: false },
+                            splitLine: { show: false },
+                            min: 'dataMin',
+                            max: 'dataMax',
+                            axisPointer: {
+                                label: { 
+                                    formatter: function(params) {
+                                        return new Date(params.value).toLocaleString();
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            type: 'time',
+                            gridIndex: 1,
+                            axisLine: { onZero: false },
+                            splitLine: { show: false },
+                            axisLabel: { show: false },
+                            axisTick: { show: false },
+                            min: 'dataMin',
+                            max: 'dataMax'
+                        }
+                    ],
+                    yAxis: [
+                        {
+                            gridIndex: 0,
+                            type: 'value',
+                            scale: true,
+                            min: minPrice - adaptivePadding,
+                            max: maxPrice + adaptivePadding,
+                            position: 'right',
+                            axisLine: { show: false },
+                            splitLine: { 
+                                show: true, 
+                                lineStyle: { color: '#f0f0f0', type: 'dashed' } 
+                            },
+                            axisLabel: {
+                                formatter: function(value) {
+                                    return '$' + value.toFixed(2);
+                                }
+                            },
+                            axisPointer: {
+                                label: {
+                                    formatter: function(params) {
+                                        return '$' + params.value.toFixed(2);
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            gridIndex: 1,
+                            type: 'value',
+                            scale: true,
+                            max: maxVolume * 1.2,
+                            position: 'right',
+                            axisLine: { show: false },
+                            splitLine: { show: false },
+                            axisLabel: {
+                                formatter: function(value) {
+                                    if (value >= 1000000000) {
+                                        return (value / 1000000000).toFixed(1) + 'B';
+                                    } else if (value >= 1000000) {
+                                        return (value / 1000000).toFixed(1) + 'M';
+                                    } else if (value >= 1000) {
+                                        return (value / 1000).toFixed(1) + 'K';
+                                    }
+                                    return value.toString();
+                                }
+                            }
+                        }
+                    ],
+                    dataZoom: [
+                        {
+                            type: 'inside',
+                            xAxisIndex: [0, 1],
+                            start: 0,
+                            end: 100
+                        },
+                        {
+                            type: 'slider',
+                            xAxisIndex: [0, 1],
+                            start: 0,
+                            end: 100,
+                            top: '96%',
+                            height: 20
+                        }
+                    ],
+                    series: [
+                        {
+                            name: 'Candlestick',
+                            type: 'candlestick',
+                            data: candlestickData,
+                            xAxisIndex: 0,
+                            yAxisIndex: 0,
+                            itemStyle: {
+                                color: '#10B981',      // Bullish (up) candles
+                                color0: '#EF4444',     // Bearish (down) candles
+                                borderColor: '#10B981',
+                                borderColor0: '#EF4444'
+                            },
+                            barMaxWidth: 8,
+                            barMinWidth: 1
+                        },
+                        {
+                            name: 'Volume',
+                            type: 'bar',
+                            data: volumeData,
+                            xAxisIndex: 1,
+                            yAxisIndex: 1,
+                            barMaxWidth: '60%',
+                            large: true,
+                            largeThreshold: 500
+                        }
+                    ]
+                };
+                
+                this.charts.candlestick.setOption(option, true);
+            }
+            
+            updateMarketMetrics(data) {
+                if (!data.data || !data.data[this.currentSymbol]) return;
+                
+                const symbolData = data.data[this.currentSymbol];
+                const latest = symbolData[symbolData.length - 1];
+                
+                document.getElementById('current-price').textContent = `$${latest.close?.toFixed(2) || '0.00'}`;
+                
+                const change = latest.percentage_change || 0;
+                const changeEl = document.getElementById('price-change');
+                changeEl.textContent = `${change >= 0 ? '+' : ''}${change.toFixed(2)}%`;
+                changeEl.className = change >= 0 ? 'text-sm text-green-600' : 'text-sm text-red-600';
+                
+                // Calculate 24h high/low
+                const prices = symbolData.map(p => p.close).filter(p => p != null);
+                document.getElementById('high-24h').textContent = `$${Math.max(...prices).toFixed(2)}`;
+                document.getElementById('low-24h').textContent = `$${Math.min(...prices).toFixed(2)}`;
+                
+                document.getElementById('volume').textContent = (latest.volume || 0).toLocaleString();
+            }
+            
+            updatePredictionMetrics(data) {
+                const prediction = data.prediction || {};
+                const currentPrice = this.data.market?.data?.[this.currentSymbol]?.[this.data.market.data[this.currentSymbol].length - 1]?.close || 0;
+                const expectedChange = prediction.expected_change_percent || 0;
+                const predictedPrice = currentPrice * (1 + expectedChange / 100);
+                const confidence = (prediction.confidence_score || 0) * 100;
+                
+                // Update detailed prediction metrics
+                document.getElementById('predicted-price').textContent = `$${predictedPrice.toFixed(2)}`;
+                document.getElementById('prediction-confidence-detailed').textContent = `${confidence.toFixed(1)}%`;
+                document.getElementById('prediction-trend').textContent = prediction.direction || '--';
+                document.getElementById('risk-level').textContent = prediction.risk_level || '--';
+                
+                // Update overview prediction
+                document.getElementById('prediction-value').textContent = `$${predictedPrice.toFixed(2)}`;
+                document.getElementById('prediction-confidence').textContent = `${confidence.toFixed(0)}% confidence`;
+                
+                // Update prediction reasoning if available
+                if (prediction.reasoning) {
+                    const reasoningElement = document.getElementById('prediction-reasoning');
+                    if (reasoningElement) {
+                        reasoningElement.textContent = prediction.reasoning;
+                    }
+                }
+                
+                // Update change percentage with color coding
+                const changeElement = document.getElementById('predicted-change');
+                if (changeElement) {
+                    changeElement.textContent = `${expectedChange >= 0 ? '+' : ''}${expectedChange.toFixed(2)}%`;
+                    changeElement.className = expectedChange >= 0 ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold';
+                }
+            }
+            
+            updateTechnicalIndicators(data) {
+                if (data.technical_indicators) {
+                    const indicators = data.technical_indicators;
+                    
+                    document.getElementById('rsi-value').textContent = 
+                        indicators.momentum_indicators?.rsi?.toFixed(1) || '--';
+                    
+                    document.getElementById('macd-value').textContent = 
+                        indicators.momentum_indicators?.macd?.toFixed(3) || '--';
+                    
+                    document.getElementById('sma-20').textContent = 
+                        `$${indicators.moving_averages?.sma_20?.toFixed(2) || '--'}`;
+                    
+                    if (indicators.support_resistance) {
+                        document.getElementById('support-resistance').textContent = 
+                            `S: $${indicators.support_resistance.support?.toFixed(0)} R: $${indicators.support_resistance.resistance?.toFixed(0)}`;
+                    }
+                }
+            }
+            
+            updateMarketTable(data) {
+                const table = document.getElementById('market-data-table');
+                table.innerHTML = '';
+                
+                Object.entries(data.data || {}).forEach(([symbol, symbolData]) => {
+                    const latest = symbolData[symbolData.length - 1];
+                    const change = latest.percentage_change || 0;
+                    
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="py-1">${symbol}</td>
+                        <td class="text-right py-1">$${(latest.close || 0).toFixed(2)}</td>
+                        <td class="text-right py-1 ${change >= 0 ? 'text-green-600' : 'text-red-600'}">
+                            ${change >= 0 ? '+' : ''}${change.toFixed(2)}%
+                        </td>
+                    `;
+                    table.appendChild(row);
+                });
+            }
+            
+            updateCrossModuleAnalysis() {
+                // Analyze correlation between modules
+                if (this.data.market && this.data.prediction) {
+                    const marketTrend = this.calculateMarketTrend();
+                    const predictionTrend = this.data.prediction.trend;
+                    
+                    const alignment = this.calculateAlignment(marketTrend, predictionTrend);
+                    document.getElementById('alignment-score').textContent = `${alignment}%`;
+                    
+                    document.getElementById('correlation-analysis').textContent = 
+                        `Market trending ${marketTrend}, prediction suggests ${predictionTrend}. Alignment: ${alignment}%`;
+                }
+                
+                // Technical signal summary
+                if (this.data.candlestick && this.data.candlestick.technical_indicators) {
+                    const signalStrength = this.calculateSignalStrength();
+                    document.getElementById('signal-strength').textContent = signalStrength;
+                    
+                    document.getElementById('technical-summary').textContent = 
+                        `RSI: ${this.data.candlestick.technical_indicators.momentum_indicators?.rsi?.toFixed(0) || '--'}, ` +
+                        `MACD: ${this.data.candlestick.technical_indicators.momentum_indicators?.macd?.toFixed(2) || '--'}`;
+                }
+                
+                // Generate trading recommendation
+                this.generateTradingRecommendation();
+            }
+            
+            calculateMarketTrend() {
+                if (!this.data.market || !this.data.market.data[this.currentSymbol]) return 'neutral';
+                
+                const data = this.data.market.data[this.currentSymbol];
+                const recentChange = data[data.length - 1]?.percentage_change || 0;
+                
+                if (recentChange > 1) return 'bullish';
+                if (recentChange < -1) return 'bearish';
+                return 'neutral';
+            }
+            
+            calculateAlignment(marketTrend, predictionTrend) {
+                if (marketTrend === predictionTrend) return 85;
+                if ((marketTrend === 'bullish' && predictionTrend === 'neutral') ||
+                    (marketTrend === 'bearish' && predictionTrend === 'neutral')) return 65;
+                return 35;
+            }
+            
+            calculateSignalStrength() {
+                const indicators = this.data.candlestick?.technical_indicators;
+                if (!indicators) return '--';
+                
+                let strength = 0;
+                
+                // RSI analysis
+                const rsi = indicators.momentum_indicators?.rsi;
+                if (rsi) {
+                    if (rsi > 70) strength += 30; // Overbought
+                    else if (rsi < 30) strength += 30; // Oversold
+                    else strength += 10;
+                }
+                
+                // MACD analysis
+                const macd = indicators.momentum_indicators?.macd;
+                if (macd) {
+                    strength += Math.abs(macd) > 5 ? 25 : 10;
+                }
+                
+                return `${Math.min(strength, 100)}%`;
+            }
+            
+            generateTradingRecommendation() {
+                const marketTrend = this.calculateMarketTrend();
+                const signalStrength = parseInt(this.calculateSignalStrength()) || 0;
+                const alignment = parseInt(document.getElementById('alignment-score').textContent) || 0;
+                
+                let recommendation = 'HOLD';
+                let confidence = 'Medium';
+                
+                if (alignment > 70 && signalStrength > 60) {
+                    recommendation = marketTrend === 'bullish' ? 'BUY' : 'SELL';
+                    confidence = 'High';
+                } else if (alignment < 40 || signalStrength < 30) {
+                    recommendation = 'WAIT';
+                    confidence = 'Low';
+                }
+                
+                document.getElementById('recommendation-action').textContent = recommendation;
+                document.getElementById('recommendation-action').className = 
+                    `text-lg font-bold ${recommendation === 'BUY' ? 'text-green-600' : 
+                    recommendation === 'SELL' ? 'text-red-600' : 'text-orange-600'}`;
+                
+                document.getElementById('trading-recommendation').textContent = 
+                    `Based on ${confidence.toLowerCase()} confidence analysis across all modules. ` +
+                    `Market alignment: ${alignment}%, Signal strength: ${signalStrength}%`;
+            }
+            
+            updateSyncStatus(status) {
+                const statusEl = document.getElementById('sync-status').querySelector('.status-indicator');
+                const iconEl = document.getElementById('sync-icon');
+                
+                switch (status) {
+                    case 'loading':
+                        statusEl.className = 'status-indicator status-loading';
+                        iconEl.className = 'fas fa-sync-alt mr-2 sync-indicator';
+                        break;
+                    case 'live':
+                        statusEl.className = 'status-indicator status-live';
+                        iconEl.className = 'fas fa-sync-alt mr-2';
+                        break;
+                    case 'error':
+                        statusEl.className = 'status-indicator status-error';
+                        iconEl.className = 'fas fa-exclamation-triangle mr-2';
+                        break;
+                }
+            }
+            
+            async syncAllModules() {
+                console.log('🔄 Syncing all modules...');
+                await this.loadAllData();
+            }
+            
+            setupAutoRefresh(intervalSeconds = 60) {
+                if (this.autoRefreshInterval) {
+                    clearInterval(this.autoRefreshInterval);
+                }
+                
+                if (intervalSeconds > 0) {
+                    this.autoRefreshInterval = setInterval(() => {
+                        this.loadAllData();
+                    }, intervalSeconds * 1000);
+                    console.log(`⏱️ Auto-refresh enabled: ${intervalSeconds}s`);
+                }
+            }
+            
+            async exportCandlestickData() {
+                try {
+                    const url = `${this.baseUrl}/api/candlestick/export/${this.currentSymbol}?interval=${this.currentInterval}&period=${this.currentTimeframe}&format=csv`;
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `${this.currentSymbol}_${this.currentInterval}min_${this.currentTimeframe}_candlestick.csv`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    console.log('💾 Candlestick data exported');
+                } catch (error) {
+                    console.error('❌ Export error:', error);
+                }
+            }
+        }
+        
+        // Initialize dashboard when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            window.dashboard = new UnifiedTradingDashboard();
+        });
+    </script>
+</body>
+</html>
