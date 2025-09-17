@@ -523,7 +523,7 @@
         <!-- Control Panel -->
         <div class="control-panel">
             <div class="symbol-input-group">
-                <input type="text" class="input-field" id="symbolInput" placeholder="Enter symbol (e.g., ^AORD, CBA, BHP)" value="^AORD">
+                <input type="text" class="input-field" id="symbolInput" placeholder="Enter symbol (e.g., CBA.AX, BHP.AX, ^AORD)" value="CBA.AX">
                 <button class="analyze-btn" onclick="runAdvancedAnalysis()" id="analyzeBtn">
                     🎯 Generate Advanced Predictions
                 </button>
@@ -587,7 +587,7 @@
     </div>
 
     <script>
-        let currentSymbol = '^AORD';
+        let currentSymbol = 'CBA.AX';
         let selectedTimeframes = ['1d'];
         let predictionData = {};
         let predictionChart = null;

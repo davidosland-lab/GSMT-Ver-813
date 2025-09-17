@@ -3,10 +3,10 @@
     {
       "name": "global-market-tracker",
       "script": "python3",
-      "args": "-m uvicorn app:app --host 0.0.0.0 --port 8000",
+      "args": "-m uvicorn app:app --host 0.0.0.0 --port 8080",
       "cwd": "/home/user/webapp",
       "env": {
-        "PORT": "8000",
+        "PORT": "8080",
         "PYTHONPATH": "/home/user/webapp"
       },
       "instances": 1,

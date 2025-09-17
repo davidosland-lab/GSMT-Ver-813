@@ -1,0 +1,112 @@
+{
+  "app_name": "Enhanced Stock Analysis - Local Mirror",
+  "version": "1.0.0",
+  "description": "Comprehensive local stock analysis with document management and AI-powered insights",
+  
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8000,
+    "debug": false,
+    "reload": false,
+    "workers": 1,
+    "access_log": true
+  },
+  
+  "database": {
+    "database_path": "data/local_mirror.db",
+    "backup_enabled": true,
+    "backup_interval_hours": 24,
+    "backup_retention_days": 30
+  },
+  
+  "storage": {
+    "documents_dir": "data/documents",
+    "cache_dir": "data/cache",
+    "analysis_dir": "data/analysis",
+    "models_dir": "data/models",
+    "logs_dir": "logs"
+  },
+  
+  "document_management": {
+    "max_concurrent_downloads": 3,
+    "download_timeout_seconds": 300,
+    "max_file_size_mb": 100,
+    "supported_formats": ["pdf", "docx", "html", "txt"],
+    "document_retention_days": 365,
+    "enable_content_deduplication": true
+  },
+  
+  "analysis": {
+    "max_concurrent_analysis": 2,
+    "analysis_timeout_seconds": 600,
+    "model_cache_size_mb": 1024,
+    "analysis_retention_days": 180,
+    "enable_auto_analysis": true,
+    "finbert_model": "ProsusAI/finbert",
+    "spacy_model": "en_core_web_sm",
+    "enable_gpu_acceleration": false
+  },
+  
+  "prediction": {
+    "default_timeframe": "5d",
+    "confidence_threshold": 0.6,
+    "max_prediction_horizon_days": 90,
+    "enable_ensemble_modeling": true,
+    "prediction_weights": {
+      "document_analysis": 0.30,
+      "technical_analysis": 0.40,
+      "market_context": 0.30
+    },
+    "cache_predictions": true,
+    "prediction_cache_hours": 6
+  },
+  
+  "data_sources": {
+    "primary_stock_data": "yfinance",
+    "backup_stock_data": null,
+    "asx_announcements_enabled": true,
+    "company_reports_enabled": true,
+    "news_sources_enabled": false,
+    "rate_limit_requests_per_minute": 60
+  },
+  
+  "background_tasks": {
+    "enable_background_updates": true,
+    "task_cleanup_interval_hours": 6,
+    "max_task_retry_attempts": 3,
+    "task_timeout_minutes": 30
+  },
+  
+  "logging": {
+    "level": "INFO",
+    "file_rotation": true,
+    "max_log_size_mb": 10,
+    "log_retention_days": 30,
+    "enable_request_logging": true,
+    "enable_performance_logging": true
+  },
+  
+  "security": {
+    "enable_cors": true,
+    "allowed_origins": ["http://localhost:8000", "http://127.0.0.1:8000"],
+    "enable_rate_limiting": false,
+    "max_requests_per_minute": 100
+  },
+  
+  "features": {
+    "enable_real_time_updates": false,
+    "enable_auto_refresh": true,
+    "auto_refresh_interval_minutes": 30,
+    "enable_export_functionality": true,
+    "enable_batch_operations": true,
+    "enable_advanced_charts": true
+  },
+  
+  "system": {
+    "cleanup_temp_files": true,
+    "temp_file_retention_hours": 24,
+    "memory_limit_mb": 2048,
+    "cpu_core_limit": null,
+    "enable_system_monitoring": true
+  }
+}

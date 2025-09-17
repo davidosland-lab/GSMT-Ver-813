@@ -1,0 +1,717 @@
+{% extends "base.html" %}
+
+{% block title %}Predictions - {{ symbol }} - Enhanced Stock Analysis{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="fas fa-crystal-ball me-2 text-primary"></i>
+        Enhanced Predictions for {{ symbol }}
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-success" onclick="generateNewPrediction()">
+                <i class="fas fa-plus me-1"></i>New Prediction
+            </button>
+            <button type="button" class="btn btn-outline-primary" onclick="refreshPredictions()">
+                <i class="fas fa-sync-alt me-1"></i>Refresh
+            </button>
+        </div>
+        <div class="btn-group">
+            <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                <i class="fas fa-cog me-1"></i>Options
+            </button>
+            <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="/documents/{{ symbol }}">
+                    <i class="fas fa-file-alt me-2"></i>View Documents
+                </a></li>
+                <li><a class="dropdown-item" href="/analysis/{{ symbol }}">
+                    <i class="fas fa-brain me-2"></i>View Analysis
+                </a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item" href="#" onclick="exportPredictions()">
+                    <i class="fas fa-file-export me-2"></i>Export Predictions
+                </a></li>
+                <li><a class="dropdown-item" href="#" onclick="generateBacktest()">
+                    <i class="fas fa-chart-line me-2"></i>Generate Backtest
+                </a></li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- Prediction Status -->
+<div id="predictionStatus" style="display: none;"></div>
+
+<!-- Latest Prediction Card -->
+{% if prediction_history and prediction_history|length > 0 %}
+{% set latest_prediction = prediction_history[0] %}
+<div class="row mb-4">
+    <div class="col-lg-12">
+        <div class="card border-primary">
+            <div class="card-header bg-primary text-white">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-star me-2"></i>
+                    Latest Enhanced Prediction
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- Prediction Summary -->
+                    <div class="col-md-8">
+                        <div class="row">
+                            <div class="col-sm-3 mb-3">
+                                <div class="text-center">
+                                    <h4 class="text-primary mb-1">
+                                        ${{ "%.2f"|format(latest_prediction.predicted_price) if latest_prediction.predicted_price else 'N/A' }}
+                                    </h4>
+                                    <p class="text-muted mb-0">Predicted Price</p>
+                                    <small class="text-muted">{{ latest_prediction.timeframe|upper }}</small>
+                                </div>
+                            </div>
+                            <div class="col-sm-3 mb-3">
+                                <div class="text-center">
+                                    <h4 class="text-success mb-1">
+                                        {{ "%.1f"|format((latest_prediction.confidence_score or 0) * 100) }}%
+                                    </h4>
+                                    <p class="text-muted mb-0">Confidence</p>
+                                    <small class="text-muted">Model Certainty</small>
+                                </div>
+                            </div>
+                            <div class="col-sm-3 mb-3">
+                                <div class="text-center">
+                                    <h4 class="text-info mb-1">
+                                        ${{ "%.2f"|format(latest_prediction.confidence_interval_lower) if latest_prediction.confidence_interval_lower else 'N/A' }} - 
+                                        ${{ "%.2f"|format(latest_prediction.confidence_interval_upper) if latest_prediction.confidence_interval_upper else 'N/A' }}
+                                    </h4>
+                                    <p class="text-muted mb-0">Price Range</p>
+                                    <small class="text-muted">95% Confidence</small>
+                                </div>
+                            </div>
+                            <div class="col-sm-3 mb-3">
+                                <div class="text-center">
+                                    {% if latest_prediction.actual_price %}
+                                    <h4 class="text-warning mb-1">
+                                        ${{ "%.2f"|format(latest_prediction.actual_price) }}
+                                    </h4>
+                                    <p class="text-muted mb-0">Actual Price</p>
+                                    <small class="text-muted">
+                                        {% set accuracy = latest_prediction.prediction_accuracy %}
+                                        {% if accuracy %}
+                                            {{ "%.1f"|format(accuracy * 100) }}% Accuracy
+                                        {% else %}
+                                            Awaiting Validation
+                                        {% endif %}
+                                    </small>
+                                    {% else %}
+                                    <h4 class="text-muted mb-1">-</h4>
+                                    <p class="text-muted mb-0">Actual Price</p>
+                                    <small class="text-muted">Awaiting Target Date</small>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Prediction Details -->
+                        <div class="mt-3">
+                            <div class="row">
+                                <div class="col-sm-6">
+                                    <p class="mb-1"><strong>Generated:</strong> 
+                                        {{ latest_prediction.prediction_date[:16]|replace('T', ' ') if latest_prediction.prediction_date else 'Unknown' }}
+                                    </p>
+                                    <p class="mb-1"><strong>Target Date:</strong> 
+                                        {{ latest_prediction.target_date[:10] if latest_prediction.target_date else 'N/A' }}
+                                    </p>
+                                </div>
+                                <div class="col-sm-6">
+                                    <p class="mb-1"><strong>Prediction Type:</strong> 
+                                        {{ latest_prediction.prediction_type|title|default('Enhanced Analysis') }}
+                                    </p>
+                                    <p class="mb-1"><strong>Timeframe:</strong> 
+                                        {{ latest_prediction.timeframe|upper|default('N/A') }}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Model Components -->
+                    <div class="col-md-4">
+                        <h6 class="mb-3">Model Components</h6>
+                        {% if latest_prediction.model_components %}
+                            {% set components = latest_prediction.model_components %}
+                            {% if components is string %}
+                                {% try %}
+                                    {% set components = components|fromjson %}
+                                {% except %}
+                                    {% set components = {} %}
+                                {% endtry %}
+                            {% endif %}
+                            
+                            <div class="mb-2">
+                                <div class="d-flex justify-content-between">
+                                    <span>Document Analysis</span>
+                                    <span class="fw-bold">{{ "%.1f"|format((components.document_weight or 30) * 100) }}%</span>
+                                </div>
+                                <div class="progress progress-custom mb-1">
+                                    <div class="progress-bar bg-info" style="width: {{ (components.document_weight or 0.3) * 100 }}%"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-2">
+                                <div class="d-flex justify-content-between">
+                                    <span>Technical Analysis</span>
+                                    <span class="fw-bold">{{ "%.1f"|format((components.technical_weight or 40) * 100) }}%</span>
+                                </div>
+                                <div class="progress progress-custom mb-1">
+                                    <div class="progress-bar bg-success" style="width: {{ (components.technical_weight or 0.4) * 100 }}%"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-2">
+                                <div class="d-flex justify-content-between">
+                                    <span>Market Context</span>
+                                    <span class="fw-bold">{{ "%.1f"|format((components.market_weight or 30) * 100) }}%</span>
+                                </div>
+                                <div class="progress progress-custom">
+                                    <div class="progress-bar bg-warning" style="width: {{ (components.market_weight or 0.3) * 100 }}%"></div>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="alert alert-light">
+                                <small>Model component details not available for this prediction.</small>
+                            </div>
+                        {% endif %}
+                        
+                        <div class="mt-3">
+                            <button class="btn btn-sm btn-outline-primary w-100" onclick="viewPredictionDetails({{ latest_prediction.id }})">
+                                <i class="fas fa-eye me-1"></i>View Full Details
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Prediction Charts -->
+<div class="row mb-4">
+    <div class="col-lg-8 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-line me-2"></i>
+                    Prediction Accuracy Trend
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="predictionAccuracyChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-chart-pie me-2"></i>
+                    Prediction Distribution
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="predictionDistributionChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Prediction Statistics -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-primary mb-1">{{ prediction_history|length }}</h5>
+                <p class="card-text text-muted mb-0">Total Predictions</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-success mb-1">
+                    {{ prediction_history|selectattr("actual_price")|list|length }}
+                </h5>
+                <p class="card-text text-muted mb-0">Validated</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-info mb-1">
+                    {% set avg_confidence = prediction_history|sum(attribute='confidence_score')|float / prediction_history|length if prediction_history|length > 0 else 0 %}
+                    {{ "%.1f"|format(avg_confidence * 100) }}%
+                </h5>
+                <p class="card-text text-muted mb-0">Avg Confidence</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title text-warning mb-1">
+                    {% set validated_predictions = prediction_history|selectattr("prediction_accuracy")|list %}
+                    {% if validated_predictions|length > 0 %}
+                        {% set avg_accuracy = validated_predictions|sum(attribute='prediction_accuracy')|float / validated_predictions|length %}
+                        {{ "%.1f"|format(avg_accuracy * 100) }}%
+                    {% else %}
+                        -
+                    {% endif %}
+                </h5>
+                <p class="card-text text-muted mb-0">Avg Accuracy</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Prediction History -->
+<div class="row">
+    <div class="col-lg-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-history me-2"></i>
+                    Prediction History
+                </h5>
+                <div class="d-flex align-items-center">
+                    <!-- Filter Controls -->
+                    <select class="form-select form-select-sm me-2" id="timeframeFilter" onchange="filterPredictions()">
+                        <option value="">All Timeframes</option>
+                        <option value="1d">1 Day</option>
+                        <option value="5d">5 Days</option>
+                        <option value="1mo">1 Month</option>
+                        <option value="3mo">3 Months</option>
+                    </select>
+                    <select class="form-select form-select-sm me-2" id="statusFilter" onchange="filterPredictions()">
+                        <option value="">All Status</option>
+                        <option value="validated">Validated</option>
+                        <option value="pending">Pending</option>
+                    </select>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearPredictionFilters()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                {% if prediction_history %}
+                <div class="table-responsive">
+                    <table class="table table-hover" id="predictionsTable">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Timeframe</th>
+                                <th>Predicted Price</th>
+                                <th>Confidence</th>
+                                <th>Price Range</th>
+                                <th>Actual Price</th>
+                                <th>Accuracy</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="predictionsTableBody">
+                            {% for prediction in prediction_history %}
+                            <tr class="prediction-row" 
+                                data-timeframe="{{ prediction.timeframe }}" 
+                                data-status="{% if prediction.actual_price %}validated{% else %}pending{% endif %}">
+                                <td>
+                                    <div class="d-flex flex-column">
+                                        <span>{{ prediction.prediction_date[:10] if prediction.prediction_date else 'Unknown' }}</span>
+                                        <small class="text-muted">
+                                            {{ prediction.prediction_date[11:16] if prediction.prediction_date else '' }}
+                                        </small>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ prediction.timeframe|upper if prediction.timeframe else 'N/A' }}</span>
+                                </td>
+                                <td>
+                                    <strong class="text-primary">
+                                        ${{ "%.2f"|format(prediction.predicted_price) if prediction.predicted_price else 'N/A' }}
+                                    </strong>
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <span class="me-2">{{ "%.1f"|format((prediction.confidence_score or 0) * 100) }}%</span>
+                                        <div class="progress progress-custom" style="width: 60px;">
+                                            <div class="progress-bar bg-info" style="width: {{ (prediction.confidence_score or 0) * 100 }}%"></div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <small>
+                                        ${{ "%.2f"|format(prediction.confidence_interval_lower) if prediction.confidence_interval_lower else 'N/A' }}<br>
+                                        ${{ "%.2f"|format(prediction.confidence_interval_upper) if prediction.confidence_interval_upper else 'N/A' }}
+                                    </small>
+                                </td>
+                                <td>
+                                    {% if prediction.actual_price %}
+                                        <strong class="text-success">
+                                            ${{ "%.2f"|format(prediction.actual_price) }}
+                                        </strong>
+                                    {% else %}
+                                        <span class="text-muted">Pending</span>
+                                        <br><small class="text-muted">
+                                            Target: {{ prediction.target_date[:10] if prediction.target_date else 'N/A' }}
+                                        </small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if prediction.prediction_accuracy %}
+                                        {% set accuracy_color = 'success' if prediction.prediction_accuracy > 0.8 else 'warning' if prediction.prediction_accuracy > 0.6 else 'danger' %}
+                                        <span class="badge bg-{{ accuracy_color }}">
+                                            {{ "%.1f"|format(prediction.prediction_accuracy * 100) }}%
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if prediction.actual_price %}
+                                        <span class="badge bg-success">Validated</span>
+                                    {% else %}
+                                        <span class="badge bg-warning">Pending</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button type="button" class="btn btn-outline-info" onclick="viewPredictionDetails({{ prediction.id }})">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-outline-primary" onclick="rerunPrediction({{ prediction.id }})">
+                                            <i class="fas fa-redo"></i>
+                                        </button>
+                                        <button type="button" class="btn btn-outline-success" onclick="exportPrediction({{ prediction.id }})">
+                                            <i class="fas fa-download"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                {% if prediction_history|length >= 50 %}
+                <div class="text-center mt-4">
+                    <button type="button" class="btn btn-outline-primary" onclick="loadMorePredictions()">
+                        <i class="fas fa-chevron-down me-2"></i>Load More Predictions
+                    </button>
+                </div>
+                {% endif %}
+                
+                {% else %}
+                <!-- Empty State -->
+                <div class="text-center py-5">
+                    <i class="fas fa-crystal-ball fa-4x text-muted mb-3"></i>
+                    <h4 class="text-muted">No Predictions Available</h4>
+                    <p class="text-muted mb-4">
+                        No predictions have been generated for {{ symbol }} yet.
+                        Start by generating your first enhanced prediction.
+                    </p>
+                    <button type="button" class="btn btn-success btn-lg" onclick="generateNewPrediction()">
+                        <i class="fas fa-crystal-ball me-2"></i>Generate First Prediction
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    initializePredictionCharts();
+});
+
+function initializePredictionCharts() {
+    {% if prediction_history and prediction_history|length > 0 %}
+    
+    // Prediction Accuracy Trend Chart
+    const accuracyCtx = document.getElementById('predictionAccuracyChart').getContext('2d');
+    
+    const validatedPredictions = {{ prediction_history|selectattr("prediction_accuracy")|list|tojson|safe }};
+    
+    if (validatedPredictions.length > 0) {
+        const labels = validatedPredictions.map(p => p.prediction_date ? p.prediction_date.substring(0, 10) : 'Unknown');
+        const accuracies = validatedPredictions.map(p => (p.prediction_accuracy || 0) * 100);
+        const confidences = validatedPredictions.map(p => (p.confidence_score || 0) * 100);
+        
+        new Chart(accuracyCtx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Prediction Accuracy (%)',
+                        data: accuracies,
+                        borderColor: '#27ae60',
+                        backgroundColor: 'rgba(39, 174, 96, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    },
+                    {
+                        label: 'Model Confidence (%)',
+                        data: confidences,
+                        borderColor: '#3498db',
+                        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                        tension: 0.4,
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'top'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': ' + context.parsed.y.toFixed(1) + '%';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    } else {
+        accuracyCtx.canvas.parentElement.innerHTML = `
+            <div class="text-center py-4">
+                <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                <p class="text-muted">No validated predictions available for trend analysis</p>
+            </div>
+        `;
+    }
+    
+    // Prediction Distribution Chart
+    const distributionCtx = document.getElementById('predictionDistributionChart').getContext('2d');
+    
+    const timeframes = {{ prediction_history|map(attribute='timeframe')|list|tojson|safe }};
+    const timeframeCounts = {};
+    timeframes.forEach(tf => {
+        timeframeCounts[tf || 'unknown'] = (timeframeCounts[tf || 'unknown'] || 0) + 1;
+    });
+    
+    new Chart(distributionCtx, {
+        type: 'doughnut',
+        data: {
+            labels: Object.keys(timeframeCounts).map(tf => tf.toUpperCase()),
+            datasets: [{
+                data: Object.values(timeframeCounts),
+                backgroundColor: [
+                    '#3498db',
+                    '#27ae60',
+                    '#f39c12',
+                    '#e74c3c',
+                    '#9b59b6'
+                ],
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 15,
+                        usePointStyle: true
+                    }
+                }
+            }
+        }
+    });
+    
+    {% endif %}
+}
+
+function filterPredictions() {
+    const timeframeFilter = document.getElementById('timeframeFilter').value;
+    const statusFilter = document.getElementById('statusFilter').value;
+    
+    const predictionRows = document.querySelectorAll('.prediction-row');
+    
+    predictionRows.forEach(row => {
+        const timeframe = row.dataset.timeframe;
+        const status = row.dataset.status;
+        
+        const matchesTimeframe = !timeframeFilter || timeframe === timeframeFilter;
+        const matchesStatus = !statusFilter || status === statusFilter;
+        
+        if (matchesTimeframe && matchesStatus) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+function clearPredictionFilters() {
+    document.getElementById('timeframeFilter').value = '';
+    document.getElementById('statusFilter').value = '';
+    filterPredictions();
+}
+
+async function generateNewPrediction() {
+    // Show prediction configuration modal
+    const timeframe = prompt('Enter prediction timeframe (1d, 5d, 1mo, 3mo):', '5d');
+    if (!timeframe) return;
+    
+    const includeAnalysis = confirm('Include document analysis? (Slower but more comprehensive)');
+    
+    try {
+        showPredictionStatus('Generating enhanced prediction...', 'info');
+        
+        const response = await fetch(`/api/predictions/{{ symbol }}/predict`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                timeframe: timeframe,
+                include_analysis: includeAnalysis 
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showPredictionStatus(`Prediction initiated. Task ID: ${result.task_id}`, 'success');
+            
+            // Poll for completion
+            pollTaskStatus(result.task_id, 'prediction');
+        } else {
+            throw new Error(result.message || 'Prediction failed');
+        }
+        
+    } catch (error) {
+        showPredictionStatus(`Prediction failed: ${error.message}`, 'danger');
+    }
+}
+
+function viewPredictionDetails(predictionId) {
+    // This would show a detailed view of the prediction
+    alert(`Prediction details view not implemented yet. Prediction ID: ${predictionId}`);
+}
+
+function rerunPrediction(predictionId) {
+    if (!confirm('Re-run this prediction with current data?')) {
+        return;
+    }
+    
+    // This would re-run the prediction with the same parameters
+    alert(`Re-run prediction not implemented yet. Prediction ID: ${predictionId}`);
+}
+
+function exportPrediction(predictionId) {
+    // This would export the specific prediction
+    alert(`Export prediction not implemented yet. Prediction ID: ${predictionId}`);
+}
+
+function exportPredictions() {
+    // This would export all predictions
+    alert('Export all predictions not implemented yet');
+}
+
+function generateBacktest() {
+    // This would generate a comprehensive backtest report
+    alert('Backtest generation not implemented yet');
+}
+
+function refreshPredictions() {
+    location.reload();
+}
+
+function loadMorePredictions() {
+    // This would load additional predictions via AJAX
+    alert('Load more functionality not implemented yet');
+}
+
+function showPredictionStatus(message, type) {
+    const statusDiv = document.getElementById('predictionStatus');
+    statusDiv.style.display = 'block';
+    statusDiv.innerHTML = `
+        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            ${type === 'info' ? '<div class="spinner-border spinner-border-sm me-2" role="status"></div>' : ''}
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    
+    // Auto-dismiss non-info alerts after 5 seconds
+    if (type !== 'info') {
+        setTimeout(() => {
+            const alert = statusDiv.querySelector('.alert');
+            if (alert) {
+                alert.classList.remove('show');
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 150);
+            }
+        }, 5000);
+    }
+}
+
+async function pollTaskStatus(taskId, taskType) {
+    const maxAttempts = 60; // 5 minutes maximum
+    let attempts = 0;
+    
+    const poll = async () => {
+        try {
+            const response = await fetch(`/api/tasks/${taskId}`);
+            const task = await response.json();
+            
+            if (task.success && task.task.status === 'completed') {
+                showPredictionStatus(`${taskType} completed successfully!`, 'success');
+                setTimeout(() => location.reload(), 2000);
+                return;
+            } else if (task.success && task.task.status === 'failed') {
+                showPredictionStatus(`${taskType} failed: ${task.task.error_message}`, 'danger');
+                return;
+            }
+            
+            attempts++;
+            if (attempts < maxAttempts) {
+                setTimeout(poll, 5000); // Poll every 5 seconds
+            } else {
+                showPredictionStatus(`${taskType} is taking longer than expected. Check task queue for status.`, 'warning');
+            }
+            
+        } catch (error) {
+            console.error('Polling error:', error);
+        }
+    };
+    
+    setTimeout(poll, 2000); // Start polling after 2 seconds
+}
+</script>
+{% endblock %}

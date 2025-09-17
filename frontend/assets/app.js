@@ -34,25 +34,18 @@ class GlobalMarketTracker {
             return 'https://gsmt-ver-813-production.up.railway.app/api';
         }
         
-        // For sandbox environment, API runs on port 8080 (updated)
+        // For sandbox environment, use the same port as current page
         if (currentHost.includes('e2b.dev')) {
-            // Extract sandbox ID from hostname like "8080-sandbox-id.e2b.dev"
-            const sandboxId = currentHost.split('-').slice(1).join('-');
-            const apiHost = `8080-${sandboxId}`;
-            return `https://${apiHost}/api`;
+            // Use the FastAPI server URL on port 8000
+            return `https://8000-${currentHost.split('-').slice(1).join('-')}/api`;
         }
         
-        // For localhost development - updated to port 8080
+        // For localhost development - use same port as frontend
         if (currentHost === 'localhost' || currentHost === '127.0.0.1') {
-            return 'http://localhost:8080/api';
+            return `/api`;
         }
         
-        // If we're already on the correct port, use relative API path
-        if (currentPort === '8080') {
-            return '/api';
-        }
-        
-        // Default fallback - use /api proxy
+        // Use relative API path for same-server deployment
         return '/api';
     }
 
@@ -336,10 +329,13 @@ class GlobalMarketTracker {
         
         switch (preset) {
             case 'major-indices':
-                this.loadPreset(['^GSPC', '^IXIC', '^DJI', '^FTSE', '^GDAXI', '^N225', '^AXJO']);
+                this.loadPreset(['^GSPC', '^IXIC', '^DJI', '^FTSE', '^GDAXI', '^N225', '^AXJO', 'AP17H.AX']);
                 break;
             case 'global-flow':
                 this.loadPreset(['^N225', '^HSI', '^FTSE', '^GDAXI', '^GSPC', '^IXIC']);
+                break;
+            case 'asx-indices':
+                this.loadPreset(['^AXJO', '^AORD', 'AP17H.AX', '^AXKO', '^AFLI', '^AXMD']);
                 break;
             case 'tech-stocks':
                 this.loadPreset(['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA']);
@@ -540,32 +536,39 @@ class GlobalMarketTracker {
         const firstSymbol = Object.keys(data.data)[0];
         const selectedInterval = parseInt(document.getElementById('time-interval').value);
         
-        if (firstSymbol) {
-            data.data[firstSymbol].forEach(point => {
-                // Parse AEST timestamp format "2025-09-08 10:00:00 AEST" 
-                // Extract the date and time parts directly without timezone conversion
-                const timestampStr = point.timestamp.replace(' AEST', '');
-                const [datePart, timePart] = timestampStr.split(' ');
-                const [year, monthNum, dayNum] = datePart.split('-').map(Number);
-                const [hourNum, minuteNum] = timePart.split(':').map(Number);
-                
-                const month = monthNum.toString().padStart(2, '0');
-                const day = dayNum.toString().padStart(2, '0');
-                const hour = hourNum.toString().padStart(2, '0');
-                const minute = minuteNum.toString().padStart(2, '0');
-                
-                // Format based on interval
-                if (selectedInterval === 5) {
-                    // For 5-minute intervals, show HH:MM
+        // LOCKED X-AXIS: Generate fixed x-axis starting at 9:00 AM AEST regardless of actual data
+        // This ensures consistent timeline display that doesn't change based on current time or data availability
+        
+        const startHour = 9; // Always start at 9:00 AM AEST
+        const totalHours = 24; // Full 24-hour cycle from 9 AM to 8:59 AM next day
+        
+        if (selectedInterval === 5) {
+            // 5-minute intervals: 9:00, 9:05, 9:10, ..., 8:55
+            for (let h = 0; h < totalHours; h++) {
+                for (let m = 0; m < 60; m += 5) {
+                    const displayHour = ((startHour + h) % 24);
+                    const hour = displayHour.toString().padStart(2, '0');
+                    const minute = m.toString().padStart(2, '0');
                     xAxisData.push(`${hour}:${minute}`);
-                } else if (selectedInterval === 30) {
-                    // For 30-minute intervals, show HH:MM
-                    xAxisData.push(`${hour}:${minute}`);
-                } else {
-                    // For 1-hour intervals, show MM/DD HH:00 (original format)
-                    xAxisData.push(`${month}/${day} ${hour}:00`);
                 }
-            });
+            }
+        } else if (selectedInterval === 30) {
+            // 30-minute intervals: 9:00, 9:30, 10:00, 10:30, ...
+            for (let h = 0; h < totalHours; h++) {
+                for (let m = 0; m < 60; m += 30) {
+                    const displayHour = ((startHour + h) % 24);
+                    const hour = displayHour.toString().padStart(2, '0');
+                    const minute = m.toString().padStart(2, '0');
+                    xAxisData.push(`${hour}:${minute}`);
+                }
+            }
+        } else {
+            // 1-hour intervals: 9:00, 10:00, 11:00, ..., 8:00
+            for (let h = 0; h < totalHours; h++) {
+                const displayHour = ((startHour + h) % 24);
+                const hour = displayHour.toString().padStart(2, '0');
+                xAxisData.push(`${hour}:00`);
+            }
         }
         
         // Calculate data range for intelligent y-axis scaling
@@ -587,28 +590,58 @@ class GlobalMarketTracker {
                 const candlestickData = [];
                 const candlestickXAxis = [];
                 
+                // Map data points to fixed x-axis positions based on their actual timestamps
                 points.forEach((point, index) => {
+                    // Parse the actual timestamp to determine correct x-axis position
+                    const timestampStr = point.timestamp.replace(' AEST', '');
+                    const [datePart, timePart] = timestampStr.split(' ');
+                    const [hourNum, minuteNum] = timePart.split(':').map(Number);
+                    
+                    // Calculate the correct x-axis index based on time relative to 9:00 AM start
+                    let xAxisIndex = -1;
+                    
+                    if (selectedInterval === 5) {
+                        // 5-minute intervals: calculate position from 9:00 AM
+                        const totalMinutesFromNineAM = ((hourNum >= 9 ? hourNum - 9 : hourNum + 24 - 9) * 60) + minuteNum;
+                        xAxisIndex = Math.floor(totalMinutesFromNineAM / 5);
+                    } else if (selectedInterval === 30) {
+                        // 30-minute intervals
+                        const totalMinutesFromNineAM = ((hourNum >= 9 ? hourNum - 9 : hourNum + 24 - 9) * 60) + minuteNum;
+                        xAxisIndex = Math.floor(totalMinutesFromNineAM / 30);
+                    } else {
+                        // 1-hour intervals
+                        xAxisIndex = hourNum >= 9 ? hourNum - 9 : hourNum + 24 - 9;
+                    }
+                    
+                    // Ensure we have valid data for all time slots in fixed x-axis
+                    while (candlestickData.length <= xAxisIndex) {
+                        candlestickData.push(null); // Fill gaps with null
+                    }
+                    
                     if (point.market_open && point.open !== null && point.high !== null && 
-                        point.low !== null && point.close !== null) {
+                        point.low !== null && point.close !== null && xAxisIndex >= 0 && xAxisIndex < xAxisData.length) {
                         // For percentage-based candlesticks, data is already in percentage format
-                        // ECharts candlestick format: [open, close, low, high] (all as percentages)
                         const ohlc = [point.open, point.close, point.low, point.high];
                         
                         // Add all OHLC values to allValues for y-axis scaling
                         allValues.push(point.open, point.close, point.low, point.high);
                         
-                        candlestickData.push(ohlc);
-                        candlestickXAxis.push(xAxisData[index]); // Store corresponding x-axis label
+                        candlestickData[xAxisIndex] = ohlc;
                         
                         if (index >= 14 && index <= 21) {
-                            console.log(`📊 Hour ${index}: OHLC% = [${ohlc.map(v => v.toFixed(2)).join(', ')}]%, market_open: ${point.market_open}`);
+                            console.log(`📊 Hour ${hourNum}:${minuteNum} -> xIndex ${xAxisIndex}: OHLC% = [${ohlc.map(v => v.toFixed(2)).join(', ')}]%, market_open: ${point.market_open}`);
                         }
                     } else {
                         if (index >= 14 && index <= 21) {
-                            console.log(`⏸️ Hour ${index}: Market closed or null data, market_open: ${point.market_open}`);
+                            console.log(`⏸️ Hour ${hourNum}:${minuteNum} -> xIndex ${xAxisIndex}: Market closed or null data, market_open: ${point.market_open}`);
                         }
                     }
                 });
+                
+                // Ensure candlestick data array matches the x-axis length
+                while (candlestickData.length < xAxisData.length) {
+                    candlestickData.push(null);
+                }
                 
                 console.log(`🕯️ Candlestick data for ${symbol}: ${candlestickData.length} valid out of ${points.length} total points`);
                 console.log(`🔍 Sample candlestick data:`, candlestickData.slice(0, 3));
@@ -676,42 +709,58 @@ class GlobalMarketTracker {
                     series.push(candlestickSeries);
                 }
             } else {
-                // Handle line charts (percentage and price) - filter future data
+                // Handle line charts (percentage and price) - map to fixed x-axis positions
                 const now = new Date();
-                const values = points.map((point, index) => {
-                    // Parse timestamp to check if it's in the future
+                const values = new Array(xAxisData.length).fill(null); // Pre-populate with nulls for fixed x-axis
+                
+                points.forEach((point, index) => {
+                    // Parse timestamp and determine x-axis position
                     const timestampStr = point.timestamp.replace(' AEST', '');
-                    const pointTime = new Date(timestampStr);
                     
-                    // Don't show data points in the future
-                    if (pointTime > now) {
-                        return null;
-                    }
+                    // For market hours, we should show data until the market closes
+                    // Australian market closes at 16:00 AEST (4:00 PM)
+                    // Don't filter based on current time for now - let all market data through
                     
-                    // Determine the value to display based on chart type
-                    const value = chartType === 'percentage' ? point.percentage_change : point.close;
+                    // Parse time to determine correct x-axis position
+                    const [datePart, timePart] = timestampStr.split(' ');
+                    const [hourNum, minuteNum] = timePart.split(':').map(Number);
                     
-                    // For y-axis scaling, collect all valid values regardless of market_open status
-                    // Filter out extreme outliers that would skew the y-axis inappropriately
-                    if (value !== null && !isNaN(value)) {
-                        // For percentage charts, filter out extreme outliers (>±50%)
-                        if (chartType === 'percentage') {
-                            if (Math.abs(value) <= 50) {  // Reasonable percentage change limit
-                                allValues.push(value);
-                            } else {
-                                console.warn(`Filtering extreme outlier: ${value}% for better y-axis scaling`);
-                            }
-                        } else {
-                            // For price charts, no filtering needed
-                            allValues.push(value);
-                        }
-                    }
+                    // Calculate the correct x-axis index based on time relative to 9:00 AM start
+                    let xAxisIndex = -1;
                     
-                    // Only show values when market is open AND we have valid data AND not in future
-                    if (point.market_open && value !== null && !isNaN(value)) {
-                        return value;
+                    if (selectedInterval === 5) {
+                        const totalMinutesFromNineAM = ((hourNum >= 9 ? hourNum - 9 : hourNum + 24 - 9) * 60) + minuteNum;
+                        xAxisIndex = Math.floor(totalMinutesFromNineAM / 5);
+                    } else if (selectedInterval === 30) {
+                        const totalMinutesFromNineAM = ((hourNum >= 9 ? hourNum - 9 : hourNum + 24 - 9) * 60) + minuteNum;
+                        xAxisIndex = Math.floor(totalMinutesFromNineAM / 30);
                     } else {
-                        return null;  // This creates a gap in the line chart
+                        xAxisIndex = hourNum >= 9 ? hourNum - 9 : hourNum + 24 - 9;
+                    }
+                    
+                    if (xAxisIndex >= 0 && xAxisIndex < xAxisData.length) {
+                        // Determine the value to display based on chart type
+                        const value = chartType === 'percentage' ? point.percentage_change : point.close;
+                        
+                        // For y-axis scaling, collect all valid values regardless of market_open status
+                        if (value !== null && !isNaN(value)) {
+                            // For percentage charts, filter out extreme outliers (>±50%)
+                            if (chartType === 'percentage') {
+                                if (Math.abs(value) <= 50) {  // Reasonable percentage change limit
+                                    allValues.push(value);
+                                } else {
+                                    console.warn(`Filtering extreme outlier: ${value}% for better y-axis scaling`);
+                                }
+                            } else {
+                                // For price charts, no filtering needed
+                                allValues.push(value);
+                            }
+                        }
+                        
+                        // Only show values when market is open AND we have valid data
+                        if (point.market_open && value !== null && !isNaN(value)) {
+                            values[xAxisIndex] = value;
+                        }
                     }
                 });
                 
@@ -761,30 +810,59 @@ class GlobalMarketTracker {
                 return isValid;
             });
             
+            // Define exact market open times in AEST hours (24-hour format)
+            const marketOpenTimes = {
+                'Japan': { hour: 9, minute: 0 },        // 09:00 AEST (JST 09:00 market open)
+                'Australia': { hour: 10, minute: 0 }    // 10:00 AEST (10:00 AM market open)
+            };
+            
             // Define exact market close times in AEST hours (24-hour format)
             const marketCloseTimes = {
                 'Japan': { hour: 16, minute: 30 },      // 16:30 AEST (JST 15:30 market close)
                 'Australia': { hour: 16, minute: 0 }    // 16:00 AEST (4:00 PM market close)  
             };
             
-
-            
-            // Find market open start (first market_open point)
-            validPoints.forEach((point, index) => {
-                if (point.market_open && marketOpenStart === -1) {
-                    marketOpenStart = index; // First market open period
+            // Calculate exact market open position based on timeline
+            if (marketOpenTimes[symbolInfo.market]) {
+                const targetOpen = marketOpenTimes[symbolInfo.market];
+                
+                // Calculate the expected timeline position for market open
+                // Timeline starts at 9:00 AEST and each point represents selectedInterval minutes
+                const timelineStartHour = 9;
+                const timelineStartMinute = 0;
+                const intervalMinutes = selectedInterval;
+                
+                const timelineStartTotalMinutes = timelineStartHour * 60 + timelineStartMinute;
+                const targetTotalMinutes = targetOpen.hour * 60 + targetOpen.minute;
+                const minutesFromStart = targetTotalMinutes - timelineStartTotalMinutes;
+                
+                // Calculate the expected index on the timeline
+                const expectedOpenIndex = Math.floor(minutesFromStart / intervalMinutes);
+                
+                // Use the calculated index if it's within the x-axis data range
+                if (expectedOpenIndex >= 0 && expectedOpenIndex < xAxisData.length) {
+                    marketOpenStart = expectedOpenIndex;
+                } else {
+                    marketOpenStart = -1;
                 }
-            });
+            } else {
+                // Fallback to data-dependent detection if market not configured
+                validPoints.forEach((point, index) => {
+                    if (point.market_open && marketOpenStart === -1) {
+                        marketOpenStart = index; // First market open period
+                    }
+                });
+            }
             
             // Calculate exact market close position based on timeline
             if (marketCloseTimes[symbolInfo.market]) {
                 const targetClose = marketCloseTimes[symbolInfo.market];
                 
                 // Calculate the expected timeline position for market close
-                // Timeline starts at 10:00 AEST and each point represents interval_minutes intervals
-                const timelineStartHour = 10;
+                // Timeline starts at 9:00 AEST and each point represents interval_minutes intervals
+                const timelineStartHour = 9;
                 const timelineStartMinute = 0;
-                const intervalMinutes = 5; // Should match the interval_minutes from the request
+                const intervalMinutes = selectedInterval; // Use actual selected interval
                 
                 const timelineStartTotalMinutes = timelineStartHour * 60 + timelineStartMinute;
                 const targetTotalMinutes = targetClose.hour * 60 + targetClose.minute;
@@ -902,7 +980,7 @@ class GlobalMarketTracker {
                 axisPointer: { type: 'cross' },
                 formatter: function(params) {
                     const currentChartType = document.getElementById('chart-type').value;
-                    let result = `<strong>${params[0].name} UTC</strong><br/>`;
+                    let result = `<strong>${params[0].name} AEST</strong><br/>`;
                     let hasData = false;
                     
                     params.forEach(param => {
@@ -955,7 +1033,7 @@ class GlobalMarketTracker {
                 type: 'category',
                 data: chartType === 'candlestick' && window.candlestickXAxisData ? 
                       window.candlestickXAxisData : xAxisData,
-                name: 'AEST Time',
+                name: 'AEST Time (Starting 9:00 AM)',
                 nameLocation: 'middle',
                 nameGap: 30
             },
@@ -1039,26 +1117,37 @@ class GlobalMarketTracker {
             let marketXAxisData = [];
             let allValues = [];
             
-            // Generate x-axis data from first symbol in market
-            const firstSymbol = Object.keys(marketSymbols)[0];
-            if (firstSymbol && marketSymbols[firstSymbol]) {
-                marketSymbols[firstSymbol].forEach(point => {
-                    const timestampStr = point.timestamp.replace(' AEST', '');
-                    const [datePart, timePart] = timestampStr.split(' ');
-                    const [year, monthNum, dayNum] = datePart.split('-').map(Number);
-                    const [hourNum, minuteNum] = timePart.split(':').map(Number);
-                    
-                    const month = monthNum.toString().padStart(2, '0');
-                    const day = dayNum.toString().padStart(2, '0');
-                    const hour = hourNum.toString().padStart(2, '0');
-                    const minute = minuteNum.toString().padStart(2, '0');
-                    
-                    if (selectedInterval === 5 || selectedInterval === 30) {
+            // LOCKED X-AXIS: Generate fixed x-axis for market view starting at 9:00 AM AEST
+            const startHour = 9; // Always start at 9:00 AM AEST
+            const totalHours = 24; // Full 24-hour cycle
+            
+            if (selectedInterval === 5) {
+                // 5-minute intervals
+                for (let h = 0; h < totalHours; h++) {
+                    for (let m = 0; m < 60; m += 5) {
+                        const displayHour = ((startHour + h) % 24);
+                        const hour = displayHour.toString().padStart(2, '0');
+                        const minute = m.toString().padStart(2, '0');
                         marketXAxisData.push(`${hour}:${minute}`);
-                    } else {
-                        marketXAxisData.push(`${month}/${day} ${hour}:00`);
                     }
-                });
+                }
+            } else if (selectedInterval === 30) {
+                // 30-minute intervals
+                for (let h = 0; h < totalHours; h++) {
+                    for (let m = 0; m < 60; m += 30) {
+                        const displayHour = ((startHour + h) % 24);
+                        const hour = displayHour.toString().padStart(2, '0');
+                        const minute = m.toString().padStart(2, '0');
+                        marketXAxisData.push(`${hour}:${minute}`);
+                    }
+                }
+            } else {
+                // 1-hour intervals
+                for (let h = 0; h < totalHours; h++) {
+                    const displayHour = ((startHour + h) % 24);
+                    const hour = displayHour.toString().padStart(2, '0');
+                    marketXAxisData.push(`${hour}:00`);
+                }
             }
             
             // Create series for each symbol in this market
@@ -1066,16 +1155,32 @@ class GlobalMarketTracker {
                 const symbolInfo = data.metadata[symbol];
                 
                 if (chartType === 'candlestick') {
-                    const candlestickData = [];
+                    const candlestickData = new Array(marketXAxisData.length).fill(null);
                     
-                    points.forEach(point => {
-                        if (point.market_open && point.open !== null && point.high !== null && 
+                    points.forEach((point, index) => {
+                        // Parse timestamp to determine correct x-axis position
+                        const timestampStr = point.timestamp.replace(' AEST', '');
+                        const [datePart, timePart] = timestampStr.split(' ');
+                        const [hourNum, minuteNum] = timePart.split(':').map(Number);
+                        
+                        // Calculate x-axis index
+                        let xAxisIndex = -1;
+                        if (selectedInterval === 5) {
+                            const totalMinutesFromNineAM = ((hourNum >= 9 ? hourNum - 9 : hourNum + 24 - 9) * 60) + minuteNum;
+                            xAxisIndex = Math.floor(totalMinutesFromNineAM / 5);
+                        } else if (selectedInterval === 30) {
+                            const totalMinutesFromNineAM = ((hourNum >= 9 ? hourNum - 9 : hourNum + 24 - 9) * 60) + minuteNum;
+                            xAxisIndex = Math.floor(totalMinutesFromNineAM / 30);
+                        } else {
+                            xAxisIndex = hourNum >= 9 ? hourNum - 9 : hourNum + 24 - 9;
+                        }
+                        
+                        if (xAxisIndex >= 0 && xAxisIndex < marketXAxisData.length &&
+                            point.market_open && point.open !== null && point.high !== null && 
                             point.low !== null && point.close !== null) {
                             const ohlc = [point.open, point.close, point.low, point.high];
                             allValues.push(point.open, point.close, point.low, point.high);
-                            candlestickData.push(ohlc);
-                        } else {
-                            candlestickData.push(null);
+                            candlestickData[xAxisIndex] = ohlc;
                         }
                     });
                     
@@ -1094,22 +1199,39 @@ class GlobalMarketTracker {
                         }
                     });
                 } else {
-                    // Line charts
-                    const values = points.map(point => {
-                        const value = chartType === 'percentage' ? point.percentage_change : point.close;
+                    // Line charts - map to fixed x-axis positions
+                    const values = new Array(marketXAxisData.length).fill(null);
+                    
+                    points.forEach((point, index) => {
+                        // Parse timestamp to determine correct x-axis position
+                        const timestampStr = point.timestamp.replace(' AEST', '');
+                        const [datePart, timePart] = timestampStr.split(' ');
+                        const [hourNum, minuteNum] = timePart.split(':').map(Number);
                         
-                        if (value !== null && !isNaN(value)) {
-                            // Only show data during market open periods
-                            if (point.market_open) {
+                        // Calculate x-axis index
+                        let xAxisIndex = -1;
+                        if (selectedInterval === 5) {
+                            const totalMinutesFromNineAM = ((hourNum >= 9 ? hourNum - 9 : hourNum + 24 - 9) * 60) + minuteNum;
+                            xAxisIndex = Math.floor(totalMinutesFromNineAM / 5);
+                        } else if (selectedInterval === 30) {
+                            const totalMinutesFromNineAM = ((hourNum >= 9 ? hourNum - 9 : hourNum + 24 - 9) * 60) + minuteNum;
+                            xAxisIndex = Math.floor(totalMinutesFromNineAM / 30);
+                        } else {
+                            xAxisIndex = hourNum >= 9 ? hourNum - 9 : hourNum + 24 - 9;
+                        }
+                        
+                        if (xAxisIndex >= 0 && xAxisIndex < marketXAxisData.length) {
+                            const value = chartType === 'percentage' ? point.percentage_change : point.close;
+                            
+                            if (value !== null && !isNaN(value) && point.market_open) {
                                 if (chartType === 'percentage' && Math.abs(value) <= 50) {
                                     allValues.push(value);
                                 } else if (chartType !== 'percentage') {
                                     allValues.push(value);
                                 }
-                                return value;
+                                values[xAxisIndex] = value;
                             }
                         }
-                        return null;
                     });
                     
                     marketSeries.push({
@@ -1369,19 +1491,76 @@ class GlobalMarketTracker {
         
         Object.entries(statusData.markets).forEach(([market, status]) => {
             const statusDiv = document.createElement('div');
-            statusDiv.className = `flex items-center justify-between p-3 rounded-lg ${status.is_open ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'} border`;
+            
+            // Determine background and styling based on status
+            let bgClass, borderClass, statusColor, statusIcon, statusText;
+            
+            if (status.status === 'HOLIDAY') {
+                bgClass = 'bg-orange-50';
+                borderClass = 'border-orange-200';
+                statusColor = 'text-orange-600';
+                statusIcon = 'bg-orange-500';
+                statusText = 'HOLIDAY';
+            } else if (status.status === 'WEEKEND') {
+                bgClass = 'bg-blue-50';
+                borderClass = 'border-blue-200';
+                statusColor = 'text-blue-600';
+                statusIcon = 'bg-blue-500';
+                statusText = 'WEEKEND';
+            } else if (status.is_open) {
+                bgClass = 'bg-green-50';
+                borderClass = 'border-green-200';
+                statusColor = 'text-green-600';
+                statusIcon = 'bg-green-500';
+                statusText = status.status.includes('Early close') ? status.status : 'OPEN';
+            } else {
+                bgClass = 'bg-gray-50';
+                borderClass = 'border-gray-200';
+                statusColor = 'text-gray-600';
+                statusIcon = 'bg-gray-400';
+                statusText = status.status || 'CLOSED';
+            }
+            
+            statusDiv.className = `flex items-center justify-between p-3 rounded-lg ${bgClass} ${borderClass} border`;
+            
+            // Build holiday information display
+            let holidayInfo = '';
+            if (status.today_holiday) {
+                const holidayType = status.today_holiday.type === 'early_close' ? 
+                    `Early Close (${status.today_holiday.early_close_time})` : 'Market Closed';
+                holidayInfo = `
+                    <div class="text-xs text-orange-600 font-medium mt-1">
+                        🎌 ${status.today_holiday.name}
+                    </div>
+                `;
+            }
+            
+            // Build next holiday information
+            let nextHolidayInfo = '';
+            if (status.next_holiday && status.next_holiday.days_until <= 30) {
+                const daysText = status.next_holiday.days_until === 0 ? 'Today' :
+                                status.next_holiday.days_until === 1 ? 'Tomorrow' :
+                                `${status.next_holiday.days_until} days`;
+                nextHolidayInfo = `
+                    <div class="text-xs text-gray-500 mt-1">
+                        Next: ${status.next_holiday.name} (${daysText})
+                    </div>
+                `;
+            }
             
             statusDiv.innerHTML = `
                 <div class="flex items-center">
-                    <div class="w-3 h-3 rounded-full mr-3 ${status.is_open ? 'bg-green-500' : 'bg-gray-400'}"></div>
+                    <div class="w-3 h-3 rounded-full mr-3 ${statusIcon}"></div>
                     <div>
                         <div class="font-medium text-gray-900">${market}</div>
                         <div class="text-sm text-gray-600">${status.hours_utc}</div>
+                        ${holidayInfo}
+                        ${nextHolidayInfo}
                     </div>
                 </div>
                 <div class="text-right">
-                    <div class="text-sm font-medium ${status.is_open ? 'text-green-600' : 'text-gray-600'}">
-                        ${status.is_open ? 'OPEN' : 'CLOSED'}
+                    <div class="text-sm font-medium ${statusColor}">
+                        ${statusText}
                     </div>
                     <div class="text-xs text-gray-500">
                         ${status.next_event} ${status.next_time}
@@ -1943,8 +2122,9 @@ class GlobalMarketTracker {
                 const errorData = await response.json().catch(() => ({detail: `HTTP ${response.status}`}));
                 if (response.status === 501) {
                     // Historical data not available for old dates
-                    this.showToast(`Historical data not available for ${dateStr}. This system uses LIVE DATA ONLY. Please select today or yesterday.`, 'warning');
+                    this.showToast(`📅 Historical data not available for ${dateStr} (${daysAgo} days ago). This system uses LIVE DATA ONLY to prevent synthetic/demo data. Please use today or yesterday only.`, 'error');
                     // Automatically switch back to live data
+                    console.warn(`🚨 Automatic fallback to live data - historical date ${dateStr} not supported`);
                     this.goToToday();
                     return;
                 } else {
