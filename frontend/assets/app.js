@@ -743,23 +743,32 @@ class GlobalMarketTracker {
                     // Parse timestamp and determine x-axis position
                     // Handle ISO format: "2025-09-16T13:30:00+00:00"
                     const timestamp = new Date(point.timestamp);
-                    const hourNum = timestamp.getUTCHours();
-                    const minuteNum = timestamp.getUTCMinutes();
+                    
+                    // Convert UTC time to AEST (Australian Eastern Standard Time)
+                    // AEST is UTC+10 (standard time) or UTC+11 (daylight saving time)
+                    const aestOffset = 10; // Hours to add to UTC to get AEST
+                    const utcHours = timestamp.getUTCHours();
+                    const utcMinutes = timestamp.getUTCMinutes();
+                    
+                    // Convert to AEST by adding the offset
+                    const aestTotalMinutes = (utcHours * 60) + utcMinutes + (aestOffset * 60);
+                    const hourNum = Math.floor((aestTotalMinutes / 60) % 24);
+                    const minuteNum = aestTotalMinutes % 60;
                     
                     // For market hours, we should show data until the market closes
                     // Don't filter based on current time for now - let all market data through
                     
-                    // Calculate the correct x-axis index based on time relative to 9:00 AM start
+                    // Calculate the correct x-axis index based on time relative to market start time
                     let xAxisIndex = -1;
                     
                     if (selectedInterval === 5) {
-                        const totalMinutesFromNineAM = ((hourNum >= 9 ? hourNum - 9 : hourNum + 24 - 9) * 60) + minuteNum;
-                        xAxisIndex = Math.floor(totalMinutesFromNineAM / 5);
+                        const totalMinutesFromStart = ((hourNum >= startHour ? hourNum - startHour : hourNum + 24 - startHour) * 60) + minuteNum;
+                        xAxisIndex = Math.floor(totalMinutesFromStart / 5);
                     } else if (selectedInterval === 30) {
-                        const totalMinutesFromNineAM = ((hourNum >= 9 ? hourNum - 9 : hourNum + 24 - 9) * 60) + minuteNum;
-                        xAxisIndex = Math.floor(totalMinutesFromNineAM / 30);
+                        const totalMinutesFromStart = ((hourNum >= startHour ? hourNum - startHour : hourNum + 24 - startHour) * 60) + minuteNum;
+                        xAxisIndex = Math.floor(totalMinutesFromStart / 30);
                     } else {
-                        xAxisIndex = hourNum >= 9 ? hourNum - 9 : hourNum + 24 - 9;
+                        xAxisIndex = hourNum >= startHour ? hourNum - startHour : hourNum + 24 - startHour;
                     }
                     
                     if (xAxisIndex >= 0 && xAxisIndex < xAxisData.length) {
@@ -1141,8 +1150,16 @@ class GlobalMarketTracker {
             let marketXAxisData = [];
             let allValues = [];
             
-            // LOCKED X-AXIS: Generate fixed x-axis for market view starting at 9:00 AM AEST
-            const startHour = 9; // Always start at 9:00 AM AEST
+            // LOCKED X-AXIS: Generate fixed x-axis for market view with market-specific opening times
+            // Detect if this market group contains Australian market data
+            const symbolsList = Object.keys(marketSymbols);
+            const hasAustralianMarkets = symbolsList.some(symbol => 
+                symbol === '^AORD' || symbol === '^AXJO' || symbol.endsWith('.AX') || 
+                (data.metadata[symbol] && data.metadata[symbol].market === 'Australia')
+            );
+            
+            // Set start time based on market type
+            const startHour = hasAustralianMarkets ? 10 : 9; // ASX opens at 10:00 AM AEST, others at 9:00 AM AEST
             const totalHours = 24; // Full 24-hour cycle
             
             if (selectedInterval === 5) {
@@ -1185,19 +1202,27 @@ class GlobalMarketTracker {
                         // Parse timestamp to determine correct x-axis position
                         // Handle ISO format: "2025-09-16T13:30:00+00:00"
                         const timestamp = new Date(point.timestamp);
-                        const hourNum = timestamp.getUTCHours();
-                        const minuteNum = timestamp.getUTCMinutes();
                         
-                        // Calculate x-axis index
+                        // Convert UTC time to AEST (Australian Eastern Standard Time)
+                        const aestOffset = 10; // Hours to add to UTC to get AEST
+                        const utcHours = timestamp.getUTCHours();
+                        const utcMinutes = timestamp.getUTCMinutes();
+                        
+                        // Convert to AEST by adding the offset
+                        const aestTotalMinutes = (utcHours * 60) + utcMinutes + (aestOffset * 60);
+                        const hourNum = Math.floor((aestTotalMinutes / 60) % 24);
+                        const minuteNum = aestTotalMinutes % 60;
+                        
+                        // Calculate x-axis index based on market start time
                         let xAxisIndex = -1;
                         if (selectedInterval === 5) {
-                            const totalMinutesFromNineAM = ((hourNum >= 9 ? hourNum - 9 : hourNum + 24 - 9) * 60) + minuteNum;
-                            xAxisIndex = Math.floor(totalMinutesFromNineAM / 5);
+                            const totalMinutesFromStart = ((hourNum >= startHour ? hourNum - startHour : hourNum + 24 - startHour) * 60) + minuteNum;
+                            xAxisIndex = Math.floor(totalMinutesFromStart / 5);
                         } else if (selectedInterval === 30) {
-                            const totalMinutesFromNineAM = ((hourNum >= 9 ? hourNum - 9 : hourNum + 24 - 9) * 60) + minuteNum;
-                            xAxisIndex = Math.floor(totalMinutesFromNineAM / 30);
+                            const totalMinutesFromStart = ((hourNum >= startHour ? hourNum - startHour : hourNum + 24 - startHour) * 60) + minuteNum;
+                            xAxisIndex = Math.floor(totalMinutesFromStart / 30);
                         } else {
-                            xAxisIndex = hourNum >= 9 ? hourNum - 9 : hourNum + 24 - 9;
+                            xAxisIndex = hourNum >= startHour ? hourNum - startHour : hourNum + 24 - startHour;
                         }
                         
                         if (xAxisIndex >= 0 && xAxisIndex < marketXAxisData.length &&
@@ -1231,19 +1256,27 @@ class GlobalMarketTracker {
                         // Parse timestamp to determine correct x-axis position
                         // Handle ISO format: "2025-09-16T13:30:00+00:00"
                         const timestamp = new Date(point.timestamp);
-                        const hourNum = timestamp.getUTCHours();
-                        const minuteNum = timestamp.getUTCMinutes();
                         
-                        // Calculate x-axis index
+                        // Convert UTC time to AEST (Australian Eastern Standard Time)
+                        const aestOffset = 10; // Hours to add to UTC to get AEST
+                        const utcHours = timestamp.getUTCHours();
+                        const utcMinutes = timestamp.getUTCMinutes();
+                        
+                        // Convert to AEST by adding the offset
+                        const aestTotalMinutes = (utcHours * 60) + utcMinutes + (aestOffset * 60);
+                        const hourNum = Math.floor((aestTotalMinutes / 60) % 24);
+                        const minuteNum = aestTotalMinutes % 60;
+                        
+                        // Calculate x-axis index based on market start time
                         let xAxisIndex = -1;
                         if (selectedInterval === 5) {
-                            const totalMinutesFromNineAM = ((hourNum >= 9 ? hourNum - 9 : hourNum + 24 - 9) * 60) + minuteNum;
-                            xAxisIndex = Math.floor(totalMinutesFromNineAM / 5);
+                            const totalMinutesFromStart = ((hourNum >= startHour ? hourNum - startHour : hourNum + 24 - startHour) * 60) + minuteNum;
+                            xAxisIndex = Math.floor(totalMinutesFromStart / 5);
                         } else if (selectedInterval === 30) {
-                            const totalMinutesFromNineAM = ((hourNum >= 9 ? hourNum - 9 : hourNum + 24 - 9) * 60) + minuteNum;
-                            xAxisIndex = Math.floor(totalMinutesFromNineAM / 30);
+                            const totalMinutesFromStart = ((hourNum >= startHour ? hourNum - startHour : hourNum + 24 - startHour) * 60) + minuteNum;
+                            xAxisIndex = Math.floor(totalMinutesFromStart / 30);
                         } else {
-                            xAxisIndex = hourNum >= 9 ? hourNum - 9 : hourNum + 24 - 9;
+                            xAxisIndex = hourNum >= startHour ? hourNum - startHour : hourNum + 24 - startHour;
                         }
                         
                         if (xAxisIndex >= 0 && xAxisIndex < marketXAxisData.length) {
