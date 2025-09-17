@@ -158,7 +158,7 @@
                         <i class="fas fa-satellite-dish mr-1"></i>Live Updates
                     </label>
                     <div class="flex items-center space-x-2">
-                        <input type="checkbox" id="realtime-toggle" class="rounded text-blue-600 focus:ring-blue-500">
+                        <input type="checkbox" id="realtime-toggle" class="rounded text-blue-600 focus:ring-blue-500" checked>
                         <span class="text-sm">Enable</span>
                     </div>
                 </div>
@@ -400,6 +400,7 @@
                 this.currentPeriod = '24h';
                 this.updateCount = 0;
                 this.lastData = null;
+                this.autoRefreshInterval = null;
                 
                 this.init();
             }
@@ -415,6 +416,21 @@
                 
                 // Load initial data
                 this.loadCandlestickData();
+                
+                // Auto-connect WebSocket if real-time toggle is enabled
+                setTimeout(() => {
+                    const realtimeToggle = document.getElementById('realtime-toggle');
+                    if (realtimeToggle.checked) {
+                        console.log('🔌 Auto-connecting WebSocket...');
+                        this.connectWebSocket();
+                    }
+                }, 2000); // Wait 2 seconds for initial data to load
+                
+                // Setup auto-refresh timer (every 5 minutes)
+                this.autoRefreshInterval = setInterval(() => {
+                    console.log('🔄 Auto-refreshing candlestick data...');
+                    this.loadCandlestickData();
+                }, 5 * 60 * 1000); // 5 minutes
                 
                 console.log('✅ Enhanced Candlestick Trader initialized successfully');
             }

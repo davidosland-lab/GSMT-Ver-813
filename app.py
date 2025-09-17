@@ -3,7 +3,7 @@ Global Stock Market Tracker - Local Deployment
 24-Hour UTC Timeline Focus for Global Stock Indices with Live Data
 """
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
@@ -5030,7 +5030,7 @@ async def serve_frontend_index():
 # === ENHANCED CANDLESTICK & WEBSOCKET ENDPOINTS ===
 
 @app.websocket("/ws/candlestick/{symbol}")
-async def websocket_candlestick(websocket, symbol: str, interval: int = 60):
+async def websocket_candlestick(websocket: WebSocket, symbol: str, interval: int = 60):
     """WebSocket endpoint for real-time candlestick updates"""
     await websocket.accept()
     logger.info(f"WebSocket connection established for {symbol} with {interval}min interval")
@@ -5076,8 +5076,8 @@ async def websocket_candlestick(websocket, symbol: str, interval: int = 60):
                     "interval": interval
                 })
             
-            # Update frequency based on interval
-            update_delay = max(10, interval * 30)  # Min 10 seconds, or 30 seconds per minute of interval
+            # Update frequency based on interval - more frequent updates for better UX
+            update_delay = max(5, interval * 10)  # Min 5 seconds, or 10 seconds per minute of interval
             await asyncio.sleep(update_delay)
             
     except Exception as e:
