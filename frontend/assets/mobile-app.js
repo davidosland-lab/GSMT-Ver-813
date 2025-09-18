@@ -94,6 +94,9 @@ class MobileGlobalMarketTracker {
             // Load demo chart data
             this.loadDemoChart();
             
+            // Auto-select some popular markets for testing (optional)
+            setTimeout(() => this.autoSelectTestMarkets(), 3000);
+            
             this.showToast('Mobile Market Tracker loaded successfully', 'success');
             
         } catch (error) {
@@ -724,6 +727,36 @@ class MobileGlobalMarketTracker {
         
         this.chartInstance.setOption(option);
         console.log('✅ Demo chart loaded');
+    }
+
+    autoSelectTestMarkets() {
+        console.log('🧪 Auto-selecting test markets for chart verification');
+        
+        // Select some major indices for testing
+        const testSymbols = ['^GSPC', '^FTSE', '^N225']; // S&P 500, FTSE 100, Nikkei 225
+        
+        testSymbols.forEach(symbol => {
+            if (this.allSymbols.has(symbol)) {
+                this.selectedIndices.add(symbol);
+            }
+        });
+        
+        if (this.selectedIndices.size > 0) {
+            this.updateSelectedMarketsDisplay();
+            
+            const analyzeBtn = document.getElementById('analyze-btn');
+            if (analyzeBtn) {
+                analyzeBtn.disabled = false;
+            }
+            
+            // Automatically load chart data
+            setTimeout(() => {
+                console.log('🔄 Auto-loading chart data for test markets');
+                this.loadChartData();
+            }, 1000);
+            
+            this.showToast(`Auto-selected ${this.selectedIndices.size} test markets`, 'info');
+        }
     }
 
     handleChartTypeChange(event) {
