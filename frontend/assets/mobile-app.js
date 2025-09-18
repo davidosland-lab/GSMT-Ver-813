@@ -754,7 +754,7 @@ class MobileGlobalMarketTracker {
                 type: 'category', 
                 data: displayTimestamps,
                 axisLabel: { 
-                    interval: hasAustralianMarkets ? 0 : 'auto',
+                    interval: hasAustralianMarkets ? 2 : 'auto', // Show every 3rd hour (0,1,2,3... so 2 means every 3rd)
                     fontSize: 10,
                     rotate: hasAustralianMarkets ? 45 : 0
                 },
@@ -949,7 +949,7 @@ class MobileGlobalMarketTracker {
                 type: 'category', 
                 data: hours,
                 axisLabel: { 
-                    interval: 0,
+                    interval: 2, // Show every 3rd hour for better mobile readability
                     fontSize: 10,
                     rotate: 45
                 },
