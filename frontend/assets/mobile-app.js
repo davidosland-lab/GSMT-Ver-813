@@ -27,6 +27,12 @@ class MobileGlobalMarketTracker {
         // Production API URL detection for deployment
         const currentHost = window.location.hostname;
         const currentPort = window.location.port;
+        const currentHref = window.location.href;
+        
+        console.log('🔍 URL Detection Debug:');
+        console.log('  - hostname:', currentHost);
+        console.log('  - port:', currentPort);
+        console.log('  - href:', currentHref);
         
         // Production deployment on Netlify
         if (currentHost.includes('netlify.app')) {
@@ -36,8 +42,19 @@ class MobileGlobalMarketTracker {
         
         // For sandbox environment, use the same port as current page
         if (currentHost.includes('e2b.dev')) {
-            // Use the same port as the current page for the API
-            return `https://${currentPort}-${currentHost.split('-').slice(1).join('-')}/api`;
+            // Extract port from hostname if currentPort is empty
+            let port = currentPort;
+            if (!port || port === '') {
+                const portMatch = currentHost.match(/^(\d+)-/);
+                port = portMatch ? portMatch[1] : '8080';
+                console.log('  - extracted port from hostname:', port);
+            }
+            
+            // Rebuild the URL correctly
+            const hostWithoutPort = currentHost.replace(/^\d+-/, '');
+            const apiUrl = `https://${port}-${hostWithoutPort}/api`;
+            console.log('  - generated API URL:', apiUrl);
+            return apiUrl;
         }
         
         // For localhost development - use same port as frontend
