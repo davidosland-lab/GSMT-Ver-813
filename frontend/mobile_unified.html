@@ -241,11 +241,22 @@
                 </div>
             </div>
 
-            <!-- Market Selection Dropdown -->
+            <!-- Search and Market Selection -->
             <div class="mobile-card bg-white p-4 rounded-lg">
-                <h3 class="text-md font-semibold mb-3">Custom Market Selection</h3>
+                <h3 class="text-md font-semibold mb-3">Market Search & Selection</h3>
                 
                 <div class="space-y-3">
+                    <!-- Search Input -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1">Search Markets</label>
+                        <input 
+                            type="text" 
+                            id="index-search" 
+                            placeholder="Search for stocks, indices, crypto..."
+                            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500"
+                        >
+                    </div>
+                    
                     <div>
                         <label class="block text-sm font-medium text-gray-600 mb-1">Region</label>
                         <select id="region-dropdown" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500">
@@ -276,6 +287,13 @@
                 <div id="selected-markets" class="space-y-2">
                     <p class="text-gray-500 text-sm text-center py-4">No markets selected yet</p>
                 </div>
+                
+                <!-- Hidden elements for compatibility -->
+                <div class="hidden">
+                    <div id="search-results"></div>
+                    <div id="market-status-container"></div>
+                    <div id="market-hours-reference"></div>
+                </div>
             </div>
 
             <!-- Chart Display -->
@@ -288,7 +306,17 @@
                             <option value="price">Price</option>
                             <option value="candlestick">Candlestick</option>
                         </select>
+                        <select id="plot-mode" class="border border-gray-300 rounded px-2 py-1 text-xs">
+                            <option value="combined">Combined</option>
+                            <option value="individual">Individual</option>
+                        </select>
                     </div>
+                </div>
+                <div class="mb-3">
+                    <button id="analyze-btn" class="bg-primary-500 text-white px-4 py-2 rounded-lg text-sm disabled:opacity-50" disabled>
+                        <i class="fas fa-chart-line mr-1"></i>
+                        Analyze Selected Markets
+                    </button>
                 </div>
                 <div id="main-chart" class="chart-container-mobile"></div>
             </div>
@@ -439,7 +467,7 @@
     </div>
 
     <!-- Application JavaScript -->
-    <script src="/static/assets/app.js"></script>
+    <script src="/static/assets/mobile-app.js"></script>
     <script>
         // Mobile-specific JavaScript enhancements
         class MobileInterface {
@@ -641,7 +669,7 @@
         // Service Worker Registration for PWA capabilities
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
+                navigator.serviceWorker.register('/static/sw.js')
                     .then(registration => console.log('SW registered'))
                     .catch(registrationError => console.log('SW registration failed'));
             });
