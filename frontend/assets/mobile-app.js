@@ -77,6 +77,9 @@ class MobileGlobalMarketTracker {
             // Initialize chart
             this.initializeChart();
             
+            // Add resize handler for mobile orientation changes
+            this.setupResizeHandler();
+            
             // Start UTC clock
             this.updateUTCClock();
             setInterval(() => this.updateUTCClock(), 1000);
@@ -456,23 +459,111 @@ class MobileGlobalMarketTracker {
     initializeChart() {
         const chartContainer = document.getElementById('main-chart');
         if (!chartContainer) {
-            console.warn('Chart container not found');
+            console.warn('❌ Chart container not found');
             return;
         }
 
-        this.chartInstance = echarts.init(chartContainer);
+        // Debug container dimensions
+        const containerRect = chartContainer.getBoundingClientRect();
+        console.log('📏 Chart container dimensions:', {
+            width: containerRect.width,
+            height: containerRect.height,
+            visible: containerRect.width > 0 && containerRect.height > 0
+        });
+
+        // Ensure container has minimum dimensions
+        if (containerRect.width === 0 || containerRect.height === 0) {
+            console.warn('⚠️ Chart container has zero dimensions, setting fallback size');
+            chartContainer.style.width = '100%';
+            chartContainer.style.height = '280px';
+            chartContainer.style.minHeight = '280px';
+        }
+
+        // Initialize ECharts with explicit sizing
+        this.chartInstance = echarts.init(chartContainer, null, {
+            width: chartContainer.offsetWidth || 350,
+            height: chartContainer.offsetHeight || 280
+        });
         
-        // Initial empty chart
+        // Initial empty chart with better mobile styling
         const option = {
-            title: { text: 'Select markets to view data', left: 'center' },
-            grid: { left: '10%', right: '10%', top: '15%', bottom: '15%' },
-            xAxis: { type: 'category', data: [] },
-            yAxis: { type: 'value' },
-            series: []
+            title: { 
+                text: 'Select Australian markets to view data', 
+                left: 'center',
+                textStyle: { fontSize: 14, color: '#333' }
+            },
+            grid: { 
+                left: '8%', 
+                right: '8%', 
+                top: '20%', 
+                bottom: '20%',
+                containLabel: true
+            },
+            xAxis: { 
+                type: 'category', 
+                data: [],
+                axisLabel: { fontSize: 10 }
+            },
+            yAxis: { 
+                type: 'value',
+                axisLabel: { fontSize: 10 }
+            },
+            series: [],
+            backgroundColor: '#ffffff'
         };
         
         this.chartInstance.setOption(option);
-        console.log('✅ Chart initialized');
+        
+        // Force resize after initialization
+        setTimeout(() => {
+            if (this.chartInstance) {
+                this.chartInstance.resize();
+                console.log('🔄 Chart resized after initialization');
+            }
+        }, 100);
+        
+        console.log('✅ Chart initialized with dimensions:', chartContainer.offsetWidth, 'x', chartContainer.offsetHeight);
+    }
+
+    setupResizeHandler() {
+        // Handle window resize and orientation change for mobile
+        let resizeTimeout;
+        const handleResize = () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                if (this.chartInstance) {
+                    console.log('📱 Handling resize/orientation change');
+                    const container = document.getElementById('main-chart');
+                    if (container) {
+                        // Force container to refresh its dimensions
+                        container.style.width = '100%';
+                        container.style.height = '280px';
+                        
+                        // Resize ECharts instance
+                        this.chartInstance.resize({
+                            width: container.offsetWidth,
+                            height: container.offsetHeight
+                        });
+                        
+                        console.log('🔄 Chart resized to:', container.offsetWidth, 'x', container.offsetHeight);
+                    }
+                }
+            }, 300);
+        };
+        
+        // Listen to multiple resize events
+        window.addEventListener('resize', handleResize);
+        window.addEventListener('orientationchange', handleResize);
+        
+        // Also listen for visibility changes (tab switching)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && this.chartInstance) {
+                setTimeout(() => {
+                    this.chartInstance.resize();
+                    console.log('👁️ Chart resized after visibility change');
+                }, 200);
+            }
+        });
     }
 
     async loadChartData() {
@@ -559,25 +650,47 @@ class MobileGlobalMarketTracker {
             
             const symbolName = metadata[symbol]?.name || symbol;
             
+            const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+            const colorIndex = Object.keys(chartData).indexOf(symbol) % colors.length;
+            
             seriesData.push({
                 name: symbolName,
                 type: 'line',
                 data: values,
                 smooth: true,
                 connectNulls: false,
-                symbol: 'none',
-                lineStyle: { width: 2 }
+                symbol: 'circle',
+                symbolSize: 4,
+                lineStyle: { 
+                    width: 3,
+                    color: colors[colorIndex]
+                },
+                itemStyle: {
+                    color: colors[colorIndex]
+                },
+                emphasis: {
+                    focus: 'series',
+                    lineStyle: { width: 4 }
+                }
             });
         });
         
         // Format timestamps for display in AEST with proper market hours
         const displayTimestamps = this.formatAESTTimestamps(sortedTimestamps, hasAustralianMarkets);
         
+        console.log('📊 Chart rendering details:', {
+            seriesCount: seriesData.length,
+            timestampCount: displayTimestamps.length,
+            hasAustralianMarkets,
+            chartType: apiResponse.chart_type
+        });
+        
         const option = {
+            backgroundColor: '#ffffff',
             title: { 
-                text: `Market Data (${apiResponse.chart_type || 'Live'})`, 
+                text: `${hasAustralianMarkets ? 'Australian' : 'Global'} Markets (${apiResponse.chart_type || 'Live'})`, 
                 left: 'center',
-                textStyle: { fontSize: 14 }
+                textStyle: { fontSize: 14, color: '#1f2937' }
             },
             tooltip: { 
                 trigger: 'axis',
@@ -599,11 +712,12 @@ class MobileGlobalMarketTracker {
                 type: 'scroll'
             },
             grid: { 
-                left: '3%', 
-                right: '4%', 
-                bottom: '15%', 
-                top: '15%',
-                containLabel: true 
+                left: '8%', 
+                right: '8%', 
+                bottom: hasAustralianMarkets ? '20%' : '15%', 
+                top: '20%',
+                containLabel: true,
+                backgroundColor: 'transparent'
             },
             xAxis: { 
                 type: 'category', 
@@ -626,6 +740,15 @@ class MobileGlobalMarketTracker {
         };
         
         this.chartInstance.setOption(option, true);
+        
+        // Force resize after rendering to ensure proper display
+        setTimeout(() => {
+            if (this.chartInstance) {
+                this.chartInstance.resize();
+                console.log('🔄 Chart resized after rendering');
+            }
+        }, 50);
+        
         console.log('✅ Chart rendered successfully with', seriesData.length, 'series');
     }
 
