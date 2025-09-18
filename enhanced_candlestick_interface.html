@@ -695,8 +695,21 @@
                         },
                         axisLabel: {
                             formatter: function(value) {
-                                return value.toFixed(2) + '%';
+                                return value.toFixed(2);  // Remove % symbol for price values
                             }
+                        },
+                        // Smart y-axis scaling to handle low volatility periods
+                        min: function(value) {
+                            // Ensure minimum range for better visualization
+                            const dataRange = value.max - value.min;
+                            const minRange = Math.max(dataRange, value.min * 0.002); // At least 0.2% range
+                            return value.min - (minRange * 0.1); // Add 10% padding below
+                        },
+                        max: function(value) {
+                            // Ensure minimum range for better visualization  
+                            const dataRange = value.max - value.min;
+                            const minRange = Math.max(dataRange, value.min * 0.002); // At least 0.2% range
+                            return value.max + (minRange * 0.1); // Add 10% padding above
                         }
                     },
                     dataZoom: [
