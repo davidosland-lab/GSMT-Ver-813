@@ -641,12 +641,29 @@ class MobileGlobalMarketTracker {
         
         const sortedTimestamps = Array.from(allTimestamps).sort();
         
-        // Create series for each symbol
+        // Create series for each symbol with proper data validation
         Object.entries(chartData).forEach(([symbol, points]) => {
             const values = sortedTimestamps.map(timestamp => {
                 const point = points.find(p => p.timestamp === timestamp);
-                return point ? parseFloat(point.value) : null;
+                // Extract the correct field based on chart type - ONLY percentage_change for percentage charts
+                let value = null;
+                if (point) {
+                    if (apiResponse.chart_type === 'percentage' && 'percentage_change' in point) {
+                        value = parseFloat(point.percentage_change);
+                    } else if ('value' in point) {
+                        value = parseFloat(point.value);
+                    } else if ('close' in point) {
+                        value = parseFloat(point.close);
+                    }
+                }
+                return value;
             });
+            
+            // Debug data ranges
+            const validValues = values.filter(v => v !== null && !isNaN(v));
+            const minVal = Math.min(...validValues);
+            const maxVal = Math.max(...validValues);
+            console.log(`📊 ${symbol} data range: ${minVal.toFixed(4)} to ${maxVal.toFixed(4)} (${validValues.length} points)`);
             
             const symbolName = metadata[symbol]?.name || symbol;
             
@@ -678,11 +695,21 @@ class MobileGlobalMarketTracker {
         // Format timestamps for display in AEST with proper market hours
         const displayTimestamps = this.formatAESTTimestamps(sortedTimestamps, hasAustralianMarkets);
         
+        // Calculate overall data range for better Y-axis scaling
+        const allValidValues = seriesData.flatMap(series => 
+            series.data.filter(v => v !== null && !isNaN(v))
+        );
+        const dataMin = Math.min(...allValidValues);
+        const dataMax = Math.max(...allValidValues);
+        const dataRange = dataMax - dataMin;
+        
         console.log('📊 Chart rendering details:', {
             seriesCount: seriesData.length,
             timestampCount: displayTimestamps.length,
             hasAustralianMarkets,
-            chartType: apiResponse.chart_type
+            chartType: apiResponse.chart_type,
+            dataRange: `${dataMin.toFixed(4)} to ${dataMax.toFixed(4)}`,
+            rangeSpan: dataRange.toFixed(4)
         });
         
         const option = {
@@ -695,11 +722,15 @@ class MobileGlobalMarketTracker {
             tooltip: { 
                 trigger: 'axis',
                 axisPointer: { type: 'cross' },
+                backgroundColor: 'rgba(50, 50, 50, 0.9)',
+                textStyle: { color: '#fff', fontSize: 12 },
                 formatter: function(params) {
                     let result = `<strong>${params[0].axisValue}</strong><br/>`;
                     params.forEach(param => {
-                        if (param.value !== null) {
-                            const value = typeof param.value === 'number' ? param.value.toFixed(2) : param.value;
+                        if (param.value !== null && !isNaN(param.value)) {
+                            const value = apiResponse.chart_type === 'percentage' 
+                                ? param.value.toFixed(3) + '%'
+                                : param.value.toFixed(2);
                             result += `${param.marker} ${param.seriesName}: ${value}<br/>`;
                         }
                     });
@@ -732,7 +763,31 @@ class MobileGlobalMarketTracker {
             },
             yAxis: { 
                 type: 'value',
-                axisLabel: { fontSize: 10 }
+                axisLabel: { 
+                    fontSize: 10,
+                    formatter: function(value) {
+                        return apiResponse.chart_type === 'percentage' ? value.toFixed(2) + '%' : value.toFixed(2);
+                    }
+                },
+                scale: true,
+                min: function(value) {
+                    // Add some padding below minimum for better visualization
+                    const padding = Math.abs(value.min) * 0.1 || 0.1;
+                    return value.min - padding;
+                },
+                max: function(value) {
+                    // Add some padding above maximum for better visualization
+                    const padding = Math.abs(value.max) * 0.1 || 0.1;
+                    return value.max + padding;
+                },
+                splitLine: {
+                    show: true,
+                    lineStyle: { color: '#f0f0f0', type: 'dashed' }
+                },
+                name: apiResponse.chart_type === 'percentage' ? 'Change (%)' : 'Value',
+                nameTextStyle: { fontSize: 9 },
+                nameLocation: 'middle',
+                nameGap: 35
             },
             series: seriesData,
             animation: true,
@@ -836,52 +891,110 @@ class MobileGlobalMarketTracker {
     loadDemoChart() {
         if (!this.chartInstance) return;
         
-        // Create demo data to show chart capabilities
+        // Create percentage-based demo data to match real data format
         const hours = [];
         const demoData = {
-            'S&P 500': [],
-            'FTSE 100': [],
-            'Nikkei 225': []
+            'All Ordinaries (Demo)': [],
+            'CBA (Demo)': []
         };
         
-        // Generate 24 hours of demo data
-        for (let i = 0; i < 24; i++) {
+        // Generate AEST market hours demo data (9am-4pm)
+        for (let i = 9; i <= 16; i++) {
             const hour = String(i).padStart(2, '0') + ':00';
             hours.push(hour);
             
-            // Generate realistic-looking demo data
-            demoData['S&P 500'].push((4200 + Math.sin(i/4) * 50 + Math.random() * 30).toFixed(2));
-            demoData['FTSE 100'].push((7300 + Math.cos(i/3) * 40 + Math.random() * 25).toFixed(2));
-            demoData['Nikkei 225'].push((28000 + Math.sin(i/5) * 200 + Math.random() * 100).toFixed(0));
+            // Generate realistic percentage change data (-3% to +3%)
+            const timeProgress = (i - 9) / 7; // 0 to 1 over trading day
+            
+            // AORD demo: slight upward trend with volatility
+            const aordChange = (Math.sin(timeProgress * Math.PI) * 1.5 + Math.random() * 0.8 - 0.4).toFixed(3);
+            demoData['All Ordinaries (Demo)'].push(parseFloat(aordChange));
+            
+            // CBA demo: more volatile banking stock
+            const cbaChange = (Math.cos(timeProgress * Math.PI * 1.5) * 2.2 + Math.random() * 1.2 - 0.6).toFixed(3);
+            demoData['CBA (Demo)'].push(parseFloat(cbaChange));
         }
         
         const option = {
+            backgroundColor: '#ffffff',
             title: { 
-                text: 'Demo Market Data (Select markets to see live data)', 
+                text: 'Australian Markets Demo (Select live markets above)', 
                 left: 'center',
-                textStyle: { fontSize: 12 }
+                textStyle: { fontSize: 14, color: '#1f2937' }
             },
-            tooltip: { trigger: 'axis' },
-            legend: { data: Object.keys(demoData), bottom: 10 },
-            grid: { left: '3%', right: '4%', bottom: '15%', top: '15%', containLabel: true },
+            tooltip: { 
+                trigger: 'axis',
+                backgroundColor: 'rgba(50, 50, 50, 0.9)',
+                textStyle: { color: '#fff', fontSize: 12 },
+                formatter: function(params) {
+                    let result = `<strong>${params[0].axisValue} AEST</strong><br/>`;
+                    params.forEach(param => {
+                        if (param.value !== null) {
+                            result += `${param.marker} ${param.seriesName}: ${param.value.toFixed(2)}%<br/>`;
+                        }
+                    });
+                    return result;
+                }
+            },
+            legend: { data: Object.keys(demoData), bottom: 10, type: 'scroll' },
+            grid: { 
+                left: '8%', 
+                right: '8%', 
+                bottom: '20%', 
+                top: '20%',
+                containLabel: true,
+                backgroundColor: 'transparent'
+            },
             xAxis: { 
                 type: 'category', 
                 data: hours,
-                axisLabel: { interval: 3, fontSize: 10 }
+                axisLabel: { 
+                    interval: 0,
+                    fontSize: 10,
+                    rotate: 45
+                },
+                name: 'AEST Time',
+                nameTextStyle: { fontSize: 9 }
             },
             yAxis: { 
                 type: 'value',
-                axisLabel: { fontSize: 10 }
+                axisLabel: { 
+                    fontSize: 10,
+                    formatter: function(value) {
+                        return value.toFixed(1) + '%';
+                    }
+                },
+                scale: true,
+                splitLine: {
+                    show: true,
+                    lineStyle: { color: '#f0f0f0', type: 'dashed' }
+                },
+                name: 'Change (%)',
+                nameTextStyle: { fontSize: 9 },
+                nameLocation: 'middle',
+                nameGap: 35
             },
-            series: Object.entries(demoData).map(([name, data]) => ({
-                name: name,
-                type: 'line',
-                data: data,
-                smooth: true,
-                symbol: 'none',
-                lineStyle: { width: 2, opacity: 0.7 }
-            })),
-            animation: true
+            series: Object.entries(demoData).map(([name, data], index) => {
+                const colors = ['#3b82f6', '#10b981'];
+                return {
+                    name: name,
+                    type: 'line',
+                    data: data,
+                    smooth: true,
+                    symbol: 'circle',
+                    symbolSize: 4,
+                    lineStyle: { 
+                        width: 3,
+                        color: colors[index % colors.length],
+                        opacity: 0.8
+                    },
+                    itemStyle: {
+                        color: colors[index % colors.length]
+                    }
+                };
+            }),
+            animation: true,
+            animationDuration: 1000
         };
         
         this.chartInstance.setOption(option);
