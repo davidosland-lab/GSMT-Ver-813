@@ -226,8 +226,7 @@ class DataSourceManager:
     
     def __init__(self):
         self.sources = [
-            {"name": "yfinance", "priority": 1, "active": True},
-            {"name": "demo", "priority": 999, "active": True}  # Always available fallback
+            {"name": "yfinance", "priority": 1, "active": True}
         ]
     
     @lru_cache(maxsize=128)
@@ -241,8 +240,9 @@ class DataSourceManager:
             try:
                 if source["name"] == "yfinance":
                     return self._fetch_yfinance_data(symbol, period, interval)
-                elif source["name"] == "demo":
-                    return self._generate_demo_data(symbol, period, interval)
+                else:
+                    logger.error(f"Unknown data source: {source['name']}")
+                    continue
                     
             except Exception as e:
                 logger.warning(f"Data source {source['name']} failed for {symbol}: {str(e)}")
@@ -311,81 +311,7 @@ class DataSourceManager:
             logger.error(f"YFinance error for {symbol}: {str(e)}")
             raise e
     
-    def _generate_demo_data(self, symbol: str, period: TimePeriod, interval: TimeInterval) -> SymbolDataResponse:
-        """Generate realistic demo data for testing"""
-        try:
-            period_config = TIME_PERIODS[period]
-            days = period_config["days"]
-            
-            # Generate realistic base price based on symbol type
-            if symbol.startswith('^'):
-                base_price = np.random.uniform(3000, 40000)  # Index range
-            elif '.AX' in symbol:
-                base_price = np.random.uniform(10, 300)      # Australian stock range
-            else:
-                base_price = np.random.uniform(50, 500)      # US stock range
-            
-            # Calculate number of points based on interval
-            interval_minutes = {
-                TimeInterval.MIN_5: 5,
-                TimeInterval.MIN_15: 15,
-                TimeInterval.MIN_30: 30,
-                TimeInterval.HOUR_1: 60,
-                TimeInterval.DAY_1: 1440,
-                TimeInterval.WEEK_1: 10080
-            }
-            
-            total_minutes = days * 24 * 60
-            minutes_per_point = interval_minutes.get(interval, 5)
-            num_points = min(1000, total_minutes // minutes_per_point)
-            
-            # Generate realistic price movement
-            data_points = []
-            current_price = base_price
-            start_time = datetime.now(AUSTRALIA_TZ) - timedelta(days=days)
-            
-            for i in range(num_points):
-                # Random walk with mean reversion
-                change_percent = np.random.normal(0, 0.02)  # 2% volatility
-                current_price = max(current_price * (1 + change_percent), base_price * 0.5)
-                
-                timestamp = start_time + timedelta(minutes=i * minutes_per_point)
-                percentage_change = ((current_price - base_price) / base_price) * 100
-                
-                # Generate OHLC around current price
-                high = current_price * (1 + abs(np.random.normal(0, 0.01)))
-                low = current_price * (1 - abs(np.random.normal(0, 0.01)))
-                open_price = current_price * (1 + np.random.normal(0, 0.005))
-                
-                data_points.append(MarketDataPoint(
-                    timestamp=timestamp,
-                    timestamp_raw=int(timestamp.timestamp() * 1000),
-                    open=float(open_price),
-                    high=float(high),
-                    low=float(low),
-                    close=float(current_price),
-                    volume=int(np.random.uniform(100000, 10000000)),
-                    percentage_change=percentage_change,
-                    data_source="demo"
-                ))
-            
-            current_change = data_points[-1].percentage_change if data_points else 0
-            
-            return SymbolDataResponse(
-                symbol=symbol,
-                success=True,
-                data=data_points,
-                period=period,
-                interval=interval,
-                points=len(data_points),
-                base_price=base_price,
-                current_change=current_change,
-                data_source="demo"
-            )
-            
-        except Exception as e:
-            logger.error(f"Demo data generation error for {symbol}: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Failed to generate demo data for {symbol}")
+    # DEMO DATA GENERATION REMOVED - LIVE DATA ONLY POLICY
 
 # Initialize data source manager
 data_manager = DataSourceManager()

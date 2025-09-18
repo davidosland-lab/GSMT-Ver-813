@@ -538,41 +538,96 @@ class UnifiedSuperPredictor:
     
     # Placeholder prediction methods (would integrate with actual modules)
     async def _get_phase2_prediction(self, symbol: str, time_horizon: str, context: Dict) -> Dict:
-        """Get prediction from Phase 2 system"""
-        # This would call the actual Phase 2 system
-        return {
-            'expected_return': 0.02,
-            'predicted_price': 150.0,
-            'confidence': 0.65,
-            'feature_importance': {'rsi': 0.3, 'volume': 0.2, 'momentum': 0.15}
-        }
+        """Get prediction from Phase 2 system using real market data"""
+        if not self.phase2_system:
+            raise ValueError("Phase 2 system not available")
+        
+        try:
+            # Call the actual Phase 2 architecture optimization system
+            result = await self.phase2_system.generate_prediction(
+                symbol=symbol,
+                time_horizon=time_horizon,
+                market_context=context
+            )
+            
+            return {
+                'expected_return': result.get('expected_return', 0.0),
+                'predicted_price': result.get('predicted_price', 0.0),
+                'confidence': result.get('confidence', 0.5),
+                'feature_importance': result.get('feature_importance', {})
+            }
+        except Exception as e:
+            logger.warning(f"Phase 2 prediction failed: {e}")
+            raise
     
     async def _get_asx_prediction(self, symbol: str, time_horizon: str, context: Dict) -> Dict:
-        """Get prediction from ASX SPI system"""
-        return {
-            'expected_return': 0.015,
-            'predicted_price': 148.5,
-            'confidence': 0.7,
-            'feature_importance': {'futures_basis': 0.4, 'spi_correlation': 0.3}
-        }
+        """Get prediction from ASX SPI system using real market data"""
+        if not self.asx_spi_system:
+            raise ValueError("ASX SPI system not available")
+        
+        try:
+            # Call the actual ASX SPI futures prediction system
+            result = await self.asx_spi_system.generate_asx_prediction(
+                symbol=symbol,
+                timeframe=time_horizon,
+                market_context=context
+            )
+            
+            return {
+                'expected_return': result.get('expected_return', 0.0),
+                'predicted_price': result.get('predicted_price', 0.0),
+                'confidence': result.get('confidence', 0.5),
+                'feature_importance': result.get('feature_importance', {})
+            }
+        except Exception as e:
+            logger.warning(f"ASX SPI prediction failed: {e}")
+            raise
     
     async def _get_banking_prediction(self, symbol: str, time_horizon: str, context: Dict) -> Dict:
-        """Get prediction from banking system"""
-        return {
-            'expected_return': 0.025,
-            'predicted_price': 151.0,
-            'confidence': 0.8,
-            'feature_importance': {'interest_rates': 0.5, 'regulatory_score': 0.3}
-        }
+        """Get prediction from banking system using real market data"""
+        if not self.cba_system:
+            raise ValueError("CBA banking system not available")
+        
+        try:
+            # Call the actual CBA banking prediction system
+            result = await self.cba_system.generate_banking_prediction(
+                symbol=symbol,
+                timeframe=time_horizon,
+                market_context=context
+            )
+            
+            return {
+                'expected_return': result.get('expected_return', 0.0),
+                'predicted_price': result.get('predicted_price', 0.0),
+                'confidence': result.get('confidence', 0.5),
+                'feature_importance': result.get('feature_importance', {})
+            }
+        except Exception as e:
+            logger.warning(f"Banking prediction failed: {e}")
+            raise
     
     async def _get_intraday_prediction(self, symbol: str, time_horizon: str, context: Dict) -> Dict:
-        """Get prediction from intraday system"""
-        return {
-            'expected_return': 0.005,
-            'predicted_price': 149.2,
-            'confidence': 0.75,
-            'feature_importance': {'volume_profile': 0.4, 'microstructure': 0.3}
-        }
+        """Get prediction from intraday system using real market data"""
+        if not self.intraday_system:
+            raise ValueError("Intraday system not available")
+        
+        try:
+            # Call the actual intraday prediction system
+            result = await self.intraday_system.generate_intraday_prediction(
+                symbol=symbol,
+                timeframe=time_horizon,
+                market_context=context
+            )
+            
+            return {
+                'expected_return': result.get('expected_return', 0.0),
+                'predicted_price': result.get('predicted_price', 0.0),
+                'confidence': result.get('confidence', 0.5),
+                'feature_importance': result.get('feature_importance', {})
+            }
+        except Exception as e:
+            logger.warning(f"Intraday prediction failed: {e}")
+            raise
 
 # Global instance
 unified_super_predictor = UnifiedSuperPredictor()
