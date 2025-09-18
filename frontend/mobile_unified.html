@@ -332,27 +332,46 @@
                 
                 <div class="space-y-4">
                     <!-- Prediction Cards -->
-                    <div class="border border-gray-200 rounded-lg p-3">
+                    <!-- Australian Market Focus (Primary) -->
+                    <div class="border-2 border-blue-200 rounded-lg p-3 bg-blue-50">
                         <div class="flex justify-between items-start mb-2">
-                            <span class="font-medium">^GSPC (S&P 500)</span>
-                            <span class="bg-success-100 text-success-700 px-2 py-1 rounded text-xs">+2.4%</span>
+                            <span class="font-medium">^AORD (All Ordinaries)</span>
+                            <span class="bg-success-100 text-success-700 px-2 py-1 rounded text-xs">+1.8%</span>
                         </div>
-                        <p class="text-sm text-gray-600 mb-2">Next 24h prediction: Bullish momentum expected</p>
+                        <p class="text-sm text-gray-600 mb-2">Next 24h prediction: Australian market showing positive momentum</p>
                         <div class="flex justify-between text-xs text-gray-500">
-                            <span>Confidence: 87%</span>
-                            <span>Updated: 5min ago</span>
+                            <span>Confidence: 92%</span>
+                            <span>AEST: 9:00-16:00</span>
                         </div>
                     </div>
 
+                    <div class="border-2 border-blue-200 rounded-lg p-3 bg-blue-50">
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="font-medium">CBA.AX (Commonwealth Bank)</span>
+                            <span class="bg-success-100 text-success-700 px-2 py-1 rounded text-xs">+2.1%</span>
+                        </div>
+                        <p class="text-sm text-gray-600 mb-2">Next 24h prediction: Banking sector strength continues</p>
+                        <div class="flex justify-between text-xs text-gray-500">
+                            <span>Confidence: 89%</span>
+                            <span>AEST: 9:00-16:00</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Global Markets Overview -->
+                    <div class="text-sm font-medium text-gray-700 mt-4 mb-2 flex items-center">
+                        <i class="fas fa-globe text-gray-500 mr-2"></i>
+                        Global Markets Impact
+                    </div>
+                    
                     <div class="border border-gray-200 rounded-lg p-3">
                         <div class="flex justify-between items-start mb-2">
                             <span class="font-medium">^FTSE (FTSE 100)</span>
-                            <span class="bg-warning-100 text-warning-700 px-2 py-1 rounded text-xs">-0.8%</span>
+                            <span class="bg-warning-100 text-warning-700 px-2 py-1 rounded text-xs">-0.3%</span>
                         </div>
-                        <p class="text-sm text-gray-600 mb-2">Next 24h prediction: Sideways with slight decline</p>
+                        <p class="text-sm text-gray-600 mb-2">Limited impact on Australian markets expected</p>
                         <div class="flex justify-between text-xs text-gray-500">
-                            <span>Confidence: 72%</span>
-                            <span>Updated: 8min ago</span>
+                            <span>Confidence: 76%</span>
+                            <span>UK Market</span>
                         </div>
                     </div>
 
@@ -384,10 +403,28 @@
                     Market Analysis
                 </h2>
                 
-                <!-- Market Summary -->
+                <!-- Australian Market Summary (Primary) -->
+                <div class="bg-blue-50 border-2 border-blue-200 rounded-lg p-3 mb-4">
+                    <h3 class="font-semibold text-blue-800 mb-2 flex items-center">
+                        <i class="fas fa-flag text-blue-600 mr-2"></i>
+                        Australian Markets (AEST)
+                    </h3>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="text-center p-2 bg-white rounded">
+                            <div class="text-lg font-bold text-success-500">+1.8%</div>
+                            <div class="text-xs text-gray-600">ASX Average</div>
+                        </div>
+                        <div class="text-center p-2 bg-white rounded">
+                            <div class="text-lg font-bold text-primary-500">9:00-16:00</div>
+                            <div class="text-xs text-gray-600">Market Hours</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Global Market Summary -->
                 <div class="grid grid-cols-2 gap-3 mb-4">
                     <div class="text-center p-3 bg-gray-50 rounded-lg">
-                        <div class="text-lg font-bold text-success-500">+1.2%</div>
+                        <div class="text-lg font-bold text-success-500">+0.9%</div>
                         <div class="text-xs text-gray-600">Global Avg</div>
                     </div>
                     <div class="text-center p-3 bg-gray-50 rounded-lg">
@@ -396,14 +433,27 @@
                     </div>
                 </div>
 
-                <!-- Regional Performance -->
+                <!-- Australian Market Performance (Primary) -->
                 <div class="space-y-3">
+                    <div class="flex justify-between items-center p-3 border-2 border-blue-200 bg-blue-50 rounded-lg">
+                        <div>
+                            <span class="font-medium text-blue-800">🇦🇺 Australian Exchange</span>
+                            <div class="text-xs text-blue-600">ASX 200, All Ordinaries</div>
+                        </div>
+                        <span class="bg-success-100 text-success-700 px-2 py-1 rounded text-sm">+1.8%</span>
+                    </div>
+                    
+                    <div class="text-sm font-medium text-gray-700 mt-4 mb-2 flex items-center">
+                        <i class="fas fa-globe text-gray-500 mr-2"></i>
+                        Global Market Overview
+                    </div>
+                    
                     <div class="flex justify-between items-center p-3 border border-gray-200 rounded-lg">
                         <div>
                             <span class="font-medium">Asia Pacific</span>
-                            <div class="text-xs text-gray-500">8 markets open</div>
+                            <div class="text-xs text-gray-500">7 markets open</div>
                         </div>
-                        <span class="bg-success-100 text-success-700 px-2 py-1 rounded text-sm">+0.8%</span>
+                        <span class="bg-success-100 text-success-700 px-2 py-1 rounded text-sm">+0.6%</span>
                     </div>
 
                     <div class="flex justify-between items-center p-3 border border-gray-200 rounded-lg">

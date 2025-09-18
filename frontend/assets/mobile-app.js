@@ -533,6 +533,11 @@ class MobileGlobalMarketTracker {
         const chartData = apiResponse.data;
         const metadata = apiResponse.metadata || {};
         
+        // Check if we have Australian markets to determine market hours
+        const hasAustralianMarkets = Object.keys(chartData).some(symbol => 
+            symbol === '^AORD' || symbol === 'CBA.AX' || symbol === '^AXJO' || symbol.endsWith('.AX')
+        );
+        
         // Extract timestamps and series data
         const timestamps = [];
         const seriesData = [];
@@ -565,11 +570,8 @@ class MobileGlobalMarketTracker {
             });
         });
         
-        // Format timestamps for display
-        const displayTimestamps = sortedTimestamps.map(ts => {
-            const date = new Date(ts);
-            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        });
+        // Format timestamps for display in AEST with proper market hours
+        const displayTimestamps = this.formatAESTTimestamps(sortedTimestamps, hasAustralianMarkets);
         
         const option = {
             title: { 
@@ -606,7 +608,13 @@ class MobileGlobalMarketTracker {
             xAxis: { 
                 type: 'category', 
                 data: displayTimestamps,
-                axisLabel: { interval: 'auto', fontSize: 10 }
+                axisLabel: { 
+                    interval: hasAustralianMarkets ? 0 : 'auto',
+                    fontSize: 10,
+                    rotate: hasAustralianMarkets ? 45 : 0
+                },
+                name: hasAustralianMarkets ? 'AEST Time' : 'Local Time',
+                nameTextStyle: { fontSize: 9 }
             },
             yAxis: { 
                 type: 'value',
@@ -619,6 +627,34 @@ class MobileGlobalMarketTracker {
         
         this.chartInstance.setOption(option, true);
         console.log('✅ Chart rendered successfully with', seriesData.length, 'series');
+    }
+
+    formatAESTTimestamps(timestamps, isAustralianFocused) {
+        if (!timestamps || timestamps.length === 0) return [];
+        
+        if (isAustralianFocused) {
+            // Generate Australian market hours (9:00 AM - 4:00 PM AEST)
+            const marketHours = [];
+            for (let hour = 9; hour <= 16; hour++) {
+                marketHours.push(`${hour.toString().padStart(2, '0')}:00`);
+            }
+            
+            // If we have fewer data points, use the market hours template
+            if (timestamps.length <= marketHours.length) {
+                return marketHours.slice(0, Math.max(timestamps.length, 1));
+            }
+        }
+        
+        // For mixed markets or many data points, format actual timestamps in AEST
+        return timestamps.map(ts => {
+            const date = new Date(ts);
+            return date.toLocaleTimeString('en-AU', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                hour12: false,
+                timeZone: 'Australia/Sydney'
+            });
+        });
     }
 
     showLoadingChart() {
@@ -730,10 +766,10 @@ class MobileGlobalMarketTracker {
     }
 
     autoSelectTestMarkets() {
-        console.log('🧪 Auto-selecting test markets for chart verification');
+        console.log('🧪 Auto-selecting Australian test markets for chart verification');
         
-        // Select some major indices for testing
-        const testSymbols = ['^GSPC', '^FTSE', '^N225']; // S&P 500, FTSE 100, Nikkei 225
+        // Select Australian markets as primary focus
+        const testSymbols = ['^AORD', 'CBA.AX']; // All Ordinaries, Commonwealth Bank
         
         testSymbols.forEach(symbol => {
             if (this.allSymbols.has(symbol)) {
