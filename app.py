@@ -1417,28 +1417,63 @@ async def get_market_announcements_for_symbols(symbols: List[str], hours_back: i
 # Root and API Routes
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    """Root endpoint - Streamlined main landing page with latest features"""
+    """Root endpoint - Unified Interface Hub"""
     try:
-        # Serve the streamlined landing page with only latest prediction model and global tracker
-        landing_path = os.path.join(os.path.dirname(__file__), "streamlined_landing_page.html")
-        if os.path.exists(landing_path):
-            with open(landing_path, 'r', encoding='utf-8') as f:
+        # Serve the unified interface hub
+        hub_path = os.path.join("frontend", "interface_hub.html")
+        if os.path.exists(hub_path):
+            with open(hub_path, 'r', encoding='utf-8') as f:
                 content = f.read()
             return HTMLResponse(content=content, status_code=200)
         else:
-            # Fallback to original landing page if streamlined version not found
-            original_path = os.path.join(os.path.dirname(__file__), "main_landing_page.html")
-            if os.path.exists(original_path):
-                with open(original_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                return HTMLResponse(content=content, status_code=200)
-            else:
-                # Final fallback to JSON if no HTML found
-                return await root_api()
+            # Fallback to interface hub if not found
+            return HTMLResponse(
+                content="""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>GSMT - Global Stock Market Tracker Hub</title>
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <style>body {font-family: Arial, sans-serif; text-align: center; padding: 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; min-height: 100vh;} a {color: #87ceeb; text-decoration: none; font-weight: bold;} .interface-card {background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; margin: 20px 0;}</style>
+                </head>
+                <body>
+                    <h1>🚀 GSMT Interface Hub</h1>
+                    <div style="max-width: 600px; margin: 0 auto;">
+                        <div class="interface-card">
+                            <h3>📱 Mobile Optimized</h3>
+                            <p><a href="/mobile">Mobile Unified Interface</a> - Touch-optimized with PWA support</p>
+                        </div>
+                        <div class="interface-card">
+                            <h3>🌍 Global Tracker</h3>
+                            <p><a href="/global-tracker">24-Hour Market Timeline</a> - Real-time global market data</p>
+                        </div>
+                        <div class="interface-card">
+                            <h3>💼 Advanced Dashboard</h3>
+                            <p><a href="/static/advanced_dashboard.html">Professional Trading Interface</a> - Full analytics suite</p>
+                        </div>
+                        <div class="interface-card">
+                            <h3>🤖 AI Predictions</h3>
+                            <p><a href="/static/enhanced_predictions.html">Machine Learning Predictions</a> - AI-powered forecasts</p>
+                        </div>
+                        <div class="interface-card">
+                            <h3>📡 API Documentation</h3>
+                            <p><a href="/api/docs">Developer API Docs</a> - Complete API reference</p>
+                        </div>
+                    </div>
+                </body>
+                </html>
+                """,
+                status_code=200
+            )
     except Exception as e:
-        logger.error(f"Error serving streamlined landing page: {e}")
+        logger.error(f"Error serving interface hub: {e}")
         # Fallback to JSON API response
         return await root_api()
+
+@app.get("/hub", response_class=HTMLResponse)
+async def serve_interface_hub():
+    """Serve the interface hub (same as root)"""
+    return await root()
 
 @app.get("/api/info")
 async def root_api():
@@ -4936,6 +4971,26 @@ async def serve_enhanced_predictions():
     except Exception as e:
         logger.error(f"Error serving enhanced predictions: {e}")
         raise HTTPException(status_code=500, detail="Failed to serve enhanced predictions")
+
+@app.get("/mobile", response_class=HTMLResponse, include_in_schema=False)
+async def serve_mobile_unified():
+    """Serve the mobile-optimized unified trading interface"""
+    try:
+        mobile_path = os.path.join("frontend", "mobile_unified.html")
+        if os.path.exists(mobile_path):
+            with open(mobile_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="Mobile interface not found")
+    except Exception as e:
+        logger.error(f"Error serving mobile interface: {e}")
+        raise HTTPException(status_code=500, detail="Failed to serve mobile interface")
+
+@app.get("/unified", response_class=HTMLResponse, include_in_schema=False)
+async def serve_unified_interface():
+    """Serve the unified trading interface (redirects to mobile-optimized version)"""
+    return await serve_mobile_unified()
 
 @app.get("/enhanced_candlestick_interface.html", response_class=HTMLResponse, include_in_schema=False)
 async def serve_enhanced_candlestick():
