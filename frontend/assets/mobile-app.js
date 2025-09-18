@@ -91,6 +91,9 @@ class MobileGlobalMarketTracker {
             // Auto-refresh every 5 minutes
             this.startAutoRefresh();
             
+            // Load demo chart data
+            this.loadDemoChart();
+            
             this.showToast('Mobile Market Tracker loaded successfully', 'success');
             
         } catch (error) {
@@ -470,49 +473,266 @@ class MobileGlobalMarketTracker {
     }
 
     async loadChartData() {
-        if (!this.chartInstance || this.selectedIndices.size === 0) return;
+        if (!this.chartInstance || this.selectedIndices.size === 0) {
+            console.log('⏭️ No chart instance or selected indices, skipping chart data load');
+            return;
+        }
+
+        console.log('📈 Loading chart data for selected indices:', [...this.selectedIndices]);
+        this.showLoadingChart();
 
         try {
-            const symbols = [...this.selectedIndices].join(',');
-            const response = await fetch(`${this.apiBaseUrl}/market-data?symbols=${symbols}&days=1`);
+            const symbols = [...this.selectedIndices];
+            const chartType = document.getElementById('chart-type')?.value || 'percentage';
             
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            // Use the correct analyze endpoint
+            const requestBody = {
+                symbols: symbols,
+                chart_type: chartType,
+                interval_minutes: 60,
+                time_period: "24h"
+            };
+            
+            console.log('📊 Requesting chart data:', requestBody);
+            
+            const response = await fetch(`${this.apiBaseUrl}/analyze`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestBody)
+            });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
             
             const data = await response.json();
+            console.log('✅ Chart data received:', Object.keys(data.data || {}));
             this.renderChart(data);
             
         } catch (error) {
-            console.error('Failed to load chart data:', error);
-            this.showToast('Failed to load chart data', 'error');
+            console.error('❌ Failed to load chart data:', error);
+            this.showToast(`Failed to load chart data: ${error.message}`, 'error');
+            this.showErrorChart();
         }
     }
 
-    renderChart(data) {
-        if (!this.chartInstance || !data) return;
+    renderChart(apiResponse) {
+        if (!this.chartInstance || !apiResponse || !apiResponse.data) {
+            console.warn('⚠️ No chart instance or data available for rendering');
+            return;
+        }
 
-        // Process chart data and render
-        const option = {
-            title: { text: 'Market Data', left: 'center' },
-            tooltip: { trigger: 'axis' },
-            legend: { data: Object.keys(data), bottom: 0 },
-            grid: { left: '3%', right: '4%', bottom: '20%', containLabel: true },
-            xAxis: { type: 'category', data: data.timestamps || [] },
-            yAxis: { type: 'value' },
-            series: Object.entries(data).filter(([key]) => key !== 'timestamps').map(([symbol, values]) => ({
-                name: symbol,
+        console.log('🎨 Rendering chart with data:', Object.keys(apiResponse.data));
+        
+        const chartData = apiResponse.data;
+        const metadata = apiResponse.metadata || {};
+        
+        // Extract timestamps and series data
+        const timestamps = [];
+        const seriesData = [];
+        
+        // Get all unique timestamps across all symbols
+        const allTimestamps = new Set();
+        Object.values(chartData).forEach(symbolData => {
+            symbolData.forEach(point => allTimestamps.add(point.timestamp));
+        });
+        
+        const sortedTimestamps = Array.from(allTimestamps).sort();
+        
+        // Create series for each symbol
+        Object.entries(chartData).forEach(([symbol, points]) => {
+            const values = sortedTimestamps.map(timestamp => {
+                const point = points.find(p => p.timestamp === timestamp);
+                return point ? parseFloat(point.value) : null;
+            });
+            
+            const symbolName = metadata[symbol]?.name || symbol;
+            
+            seriesData.push({
+                name: symbolName,
                 type: 'line',
                 data: values,
-                smooth: true
-            }))
+                smooth: true,
+                connectNulls: false,
+                symbol: 'none',
+                lineStyle: { width: 2 }
+            });
+        });
+        
+        // Format timestamps for display
+        const displayTimestamps = sortedTimestamps.map(ts => {
+            const date = new Date(ts);
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        });
+        
+        const option = {
+            title: { 
+                text: `Market Data (${apiResponse.chart_type || 'Live'})`, 
+                left: 'center',
+                textStyle: { fontSize: 14 }
+            },
+            tooltip: { 
+                trigger: 'axis',
+                axisPointer: { type: 'cross' },
+                formatter: function(params) {
+                    let result = `<strong>${params[0].axisValue}</strong><br/>`;
+                    params.forEach(param => {
+                        if (param.value !== null) {
+                            const value = typeof param.value === 'number' ? param.value.toFixed(2) : param.value;
+                            result += `${param.marker} ${param.seriesName}: ${value}<br/>`;
+                        }
+                    });
+                    return result;
+                }
+            },
+            legend: { 
+                data: seriesData.map(s => s.name), 
+                bottom: 10,
+                type: 'scroll'
+            },
+            grid: { 
+                left: '3%', 
+                right: '4%', 
+                bottom: '15%', 
+                top: '15%',
+                containLabel: true 
+            },
+            xAxis: { 
+                type: 'category', 
+                data: displayTimestamps,
+                axisLabel: { interval: 'auto', fontSize: 10 }
+            },
+            yAxis: { 
+                type: 'value',
+                axisLabel: { fontSize: 10 }
+            },
+            series: seriesData,
+            animation: true,
+            animationDuration: 1000
+        };
+        
+        this.chartInstance.setOption(option, true);
+        console.log('✅ Chart rendered successfully with', seriesData.length, 'series');
+    }
+
+    showLoadingChart() {
+        if (!this.chartInstance) return;
+        
+        const option = {
+            title: { text: 'Loading market data...', left: 'center' },
+            grid: { left: '10%', right: '10%', top: '20%', bottom: '15%' },
+            xAxis: { type: 'category', data: [] },
+            yAxis: { type: 'value' },
+            series: [],
+            graphic: {
+                elements: [{
+                    type: 'text',
+                    left: 'center',
+                    top: 'middle',
+                    style: {
+                        text: '📊 Loading market data...',
+                        fontSize: 16,
+                        fill: '#666'
+                    }
+                }]
+            }
         };
         
         this.chartInstance.setOption(option);
-        console.log('✅ Chart rendered with data');
+    }
+
+    showErrorChart() {
+        if (!this.chartInstance) return;
+        
+        const option = {
+            title: { text: 'Failed to load data', left: 'center' },
+            grid: { left: '10%', right: '10%', top: '20%', bottom: '15%' },
+            xAxis: { type: 'category', data: [] },
+            yAxis: { type: 'value' },
+            series: [],
+            graphic: {
+                elements: [{
+                    type: 'text',
+                    left: 'center',
+                    top: 'middle',
+                    style: {
+                        text: '❌ Failed to load chart data\nTry refreshing or selecting different markets',
+                        fontSize: 14,
+                        fill: '#ef4444',
+                        textAlign: 'center'
+                    }
+                }]
+            }
+        };
+        
+        this.chartInstance.setOption(option);
+    }
+
+    loadDemoChart() {
+        if (!this.chartInstance) return;
+        
+        // Create demo data to show chart capabilities
+        const hours = [];
+        const demoData = {
+            'S&P 500': [],
+            'FTSE 100': [],
+            'Nikkei 225': []
+        };
+        
+        // Generate 24 hours of demo data
+        for (let i = 0; i < 24; i++) {
+            const hour = String(i).padStart(2, '0') + ':00';
+            hours.push(hour);
+            
+            // Generate realistic-looking demo data
+            demoData['S&P 500'].push((4200 + Math.sin(i/4) * 50 + Math.random() * 30).toFixed(2));
+            demoData['FTSE 100'].push((7300 + Math.cos(i/3) * 40 + Math.random() * 25).toFixed(2));
+            demoData['Nikkei 225'].push((28000 + Math.sin(i/5) * 200 + Math.random() * 100).toFixed(0));
+        }
+        
+        const option = {
+            title: { 
+                text: 'Demo Market Data (Select markets to see live data)', 
+                left: 'center',
+                textStyle: { fontSize: 12 }
+            },
+            tooltip: { trigger: 'axis' },
+            legend: { data: Object.keys(demoData), bottom: 10 },
+            grid: { left: '3%', right: '4%', bottom: '15%', top: '15%', containLabel: true },
+            xAxis: { 
+                type: 'category', 
+                data: hours,
+                axisLabel: { interval: 3, fontSize: 10 }
+            },
+            yAxis: { 
+                type: 'value',
+                axisLabel: { fontSize: 10 }
+            },
+            series: Object.entries(demoData).map(([name, data]) => ({
+                name: name,
+                type: 'line',
+                data: data,
+                smooth: true,
+                symbol: 'none',
+                lineStyle: { width: 2, opacity: 0.7 }
+            })),
+            animation: true
+        };
+        
+        this.chartInstance.setOption(option);
+        console.log('✅ Demo chart loaded');
     }
 
     handleChartTypeChange(event) {
-        console.log('Chart type changed:', event.target.value);
-        // Implement chart type change
+        console.log('📊 Chart type changed:', event.target.value);
+        
+        // Reload chart data with new chart type if we have selected indices
+        if (this.selectedIndices.size > 0) {
+            this.loadChartData();
+        }
     }
 
     handlePlotModeChange(event) {
