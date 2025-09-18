@@ -5557,6 +5557,191 @@ async def export_candlestick_data(
         logger.error(f"Error exporting candlestick data: {e}")
         raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
 
+# ============================
+# MULTI-MARKET PREDICTION API
+# ============================
+
+from ftse_sp500_prediction_system import multi_market_predictor, PredictionResult
+
+class PredictionRequest(BaseModel):
+    symbols: List[str] = Field(default=["^FTSE", "^GSPC"], description="Symbols to predict")
+    horizon: str = Field(default="15min", description="Prediction horizon (5min, 15min, 1hour)")
+
+class PredictionResponse(BaseModel):
+    symbol: str
+    predicted_price: float
+    confidence_interval: tuple
+    prediction_horizon: str
+    model_used: str
+    accuracy_metrics: dict
+    timestamp: str
+    market_state: str
+    factors_used: List[str]
+
+@app.post("/api/predictions/train")
+async def train_prediction_models(symbols: List[str] = Query(default=["^FTSE", "^GSPC"])):
+    """Train prediction models for specified symbols"""
+    try:
+        logger.info(f"Training prediction models for symbols: {symbols}")
+        
+        results = {}
+        for symbol in symbols:
+            if symbol not in multi_market_predictor.markets:
+                results[symbol] = {"error": f"Symbol {symbol} not supported"}
+                continue
+            
+            metrics = await multi_market_predictor.train_models(symbol)
+            results[symbol] = metrics if metrics else {"error": "Training failed"}
+        
+        return {
+            "status": "completed",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "results": results
+        }
+        
+    except Exception as e:
+        logger.error(f"Error training prediction models: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/predictions/predict")
+async def make_predictions(request: PredictionRequest):
+    """Make predictions for specified symbols"""
+    try:
+        logger.info(f"Making predictions for {len(request.symbols)} symbols with {request.horizon} horizon")
+        
+        # Validate symbols
+        valid_symbols = [s for s in request.symbols if s in multi_market_predictor.markets]
+        if not valid_symbols:
+            raise HTTPException(status_code=400, detail="No valid symbols provided")
+        
+        # Make predictions
+        predictions = await multi_market_predictor.predict_multiple(valid_symbols, request.horizon)
+        
+        # Format response
+        response_data = {
+            "status": "success",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "horizon": request.horizon,
+            "predictions": {}
+        }
+        
+        for symbol, prediction in predictions.items():
+            if prediction:
+                response_data["predictions"][symbol] = {
+                    "symbol": prediction.symbol,
+                    "predicted_price": prediction.predicted_price,
+                    "confidence_interval": prediction.confidence_interval,
+                    "prediction_horizon": prediction.prediction_horizon,
+                    "model_used": prediction.model_used,
+                    "accuracy_metrics": prediction.accuracy_metrics,
+                    "timestamp": prediction.timestamp.isoformat(),
+                    "market_state": prediction.market_state,
+                    "factors_used": prediction.factors_used[:5]  # Top 5 factors
+                }
+            else:
+                response_data["predictions"][symbol] = {"error": "Prediction failed"}
+        
+        return response_data
+        
+    except Exception as e:
+        logger.error(f"Error making predictions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/predictions/status")
+async def prediction_status():
+    """Get prediction system status and supported markets"""
+    try:
+        current_time = datetime.now(timezone.utc)
+        
+        market_status = {}
+        for symbol, config in multi_market_predictor.markets.items():
+            market_state = multi_market_predictor._get_market_state(symbol, current_time)
+            
+            # Check if models are trained
+            models_trained = []
+            for model_name in config.prediction_models:
+                if f"{symbol}_{model_name}_features" in multi_market_predictor.model_cache:
+                    models_trained.append(model_name)
+            
+            market_status[symbol] = {
+                "name": config.name,
+                "currency": config.currency,
+                "timezone": config.timezone,
+                "market_state": market_state,
+                "models_available": config.prediction_models,
+                "models_trained": models_trained,
+                "data_quality_threshold": config.data_quality_threshold
+            }
+        
+        return {
+            "status": "operational",
+            "timestamp": current_time.isoformat(),
+            "supported_markets": market_status,
+            "prediction_horizons": ["5min", "15min", "30min", "1hour"]
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting prediction status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/predictions/{symbol}")
+async def get_single_prediction(
+    symbol: str,
+    horizon: str = Query(default="15min", description="Prediction horizon")
+):
+    """Get prediction for a single symbol"""
+    try:
+        if symbol not in multi_market_predictor.markets:
+            raise HTTPException(status_code=404, detail=f"Symbol {symbol} not supported")
+        
+        logger.info(f"Making {horizon} prediction for {symbol}")
+        
+        prediction = await multi_market_predictor.predict(symbol, horizon)
+        
+        if prediction:
+            return {
+                "status": "success",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "prediction": {
+                    "symbol": prediction.symbol,
+                    "predicted_price": prediction.predicted_price,
+                    "confidence_interval": prediction.confidence_interval,
+                    "prediction_horizon": prediction.prediction_horizon,
+                    "model_used": prediction.model_used,
+                    "accuracy_metrics": prediction.accuracy_metrics,
+                    "timestamp": prediction.timestamp.isoformat(),
+                    "market_state": prediction.market_state,
+                    "factors_used": prediction.factors_used[:10]
+                }
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Prediction failed")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting prediction for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/predictions", response_class=HTMLResponse)
+async def predictions_interface():
+    """Serve the FTSE & S&P 500 predictions interface"""
+    try:
+        predictions_file = os.path.join(os.path.dirname(__file__), "ftse_sp500_predictions_interface.html")
+        
+        if os.path.exists(predictions_file):
+            logger.info(f"📊 Serving predictions interface")
+            with open(predictions_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content)
+        else:
+            logger.error("❌ Predictions interface file not found")
+            raise HTTPException(status_code=404, detail="Predictions interface not found")
+            
+    except Exception as e:
+        logger.error(f"Error serving predictions interface: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
 if __name__ == "__main__":
     import uvicorn
     

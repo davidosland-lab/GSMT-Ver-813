@@ -349,7 +349,7 @@ class RealMarketDataAggregator:
         self.finnhub_api = FinnhubRealAPI()
         self.alphavantage_api = AlphaVantageRealAPI()
         self.cache: Dict[str, Tuple[RealMarketData, datetime]] = {}
-        self.cache_duration = timedelta(minutes=2)  # Short cache for real data
+        self.cache_duration = timedelta(minutes=1)  # Very short cache to prevent future data issues
         
     async def get_real_market_data(self, symbol: str) -> Optional[RealMarketData]:
         """Get real market data from multiple sources with priority order"""
@@ -381,8 +381,17 @@ class RealMarketDataAggregator:
                     cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
                     recent_points = [p for p in data_points if p.timestamp >= cutoff]
                     
+                    # CRITICAL FIX: Filter out future data to prevent separate segment plotting
+                    current_time = datetime.now(timezone.utc)
+                    current_and_past_points = [p for p in recent_points if p.timestamp <= current_time]
+                    
+                    # Log if future data was filtered out
+                    future_count = len(recent_points) - len(current_and_past_points)
+                    if future_count > 0:
+                        logger.info(f"🔍 Filtered out {future_count} future data points for {symbol}")
+                    
                     # Apply smart data quality filtering to remove aberrant data
-                    quality_filtered_points = self._filter_aberrant_data(recent_points, symbol)
+                    quality_filtered_points = self._filter_aberrant_data(current_and_past_points, symbol)
                     
                     if len(quality_filtered_points) >= 10:  # Need minimum data points
                         market_data = RealMarketData(
