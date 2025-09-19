@@ -255,37 +255,9 @@ class LiveDataService:
         
         return data_dict
     
-    def generate_demo_data_for_symbol(self, symbol: str, base_price: float) -> List[LiveDataPoint]:
-        """Generate demo data as fallback"""
-        data_points = []
-        base_time = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-        current_price = base_price
-        
-        for hour in range(24):
-            timestamp = base_time + timedelta(hours=hour)
-            
-            # Simple random walk
-            change = random.gauss(0, 0.02)  # 2% volatility
-            current_price *= (1 + change)
-            
-            high_var = abs(random.gauss(0, 0.005))
-            low_var = abs(random.gauss(0, 0.005))
-            
-            high = current_price * (1 + high_var)
-            low = current_price * (1 - low_var)
-            open_price = low + (high - low) * random.uniform(0.2, 0.8)
-            
-            data_points.append(LiveDataPoint(
-                timestamp=timestamp,
-                open=open_price,
-                high=high,
-                low=low,
-                close=current_price,
-                volume=random.randint(1000000, 5000000),
-                symbol=symbol
-            ))
-        
-        return data_points
+    # DEMO DATA GENERATION FUNCTION REMOVED - LIVE DATA ONLY POLICY
+    # All market data must come from real API sources (Alpha Vantage, yfinance, etc.)
+    # No synthetic or demo data generation allowed
 
 # Global instance
 live_data_service = LiveDataService()

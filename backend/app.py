@@ -228,51 +228,9 @@ async def fetch_symbol_data(symbol: str, period: TimePeriod) -> List[MarketDataP
         logger.error(f"Error fetching data for {symbol}: {str(e)}")
         return []
 
-def generate_demo_data(symbol: str, period: TimePeriod) -> List[MarketDataPoint]:
-    """Generate realistic demo data when real data fails"""
-    config = PERIOD_CONFIG[period]
-    days = config["days"]
-    
-    # Generate realistic base price
-    if symbol.startswith('^'):
-        base_price = np.random.uniform(3000, 40000)  # Index range
-    elif '.AX' in symbol:
-        base_price = np.random.uniform(10, 300)      # Australian stock range
-    else:
-        base_price = np.random.uniform(50, 500)      # US stock range
-    
-    # Generate points
-    num_points = min(100, days * 4)  # Up to 100 points
-    data_points = []
-    current_price = base_price
-    
-    start_time = datetime.now() - timedelta(days=days)
-    
-    for i in range(num_points):
-        # Random walk with mean reversion
-        change = np.random.normal(0, 0.02)  # 2% volatility
-        current_price = max(current_price * (1 + change), base_price * 0.5)
-        
-        timestamp = start_time + timedelta(days=(days * i / num_points))
-        percentage_change = ((current_price - base_price) / base_price) * 100
-        
-        # Generate OHLC around current price
-        high = current_price * (1 + abs(np.random.normal(0, 0.01)))
-        low = current_price * (1 - abs(np.random.normal(0, 0.01)))
-        open_price = current_price * (1 + np.random.normal(0, 0.005))
-        
-        data_points.append(MarketDataPoint(
-            timestamp=timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-            timestamp_ms=int(timestamp.timestamp() * 1000),
-            open=round(open_price, 2),
-            high=round(high, 2),
-            low=round(low, 2),
-            close=round(current_price, 2),
-            volume=int(np.random.uniform(100000, 10000000)),
-            percentage_change=round(percentage_change, 2)
-        ))
-    
-    return data_points
+# DEMO DATA GENERATION FUNCTION REMOVED - LIVE DATA ONLY POLICY
+# All market data must come from real sources (yfinance, Alpha Vantage, etc.)
+# No synthetic or demo data generation allowed
 
 # API Routes
 @app.get("/")
@@ -403,10 +361,10 @@ async def analyze_symbols(request: AnalysisRequest):
             # Try to fetch real data
             data = await fetch_symbol_data(symbol, request.period)
             
-            # If no real data, generate demo data
+            # LIVE DATA ONLY - NO DEMO DATA FALLBACK
             if not data:
-                logger.warning(f"No real data for {symbol}, using demo data")
-                data = generate_demo_data(symbol, request.period)
+                logger.error(f"❌ No real market data available for {symbol} - no demo data allowed")
+                raise HTTPException(status_code=404, detail=f"No market data available for {symbol}")
             
             if data:
                 symbol_data[symbol] = data
@@ -415,10 +373,9 @@ async def analyze_symbols(request: AnalysisRequest):
                 
         except Exception as e:
             logger.error(f"Failed to fetch data for {symbol}: {str(e)}")
-            # Generate demo data as fallback
-            try:
-                data = generate_demo_data(symbol, request.period)
-                if data:
+            # LIVE DATA ONLY - NO DEMO DATA FALLBACK ALLOWED
+            logger.error(f"❌ Skipping {symbol} - no demo data fallback allowed")
+            continue  # Skip this symbol instead of using demo data
                     symbol_data[symbol] = data
                     symbol_metadata[symbol] = SYMBOLS_DB[symbol]
                     successful_count += 1
