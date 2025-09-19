@@ -7,8 +7,7 @@
     
     <!-- External Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
@@ -564,10 +563,53 @@
         let trackingInterval = null;
         let chartData = [];
 
+        // Load market symbols into dropdown
+        async function loadMarketSymbols() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/symbols`);
+                const data = await response.json();
+                
+                const select = document.getElementById('marketSelect');
+                select.innerHTML = '<option value="">Select a market...</option>';
+                
+                // Add markets from API response
+                Object.entries(data.markets).forEach(([category, symbols]) => {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = category.replace('_', ' ').toUpperCase();
+                    
+                    Object.values(symbols).forEach(symbol => {
+                        const option = document.createElement('option');
+                        option.value = symbol.symbol;
+                        option.textContent = `${symbol.symbol} - ${symbol.name}`;
+                        optgroup.appendChild(option);
+                    });
+                    
+                    select.appendChild(optgroup);
+                });
+                
+                console.log(`✅ Loaded ${data.total_symbols} market symbols`);
+            } catch (error) {
+                console.error('❌ Failed to load market symbols:', error);
+            }
+        }
+
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🚀 Enhanced Market Tracker Loaded');
-            initializeChart();
+            loadMarketSymbols();
+            
+            // Wait for Chart.js to be fully loaded
+            if (typeof Chart !== 'undefined') {
+                initializeChart();
+            } else {
+                setTimeout(() => {
+                    if (typeof Chart !== 'undefined') {
+                        initializeChart();
+                    } else {
+                        console.error('Chart.js failed to load');
+                    }
+                }, 1000);
+            }
         });
 
         // Market selection handler
@@ -602,8 +644,10 @@
 
         // Initialize Chart.js chart
         function initializeChart() {
-            const ctx = document.getElementById('mainChart').getContext('2d');
-            currentChart = new Chart(ctx, {
+            try {
+                console.log('🎯 Initializing Chart.js...', typeof Chart);
+                const ctx = document.getElementById('mainChart').getContext('2d');
+                currentChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: [],
@@ -661,6 +705,10 @@
                     }
                 }
             });
+            console.log('✅ Chart.js initialized successfully');
+            } catch (error) {
+                console.error('❌ Chart.js initialization failed:', error);
+            }
         }
 
         // Start tracking a symbol
