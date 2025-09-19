@@ -538,6 +538,91 @@ def _get_symbol_suggestions(symbol: str) -> List[str]:
     
     return suggestions[:5]  # Limit to 5 suggestions
 
+# Pydantic model for prediction request
+class PredictionRequest(BaseModel):
+    timeframe: str = "5d"
+    include_all_domains: bool = True
+    include_social: bool = True
+    include_geopolitical: bool = True
+
+# Unified Prediction Endpoint
+@app.post("/api/unified-prediction/{symbol}")
+async def get_unified_prediction(
+    symbol: str,
+    request: PredictionRequest
+):
+    """Generate unified super prediction using all available modules"""
+    
+    try:
+        logger.info(f"🚀 Generating unified prediction for {symbol} ({request.timeframe})")
+        
+        # Import the unified super predictor
+        import sys
+        import os
+        sys.path.append('/home/user/webapp')
+        
+        from unified_super_predictor import unified_super_predictor
+        
+        # Generate the prediction
+        prediction_result = await unified_super_predictor.generate_unified_prediction(
+            symbol=symbol.upper(),
+            time_horizon=request.timeframe,
+            include_all_domains=request.include_all_domains
+        )
+        
+        # Format the response to match the frontend expectations
+        response_data = {
+            "success": True,
+            "symbol": symbol.upper(),
+            "timeframe": request.timeframe,
+            "prediction": {
+                "direction": prediction_result.direction,
+                "expected_return": prediction_result.expected_return,
+                "predicted_price": prediction_result.predicted_price,
+                "current_price": prediction_result.current_price,
+                "confidence_score": prediction_result.confidence_score,
+                "probability_up": prediction_result.probability_up,
+                "uncertainty_score": prediction_result.uncertainty_score,
+                "confidence_interval": prediction_result.confidence_interval
+            },
+            "domain_analysis": {
+                "active_domains": len([d for d, w in prediction_result.domain_weights.items() if w > 0]),
+                "domain_weights": prediction_result.domain_weights,
+                "domain_predictions": prediction_result.domain_predictions,
+                "domain_confidence": prediction_result.domain_confidence
+            },
+            "feature_analysis": {
+                "top_factors": prediction_result.top_factors,
+                "total_features": len(prediction_result.feature_importance),
+                "feature_importance": prediction_result.feature_importance
+            },
+            "risk_assessment": {
+                "risk_level": "Medium" if prediction_result.risk_score < 0.3 else "High" if prediction_result.risk_score > 0.6 else "Low",
+                "risk_score": prediction_result.risk_score,
+                "risk_factors": prediction_result.risk_factors,
+                "volatility_estimate": prediction_result.volatility_estimate
+            },
+            "system_metadata": {
+                "prediction_methodology": "Multi-Domain Ensemble with Live Data",
+                "expected_accuracy": f"{prediction_result.confidence_score:.1%}",
+                "market_regime": prediction_result.market_regime,
+                "session_type": prediction_result.session_type,
+                "external_factors": prediction_result.external_factors
+            },
+            "processing_time": f"{datetime.now().strftime('%H:%M:%S')} AEST",
+            "timestamp": prediction_result.prediction_timestamp.isoformat()
+        }
+        
+        logger.info(f"✅ Unified prediction completed: {prediction_result.direction} ({prediction_result.confidence_score:.1%} confidence)")
+        return response_data
+        
+    except Exception as e:
+        logger.error(f"❌ Error generating unified prediction: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Prediction generation failed: {str(e)}"
+        )
+
 # Exception handlers
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, exc):

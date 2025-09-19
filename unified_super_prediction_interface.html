@@ -346,7 +346,46 @@
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-bottom: 25px;">
                 <div class="input-group">
                     <label for="symbol">Stock Symbol</label>
-                    <input type="text" id="symbol" placeholder="e.g., AAPL, TSLA, CBA.AX" style="text-transform: uppercase;">
+                    <div style="display: flex; gap: 10px;">
+                        <select id="marketSelect" style="flex: 1;" onchange="selectMarket()">
+                            <option value="">Select Popular Market</option>
+                            <optgroup label="🇦🇺 Australian Banks">
+                                <option value="CBA.AX">CBA.AX - Commonwealth Bank</option>
+                                <option value="ANZ.AX">ANZ.AX - ANZ Banking</option>
+                                <option value="WBC.AX">WBC.AX - Westpac Banking</option>
+                                <option value="NAB.AX">NAB.AX - National Australia Bank</option>
+                            </optgroup>
+                            <optgroup label="🇦🇺 Australian Indices">
+                                <option value="^AXJO">^AXJO - ASX 200</option>
+                                <option value="^AORD">^AORD - All Ordinaries</option>
+                            </optgroup>
+                            <optgroup label="🇺🇸 US Tech Giants">
+                                <option value="AAPL">AAPL - Apple</option>
+                                <option value="MSFT">MSFT - Microsoft</option>
+                                <option value="GOOGL">GOOGL - Google</option>
+                                <option value="TSLA">TSLA - Tesla</option>
+                                <option value="NVDA">NVDA - NVIDIA</option>
+                                <option value="META">META - Meta</option>
+                            </optgroup>
+                            <optgroup label="🇺🇸 US Banks">
+                                <option value="JPM">JPM - JPMorgan Chase</option>
+                                <option value="BAC">BAC - Bank of America</option>
+                                <option value="WFC">WFC - Wells Fargo</option>
+                                <option value="C">C - Citigroup</option>
+                            </optgroup>
+                            <optgroup label="🇺🇸 US Indices">
+                                <option value="^GSPC">^GSPC - S&P 500</option>
+                                <option value="^DJI">^DJI - Dow Jones</option>
+                                <option value="^IXIC">^IXIC - NASDAQ</option>
+                            </optgroup>
+                            <optgroup label="🇬🇧 UK Markets">
+                                <option value="^FTSE">^FTSE - FTSE 100</option>
+                                <option value="LLOY.L">LLOY.L - Lloyds Banking</option>
+                                <option value="BARC.L">BARC.L - Barclays</option>
+                            </optgroup>
+                        </select>
+                        <input type="text" id="symbol" placeholder="Or type symbol" style="flex: 1; text-transform: uppercase;">
+                    </div>
                 </div>
                 
                 <div class="input-group">
@@ -667,6 +706,20 @@
                 generateUnifiedPrediction();
             }
         });
+
+        // Market selection handler
+        function selectMarket() {
+            const marketSelect = document.getElementById('marketSelect');
+            const symbolInput = document.getElementById('symbol');
+            
+            if (marketSelect.value) {
+                symbolInput.value = marketSelect.value;
+                // Clear the dropdown selection for next use
+                setTimeout(() => {
+                    marketSelect.value = '';
+                }, 100);
+            }
+        }
 
         // Auto-uppercase symbol input
         document.getElementById('symbol').addEventListener('input', function(e) {
