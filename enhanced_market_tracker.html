@@ -552,6 +552,11 @@
     </div>
 
     <script>
+        // API Configuration
+        const API_BASE_URL = window.location.hostname === 'localhost' ? 
+            'http://localhost:8000' : 
+            'https://8000-ib2hlmks3ra0wwghsafox-6532622b.e2b.dev';
+        
         // Global variables
         let currentChart = null;
         let currentSymbol = '';
@@ -728,7 +733,7 @@
         // Fetch market data
         async function fetchMarketData(symbol) {
             try {
-                const response = await fetch(`/api/stock/${symbol}?period=1d`);
+                const response = await fetch(`${API_BASE_URL}/api/stock/${symbol}?period=1d`);
                 
                 if (!response.ok) {
                     throw new Error(`Failed to fetch real market data for ${symbol}: ${response.status} ${response.statusText}`);
@@ -843,7 +848,15 @@
             try {
                 console.log(`🔮 Generating ${timeframe} prediction for ${currentSymbol}`);
                 
-                const response = await fetch(`/api/unified-prediction/${currentSymbol}?timeframe=${timeframe}`);
+                const response = await fetch(`${API_BASE_URL}/api/unified-prediction/${currentSymbol}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        timeframe: timeframe
+                    })
+                });
                 
                 if (!response.ok) {
                     throw new Error(`Prediction failed: ${response.status} ${response.statusText}`);
