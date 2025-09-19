@@ -619,6 +619,10 @@
             
             if (marketSelect.value) {
                 symbolInput.value = marketSelect.value;
+                
+                // Clear previous prediction results when new symbol is selected
+                clearPredictionResults();
+                
                 // Auto-start tracking when market is selected
                 setTimeout(() => {
                     startTracking();
@@ -730,6 +734,9 @@
 
             currentSymbol = symbol;
             
+            // Clear previous prediction results when starting new tracking
+            clearPredictionResults();
+            
             // Show status
             document.getElementById('statusDisplay').classList.remove('hidden');
             document.getElementById('currentSymbol').textContent = symbol;
@@ -773,6 +780,9 @@
             const trackBtn = document.querySelector('.track-btn');
             trackBtn.innerHTML = '<i class="fas fa-play" style="margin-right: 8px;"></i>Start Tracking';
             trackBtn.onclick = startTracking;
+            
+            // Clear prediction results when stopping tracking
+            clearPredictionResults();
             
             document.getElementById('statusDisplay').classList.add('hidden');
             currentSymbol = '';
@@ -927,6 +937,22 @@
                 button.innerHTML = originalContent;
                 button.disabled = false;
             }
+        }
+
+        // Clear prediction results panel
+        function clearPredictionResults() {
+            const resultsPanel = document.getElementById('predictionResults');
+            const summaryDiv = document.getElementById('predictionSummary');
+            const detailsDiv = document.getElementById('predictionDetails');
+            
+            // Hide the results panel
+            resultsPanel.style.display = 'none';
+            
+            // Clear the content
+            if (summaryDiv) summaryDiv.innerHTML = '';
+            if (detailsDiv) detailsDiv.innerHTML = '';
+            
+            console.log('🧹 Prediction results cleared for new symbol');
         }
 
         // Display prediction results
