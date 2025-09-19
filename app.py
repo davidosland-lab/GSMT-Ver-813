@@ -1618,6 +1618,52 @@ async def get_symbols():
         "timeline": "24-hour UTC focus"
     }
 
+@app.get("/api/stock/{symbol}")
+async def get_stock_data(
+    symbol: str,
+    period: str = Query("1d", description="Time period: 1d, 5d, 1mo, 3mo, 6mo, 1y"),
+    interval: str = Query("1m", description="Data interval: 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d")
+):
+    """Get historical stock data for charting"""
+    try:
+        logger.info(f"📈 Fetching stock data for {symbol} (period={period}, interval={interval})")
+        
+        # Use yfinance to get real market data
+        import yfinance as yf
+        
+        ticker = yf.Ticker(symbol)
+        hist = ticker.history(period=period, interval=interval)
+        
+        if hist.empty:
+            raise HTTPException(status_code=404, detail=f"No data found for symbol {symbol}")
+        
+        # Convert to our expected format
+        data_points = []
+        for timestamp, row in hist.iterrows():
+            data_points.append({
+                "timestamp": timestamp.isoformat(),
+                "open": float(row['Open']),
+                "high": float(row['High']),
+                "low": float(row['Low']),
+                "close": float(row['Close']),
+                "volume": int(row['Volume']) if not pd.isna(row['Volume']) else 0
+            })
+        
+        logger.info(f"✅ Retrieved {len(data_points)} data points for {symbol}")
+        
+        return {
+            "success": True,
+            "symbol": symbol,
+            "period": period,
+            "interval": interval,
+            "data": data_points,
+            "total_points": len(data_points)
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error fetching stock data for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch stock data: {str(e)}")
+
 @app.get("/api/live-status")
 async def get_live_status():
     """Get real-time market status and refresh information"""
@@ -5002,6 +5048,26 @@ async def serve_mobile_unified():
 async def serve_unified_interface():
     """Serve the unified trading interface (redirects to mobile-optimized version)"""
     return await serve_mobile_unified()
+
+@app.get("/enhanced_market_tracker.html", response_class=HTMLResponse, include_in_schema=False)
+async def serve_enhanced_market_tracker():
+    """Serve the Enhanced Market Tracker with Stock Plotting and Predictions"""
+    try:
+        file_path = "enhanced_market_tracker.html"
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="Enhanced Market Tracker not found")
+    except Exception as e:
+        logger.error(f"Error serving Enhanced Market Tracker: {e}")
+        raise HTTPException(status_code=500, detail="Failed to serve Enhanced Market Tracker")
+
+@app.get("/stock-plotter", response_class=HTMLResponse, include_in_schema=False)
+async def serve_stock_plotter_redirect():
+    """Serve the stock plotting interface (redirects to Enhanced Market Tracker)"""
+    return await serve_enhanced_market_tracker()
 
 @app.get("/mobile", response_class=HTMLResponse, include_in_schema=False)
 async def serve_mobile_unified():
