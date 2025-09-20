@@ -7007,6 +7007,199 @@ async def get_learning_metrics():
             "error": str(e)
         }
 
+@app.post("/api/scheduler/start")
+async def start_automatic_scheduler():
+    """Start the automatic prediction scheduler for continuous learning."""
+    try:
+        from automatic_prediction_scheduler import get_scheduler
+        
+        scheduler = get_scheduler()
+        
+        if scheduler.running:
+            return {
+                "success": False,
+                "message": "Automatic scheduler is already running",
+                "status": scheduler.get_scheduler_status()
+            }
+        
+        await scheduler.start()
+        
+        logger.info("🤖 Automatic prediction scheduler started via API")
+        
+        return {
+            "success": True,
+            "message": "Automatic prediction scheduler started successfully",
+            "status": scheduler.get_scheduler_status(),
+            "capabilities": {
+                "continuous_learning": True,
+                "market_hours_aware": True,
+                "multi_symbol_support": True,
+                "performance_tracking": True,
+                "self_adaptation": True
+            }
+        }
+        
+    except ImportError:
+        return {
+            "success": False,
+            "error": "Automatic scheduler module not available",
+            "recommendation": "Check if automatic_prediction_scheduler.py is properly installed"
+        }
+    except Exception as e:
+        logger.error(f"Error starting automatic scheduler: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.post("/api/scheduler/stop")
+async def stop_automatic_scheduler():
+    """Stop the automatic prediction scheduler."""
+    try:
+        from automatic_prediction_scheduler import get_scheduler
+        
+        scheduler = get_scheduler()
+        
+        if not scheduler.running:
+            return {
+                "success": False,
+                "message": "Automatic scheduler is not currently running"
+            }
+        
+        await scheduler.stop()
+        
+        logger.info("⏹️ Automatic prediction scheduler stopped via API")
+        
+        return {
+            "success": True,
+            "message": "Automatic prediction scheduler stopped successfully",
+            "final_status": scheduler.get_scheduler_status()
+        }
+        
+    except ImportError:
+        return {
+            "success": False,
+            "error": "Automatic scheduler module not available"
+        }
+    except Exception as e:
+        logger.error(f"Error stopping automatic scheduler: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.get("/api/scheduler/status")
+async def get_scheduler_status():
+    """Get current status of the automatic prediction scheduler."""
+    try:
+        from automatic_prediction_scheduler import get_scheduler
+        
+        scheduler = get_scheduler()
+        status = scheduler.get_scheduler_status()
+        
+        # Add market hours information
+        current_time = datetime.now()
+        market_info = {}
+        
+        for market in ['ASX', 'NYSE', 'NASDAQ', 'LSE']:
+            market_status = scheduler.get_market_status(market, current_time)
+            market_info[market] = {
+                'status': market_status.value,
+                'local_time': current_time.isoformat()
+            }
+        
+        return {
+            "success": True,
+            "scheduler_status": status,
+            "market_information": market_info,
+            "system_info": {
+                "uptime": "Active" if status['running'] else "Stopped",
+                "last_check": current_time.isoformat(),
+                "learning_mode": "Continuous" if status['running'] else "Manual"
+            }
+        }
+        
+    except ImportError:
+        return {
+            "success": False,
+            "error": "Automatic scheduler module not available"
+        }
+    except Exception as e:
+        logger.error(f"Error getting scheduler status: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.post("/api/scheduler/add-symbol")
+async def add_symbol_to_scheduler(data: dict):
+    """Add a symbol to the automatic prediction schedule."""
+    try:
+        symbol = data.get('symbol')
+        market = data.get('market')
+        intervals = data.get('intervals', ['1h', '4h', '1d'])
+        priority = data.get('priority', 2)
+        
+        if not symbol or not market:
+            raise HTTPException(status_code=400, detail="Symbol and market are required")
+        
+        from automatic_prediction_scheduler import get_scheduler
+        
+        scheduler = get_scheduler()
+        scheduler.add_symbol_schedule(symbol, market, intervals, priority)
+        
+        logger.info(f"➕ Added {symbol} to automatic prediction schedule")
+        
+        return {
+            "success": True,
+            "message": f"Added {symbol} to automatic prediction schedule",
+            "symbol": symbol,
+            "market": market,
+            "intervals": intervals,
+            "priority": priority
+        }
+        
+    except ImportError:
+        return {
+            "success": False,
+            "error": "Automatic scheduler module not available"
+        }
+    except Exception as e:
+        logger.error(f"Error adding symbol to scheduler: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.delete("/api/scheduler/remove-symbol/{symbol}")
+async def remove_symbol_from_scheduler(symbol: str):
+    """Remove a symbol from the automatic prediction schedule."""
+    try:
+        from automatic_prediction_scheduler import get_scheduler
+        
+        scheduler = get_scheduler()
+        scheduler.remove_symbol_schedule(symbol)
+        
+        logger.info(f"➖ Removed {symbol} from automatic prediction schedule")
+        
+        return {
+            "success": True,
+            "message": f"Removed {symbol} from automatic prediction schedule",
+            "symbol": symbol
+        }
+        
+    except ImportError:
+        return {
+            "success": False,
+            "error": "Automatic scheduler module not available"
+        }
+    except Exception as e:
+        logger.error(f"Error removing symbol from scheduler: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 
 if __name__ == "__main__":
     import uvicorn
