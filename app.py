@@ -666,7 +666,11 @@ def convert_real_market_data_to_format(real_points, symbol: str, market: str, ch
         return []
     
     # Get base price for percentage calculations (first point's close)
-    base_price = filtered_points[0].close if filtered_points else 100.0
+    # LIVE DATA ONLY: No synthetic fallback prices
+    if not filtered_points:
+        logger.error(f"No market data available for {symbol}. Cannot calculate base price.")
+        return []
+    base_price = filtered_points[0].close
     
     # Convert to MarketDataPoint format
     market_data_points = []
@@ -724,7 +728,11 @@ def convert_simulated_data_to_format(simulated_points, symbol: str, market: str,
     filtered_points = [p for p in simulated_points if p.timestamp >= start_time]
     
     # Get base price for percentage calculations (first point's close)
-    base_price = filtered_points[0].close if filtered_points else 100.0
+    # LIVE DATA ONLY: No synthetic fallback prices
+    if not filtered_points:
+        logger.error(f"No market data available for {symbol}. Cannot calculate base price.")
+        return []
+    base_price = filtered_points[0].close
     
     # Convert to MarketDataPoint format
     market_data_points = []
@@ -818,9 +826,9 @@ def convert_live_data_to_format(live_points: List[LiveDataPoint], symbol: str, m
                 base_price = sorted_points[-1].close  # Last available point
                 logger.info(f"📊 Using last available price as base for {symbol}: {base_price}")
         else:
-            # Ultimate fallback - should rarely happen with live data
-            base_price = 100.0
-            logger.warning(f"⚠️ No live data available for {symbol}, using default fallback: {base_price}")
+            # LIVE DATA ONLY POLICY: No synthetic fallback prices
+            logger.error(f"❌ No real market data available for {symbol}. LIVE DATA ONLY policy prevents fallback pricing.")
+            raise ValueError(f"Unable to obtain real market data for {symbol}. No synthetic fallback data allowed.")
     
     logger.info(f"📊 Final base price for {symbol}: {base_price}")
     

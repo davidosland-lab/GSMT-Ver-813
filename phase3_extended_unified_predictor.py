@@ -421,12 +421,9 @@ class ExtendedUnifiedSuperPredictor:
             
         except Exception as e:
             self.logger.error(f"Market data fetch failed for {symbol}: {e}")
-            # Return minimal dummy data to prevent total failure
-            dummy_data = pd.DataFrame({
-                'Open': [100.0], 'High': [101.0], 'Low': [99.0], 
-                'Close': [100.5], 'Volume': [1000000]
-            }, index=[datetime.now().date()])
-            return dummy_data
+            # LIVE DATA ONLY POLICY: Never return dummy/fake data
+            # Instead, propagate the error so the system can handle it appropriately
+            raise ValueError(f"Unable to fetch real market data for {symbol}. LIVE DATA ONLY policy prevents dummy data usage.") from e
     
     async def _engineer_advanced_features(self, 
                                         symbol: str, 

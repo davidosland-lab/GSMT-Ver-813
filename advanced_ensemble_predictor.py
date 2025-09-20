@@ -266,8 +266,9 @@ class AdvancedEnsemblePredictor:
             
         except Exception as e:
             logger.error(f"❌ Error in advanced prediction for {symbol}: {e}")
-            # Return fallback prediction
-            return self._create_fallback_prediction(symbol, timeframe)
+            # LIVE DATA ONLY POLICY: Never return synthetic fallback predictions
+            # Instead, propagate the error to maintain data integrity
+            raise ValueError(f"Prediction failed for {symbol} ({timeframe}). LIVE DATA ONLY policy prevents fallback synthetic predictions.") from e
     
     async def _generate_features(self, 
                                symbol: str, 
@@ -829,23 +830,9 @@ class AdvancedEnsemblePredictor:
             logger.error(f"❌ Failed to convert market data: {e}")
             return None
     
-    def _create_fallback_prediction(self, symbol: str, timeframe: str) -> PredictionResult:
-        """Create a fallback prediction when main prediction fails"""
-        
-        return PredictionResult(
-            symbol=symbol,
-            timeframe=timeframe,
-            direction="sideways",
-            expected_return=0.0,
-            confidence_interval=(-0.02, 0.02),
-            probability_up=0.5,
-            volatility_estimate=0.2,
-            risk_adjusted_return=0.0,
-            model_ensemble_weights={"fallback": 1.0},
-            feature_importance={"error": 1.0},
-            uncertainty_score=0.9,
-            prediction_timestamp=datetime.now()
-        )
+    # REMOVED: _create_fallback_prediction method
+    # LIVE DATA ONLY POLICY: No synthetic/fallback predictions allowed
+    # All predictions must be based on real market data or fail gracefully
 
 # Global instance
 advanced_predictor = AdvancedEnsemblePredictor()
