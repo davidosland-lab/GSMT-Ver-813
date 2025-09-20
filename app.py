@@ -5725,18 +5725,47 @@ async def export_candlestick_data(
 
 from ftse_sp500_prediction_system import multi_market_predictor, PredictionResult
 
-# Import Unified Super Predictor
+# Import Phase 3 Enhanced Unified Super Predictor
 try:
-    from unified_super_predictor import (
-        unified_super_predictor,
-        UnifiedPrediction,
+    from phase3_unified_super_predictor import (
+        Phase3UnifiedSuperPredictor,
+        Phase3UnifiedPrediction,
         PredictionDomain,
         TimeHorizon
     )
-    logger.info("🚀 Unified Super Predictor loaded successfully")
+    
+    # Initialize Phase 3 predictor with configuration
+    phase3_config = {
+        'lookback_period': 60,
+        'min_samples': 50,
+        'confidence_threshold': 0.7,
+        'performance_db_path': 'phase3_performance_monitoring.db',
+        'mcmc_samples': 1000,
+        'prior_alpha': 1.0,
+        'posterior_window': 100,
+        'regime_lookback': 60,
+        'max_memory_records': 10000
+    }
+    
+    unified_super_predictor = Phase3UnifiedSuperPredictor(phase3_config)
+    logger.info("🚀 Phase 3 Enhanced Unified Super Predictor loaded successfully")
+    PHASE3_ENABLED = True
+    
 except ImportError as e:
-    unified_super_predictor = None
-    logger.warning(f"Unified Super Predictor not available: {e}")
+    # Fallback to original unified predictor
+    try:
+        from unified_super_predictor import (
+            unified_super_predictor,
+            UnifiedPrediction as Phase3UnifiedPrediction,
+            PredictionDomain,
+            TimeHorizon
+        )
+        logger.info("🚀 Original Unified Super Predictor loaded (Phase 3 fallback)")
+        PHASE3_ENABLED = False
+    except ImportError as e2:
+        unified_super_predictor = None
+        logger.warning(f"No Unified Super Predictor available: Phase 3: {e}, Original: {e2}")
+        PHASE3_ENABLED = False
 
 class PredictionRequest(BaseModel):
     symbols: List[str] = Field(default=["^FTSE", "^GSPC"], description="Symbols to predict")
@@ -5993,24 +6022,33 @@ async def get_unified_super_prediction(
                 detail=f"Invalid timeframe. Must be one of: {', '.join(valid_timeframes)}"
             )
         
-        # Generate unified prediction
-        logger.info(f"🚀 Generating unified super prediction for {symbol} ({timeframe})")
+        # Generate Phase 3 enhanced unified prediction
+        logger.info(f"🚀 Generating Phase 3 enhanced unified super prediction for {symbol} ({timeframe})")
         
-        unified_result = await unified_super_predictor.generate_unified_prediction(
-            symbol=symbol,
-            time_horizon=timeframe,
-            include_all_domains=include_all_domains
-        )
+        if PHASE3_ENABLED:
+            unified_result = await unified_super_predictor.generate_phase3_unified_prediction(
+                symbol=symbol,
+                time_horizon=timeframe,
+                include_all_domains=include_all_domains,
+                use_phase3_enhancements=True
+            )
+        else:
+            # Fallback to original method
+            unified_result = await unified_super_predictor.generate_unified_prediction(
+                symbol=symbol,
+                time_horizon=timeframe,
+                include_all_domains=include_all_domains
+            )
         
         processing_time = asyncio.get_event_loop().time() - start_time
         
-        # Format comprehensive response
+        # Format comprehensive Phase 3 enhanced response
         response = {
             "success": True,
             "symbol": symbol,
             "timeframe": timeframe,
             "processing_time": f"{processing_time:.2f}s",
-            "prediction_type": "UNIFIED_SUPER_PREDICTION",
+            "prediction_type": "PHASE3_UNIFIED_SUPER_PREDICTION" if PHASE3_ENABLED else "UNIFIED_SUPER_PREDICTION",
             
             # Core Prediction Results
             "prediction": {
@@ -6035,7 +6073,31 @@ async def get_unified_super_prediction(
                 "active_domains": len(unified_result.domain_predictions)
             },
             
-            # Feature Analysis
+            # Phase 3 Enhanced Analysis (if available)
+            **({"phase3_enhancements": {
+                "multi_timeframe_analysis": {
+                    "timeframe_predictions": getattr(unified_result, 'timeframe_predictions', {}),
+                    "timeframe_weights": getattr(unified_result, 'timeframe_weights', {}),
+                    "cross_timeframe_consistency": getattr(unified_result, 'cross_timeframe_consistency', 0.0)
+                },
+                "bayesian_uncertainty": {
+                    "bayesian_uncertainty": getattr(unified_result, 'bayesian_uncertainty', {}),
+                    "credible_intervals": getattr(unified_result, 'credible_intervals', {})
+                },
+                "market_regime_detection": {
+                    "market_regime": getattr(unified_result, 'market_regime', 'Unknown'),
+                    "regime_confidence": getattr(unified_result, 'regime_confidence', 0.0),
+                    "volatility_regime": getattr(unified_result, 'volatility_regime', 'Unknown'),
+                    "regime_specific_weights": getattr(unified_result, 'regime_specific_weights', {})
+                },
+                "performance_monitoring": {
+                    "model_performance_scores": getattr(unified_result, 'model_performance_scores', {}),
+                    "performance_adjusted_weights": getattr(unified_result, 'performance_adjusted_weights', {}),
+                    "degradation_alerts": getattr(unified_result, 'degradation_alerts', []),
+                    "retraining_recommendations": getattr(unified_result, 'retraining_recommendations', [])
+                }
+            }} if PHASE3_ENABLED else {}),
+            
             "feature_analysis": {
                 "top_factors": unified_result.top_factors,
                 "feature_importance": dict(list(unified_result.feature_importance.items())[:10]),
@@ -6053,14 +6115,20 @@ async def get_unified_super_prediction(
             
             # Market Context
             "market_context": {
-                "market_regime": unified_result.market_regime,
-                "session_type": unified_result.session_type,
-                "external_factors": unified_result.external_factors
+                "market_regime": getattr(unified_result, 'market_regime', 'Unknown'),
+                "session_type": getattr(unified_result, 'session_type', 'Unknown'),
+                "external_factors": getattr(unified_result, 'external_factors', {})
             },
             
             # System Metadata
             "system_metadata": {
-                "prediction_methodology": "Multi-Domain Ensemble with Dynamic Weighting",
+                "prediction_methodology": "Phase 3 Enhanced Multi-Domain Ensemble" if PHASE3_ENABLED else "Multi-Domain Ensemble with Dynamic Weighting",
+                "phase3_components": [
+                    "P3_001: Multi-Timeframe Architecture",
+                    "P3_002: Bayesian Ensemble Framework", 
+                    "P3_003: Market Regime Detection",
+                    "P3_004: Real-Time Performance Monitoring"
+                ] if PHASE3_ENABLED else [],
                 "integrated_modules": [
                     "Phase 2 Architecture Optimization",
                     "ASX SPI Futures Integration", 
@@ -6090,6 +6158,183 @@ async def get_unified_super_prediction(
         raise HTTPException(
             status_code=500, 
             detail=f"Unified super prediction failed: {str(e)}"
+        )
+
+@app.get("/api/phase3-prediction/{symbol}")
+async def get_phase3_enhanced_prediction(
+    symbol: str,
+    timeframe: str = Query("5d", description="Prediction timeframe: 1d, 5d, 30d, 90d"),
+    enable_all_enhancements: bool = Query(True, description="Enable all Phase 3 enhancements"),
+    include_bayesian: bool = Query(True, description="Include Bayesian uncertainty quantification"),
+    include_regime_detection: bool = Query(True, description="Include market regime detection"),
+    include_performance_monitoring: bool = Query(True, description="Include real-time performance monitoring")
+):
+    """🚀 PHASE 3 ENHANCED PREDICTION - Advanced ML prediction with all Phase 3 components
+    
+    This endpoint provides access to the most advanced prediction system featuring:
+    - P3_001: Multi-Timeframe Architecture with horizon-specific models
+    - P3_002: Bayesian Ensemble Framework with uncertainty quantification
+    - P3_003: Market Regime Detection with dynamic model weighting
+    - P3_004: Real-Time Performance Monitoring with live adaptation
+    
+    Target Performance: 75%+ ensemble accuracy through sophisticated ML techniques
+    """
+    try:
+        if not unified_super_predictor:
+            raise HTTPException(
+                status_code=503,
+                detail="Phase 3 Enhanced Predictor not available"
+            )
+        
+        if not PHASE3_ENABLED:
+            return RedirectResponse(
+                url=f"/api/unified-prediction/{symbol}?timeframe={timeframe}",
+                status_code=307
+            )
+        
+        start_time = asyncio.get_event_loop().time()
+        
+        # Validate symbol
+        if symbol not in SYMBOLS_DB:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Symbol {symbol} not supported. Use /api/symbols to see available symbols."
+            )
+        
+        # Validate timeframe
+        valid_timeframes = ["1d", "5d", "30d", "90d"]
+        if timeframe not in valid_timeframes:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid timeframe for Phase 3. Must be one of: {', '.join(valid_timeframes)}"
+            )
+        
+        logger.info(f"🚀 Generating Phase 3 enhanced prediction for {symbol} ({timeframe})")
+        
+        # Generate Phase 3 prediction with full enhancements
+        unified_result = await unified_super_predictor.generate_phase3_unified_prediction(
+            symbol=symbol,
+            time_horizon=timeframe,
+            include_all_domains=True,
+            use_phase3_enhancements=enable_all_enhancements
+        )
+        
+        processing_time = asyncio.get_event_loop().time() - start_time
+        
+        # Comprehensive Phase 3 response
+        response = {
+            "success": True,
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "processing_time": f"{processing_time:.2f}s",
+            "prediction_type": "PHASE3_ENHANCED_PREDICTION",
+            "phase3_enabled": True,
+            
+            # Core Prediction Results
+            "prediction": {
+                "direction": unified_result.direction,
+                "expected_return": unified_result.expected_return,
+                "predicted_price": unified_result.predicted_price,
+                "current_price": unified_result.current_price,
+                "confidence_score": unified_result.confidence_score,
+                "uncertainty_score": unified_result.uncertainty_score,
+                "probability_up": unified_result.probability_up,
+                "confidence_interval": {
+                    "lower": unified_result.confidence_interval[0],
+                    "upper": unified_result.confidence_interval[1]
+                }
+            },
+            
+            # Phase 3 Multi-Timeframe Analysis (P3_001)
+            "multi_timeframe_analysis": {
+                "timeframe_predictions": unified_result.timeframe_predictions,
+                "timeframe_weights": unified_result.timeframe_weights,
+                "cross_timeframe_consistency": unified_result.cross_timeframe_consistency,
+                "primary_timeframe": timeframe,
+                "supporting_timeframes": list(unified_result.timeframe_predictions.keys())
+            },
+            
+            # Phase 3 Bayesian Uncertainty (P3_002)
+            "bayesian_analysis": {
+                "bayesian_uncertainty": unified_result.bayesian_uncertainty,
+                "credible_intervals": unified_result.credible_intervals,
+                "epistemic_uncertainty": unified_result.bayesian_uncertainty.get('epistemic', 0.0),
+                "aleatoric_uncertainty": unified_result.bayesian_uncertainty.get('aleatoric', 0.0),
+                "uncertainty_decomposition": "Epistemic (model) + Aleatoric (data)"
+            },
+            
+            # Phase 3 Market Regime Detection (P3_003)
+            "regime_analysis": {
+                "market_regime": unified_result.market_regime,
+                "regime_confidence": unified_result.regime_confidence,
+                "volatility_regime": unified_result.volatility_regime,
+                "regime_specific_weights": unified_result.regime_specific_weights,
+                "regime_interpretation": {
+                    "trend": unified_result.market_regime.split('_')[0] if '_' in unified_result.market_regime else 'Unknown',
+                    "volatility": unified_result.volatility_regime
+                }
+            },
+            
+            # Phase 3 Performance Monitoring (P3_004)
+            "performance_monitoring": {
+                "model_performance_scores": unified_result.model_performance_scores,
+                "performance_adjusted_weights": unified_result.performance_adjusted_weights,
+                "degradation_alerts": unified_result.degradation_alerts,
+                "retraining_recommendations": unified_result.retraining_recommendations,
+                "monitoring_status": "active" if unified_result.model_performance_scores else "limited_history"
+            },
+            
+            # Enhanced Domain Analysis
+            "domain_analysis": {
+                "domain_predictions": unified_result.domain_predictions,
+                "domain_weights": unified_result.domain_weights,
+                "domain_confidence": unified_result.domain_confidence,
+                "active_domains": len(unified_result.domain_predictions),
+                "domain_count": len(unified_result.domain_predictions)
+            },
+            
+            # Enhanced Risk Assessment
+            "risk_assessment": {
+                "risk_score": unified_result.risk_score,
+                "volatility_estimate": unified_result.volatility_estimate,
+                "risk_factors": unified_result.risk_factors,
+                "risk_level": "HIGH" if unified_result.risk_score > 0.7 else 
+                           "MEDIUM" if unified_result.risk_score > 0.4 else "LOW",
+                "uncertainty_based_risk": unified_result.uncertainty_score
+            },
+            
+            # System Metadata
+            "system_metadata": {
+                "prediction_methodology": "Phase 3 Advanced ML Architecture",
+                "phase3_components_active": [
+                    "P3_001: Multi-Timeframe Architecture",
+                    "P3_002: Bayesian Ensemble Framework",
+                    "P3_003: Market Regime Detection", 
+                    "P3_004: Real-Time Performance Monitoring"
+                ],
+                "target_accuracy": "75%+ ensemble accuracy",
+                "ml_techniques": [
+                    "Horizon-specific models",
+                    "Bayesian model averaging",
+                    "Gaussian mixture regime detection",
+                    "Real-time performance adaptation"
+                ],
+                "timestamp": unified_result.prediction_timestamp.isoformat()
+            }
+        }
+        
+        logger.info(f"🎯 Phase 3 enhanced prediction completed for {symbol}: {unified_result.direction} "
+                   f"(confidence: {unified_result.confidence_score:.1%}, regime: {unified_result.market_regime})")
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in Phase 3 enhanced prediction endpoint: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Phase 3 enhanced prediction failed: {str(e)}"
         )
 
 @app.get("/favicon.ico", include_in_schema=False)
