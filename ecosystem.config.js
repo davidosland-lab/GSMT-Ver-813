@@ -21,7 +21,7 @@ module.exports = {
     {
       name: 'api-service',
       script: 'python3',
-      args: '-m uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload',
+      args: '-m uvicorn app:app --host 0.0.0.0 --port 8000',
       cwd: '/home/user/webapp',
       env: {
         PORT: '8000',
