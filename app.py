@@ -5074,9 +5074,9 @@ async def serve_unified_interface():
     """Serve the unified trading interface (redirects to mobile-optimized version)"""
     return await serve_mobile_unified()
 
-@app.get("/enhanced_market_tracker.html", response_class=HTMLResponse, include_in_schema=False)
-async def serve_enhanced_market_tracker():
-    """Serve the Enhanced Market Tracker with Stock Plotting and Predictions"""
+@app.get("/enhanced-global-tracker", response_class=HTMLResponse)
+async def serve_enhanced_global_market_tracker():
+    """🚀 Enhanced Global Market Tracker with Phase 3 Extensions (P3-005 to P3-007)"""
     try:
         file_path = "enhanced_market_tracker.html"
         if os.path.exists(file_path):
@@ -5084,15 +5084,35 @@ async def serve_enhanced_market_tracker():
                 content = f.read()
             return HTMLResponse(content=content, status_code=200)
         else:
-            raise HTTPException(status_code=404, detail="Enhanced Market Tracker not found")
+            raise HTTPException(status_code=404, detail="Enhanced Global Market Tracker not found")
     except Exception as e:
-        logger.error(f"Error serving Enhanced Market Tracker: {e}")
-        raise HTTPException(status_code=500, detail="Failed to serve Enhanced Market Tracker")
+        logger.error(f"Error serving Enhanced Global Market Tracker: {e}")
+        raise HTTPException(status_code=500, detail="Failed to serve Enhanced Global Market Tracker")
+
+@app.get("/enhanced_market_tracker.html", response_class=HTMLResponse, include_in_schema=False)
+async def serve_enhanced_market_tracker():
+    """Serve the Enhanced Market Tracker with Stock Plotting and Predictions (Legacy Route)"""
+    return await serve_enhanced_global_market_tracker()
 
 @app.get("/stock-plotter", response_class=HTMLResponse, include_in_schema=False)
 async def serve_stock_plotter_redirect():
-    """Serve the stock plotting interface (redirects to Enhanced Market Tracker)"""
-    return await serve_enhanced_market_tracker()
+    """Serve the stock plotting interface (redirects to Single Stock Track and Predict)"""
+    return await serve_single_stock_track_predict()
+
+@app.get("/single-stock-tracker", response_class=HTMLResponse)
+async def serve_single_stock_track_predict():
+    """📈 Single Stock Track and Predict - Advanced AI Analysis with Phase 3 Extended"""
+    try:
+        file_path = "single_stock_track_predict.html"
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="Single Stock Track and Predict module not found")
+    except Exception as e:
+        logger.error(f"Error serving Single Stock Track and Predict: {e}")
+        raise HTTPException(status_code=500, detail="Failed to serve Single Stock Track and Predict module")
 
 @app.get("/mobile", response_class=HTMLResponse, include_in_schema=False)
 async def serve_mobile_unified():

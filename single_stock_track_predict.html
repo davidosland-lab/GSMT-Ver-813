@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🚀 Enhanced Global Market Tracker with Phase 3 Extended Predictions (P3-005 to P3-007)</title>
+    <title>📈 Single Stock Track and Predict - Advanced AI Analysis</title>
     
     <!-- External Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -367,9 +367,9 @@
         <div class="header">
             <h1>
                 <i class="fas fa-chart-line" style="margin-right: 15px; color: #3b82f6;"></i>
-                Enhanced Global Market Tracker
+                Single Stock Track and Predict
             </h1>
-            <p class="subtitle">Real-time tracking with Phase 3 Extended predictions (P3-005 to P3-007)</p>
+            <p class="subtitle">Advanced AI-powered single stock analysis with Phase 3 predictions (P3-001 to P3-007)</p>
             
             <div class="feature-badges">
                 <span class="badge badge-live">
@@ -1238,22 +1238,33 @@
                 </div>
             `;
 
-            // Build details
+            // Build Extended Phase 3 details
             detailsDiv.innerHTML = `
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-top: 15px;">
                     <div>
                         <strong>🎯 Timeframe:</strong> ${timeframe}<br>
                         <strong>📊 Current Price:</strong> $${prediction.current_price.toFixed(2)}<br>
-                        <strong>⚖️ Risk Level:</strong> ${data.risk_assessment.risk_level}
+                        <strong>⏱️ Processing Time:</strong> ${data.processing_time || 'N/A'}
                     </div>
                     <div>
-                        <strong>🔧 Active Domains:</strong> ${data.domain_analysis.active_domains}<br>
-                        <strong>🧠 Methodology:</strong> ${data.system_metadata.prediction_methodology}<br>
-                        <strong>⏱️ Processing Time:</strong> ${data.processing_time}
+                        <strong>🚀 Phase 3 Extended:</strong> ${data.prediction_type || 'EXTENDED_PHASE3_PREDICTION'}<br>
+                        <strong>🧠 AI Features:</strong> ${data.advanced_feature_engineering?.total_features_engineered || 'N/A'} engineered<br>
+                        <strong>⚖️ Risk Management:</strong> ${data.risk_management?.risk_management_active ? 'Active' : 'Inactive'}
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 15px;">
+                    <div style="padding: 8px; background: rgba(45, 90, 160, 0.2); border-radius: 6px; font-size: 0.8em;">
+                        <strong>P3-005 Advanced Features:</strong> ${data.components_active?.p3_005_advanced_features ? '✅ Active' : '❌ Inactive'}
+                    </div>
+                    <div style="padding: 8px; background: rgba(139, 92, 246, 0.2); border-radius: 6px; font-size: 0.8em;">
+                        <strong>P3-006 Reinforcement Learning:</strong> ${data.components_active?.p3_006_reinforcement_learning ? '✅ Active' : '❌ Inactive'}
+                    </div>
+                    <div style="padding: 8px; background: rgba(239, 68, 68, 0.2); border-radius: 6px; font-size: 0.8em;">
+                        <strong>P3-007 Risk Management:</strong> ${data.components_active?.p3_007_risk_management ? '✅ Active' : '❌ Inactive'}
                     </div>
                 </div>
                 <div style="margin-top: 15px; padding: 10px; background: rgba(30, 41, 59, 0.4); border-radius: 8px; font-size: 0.85em;">
-                    <strong>🔍 Top Factors:</strong> ${data.feature_analysis.top_factors.slice(0, 5).join(', ')}
+                    <strong>🔍 Top Factors:</strong> ${data.advanced_feature_engineering?.top_factors?.slice(0, 5).join(', ') || 'Feature analysis in progress...'}
                 </div>
             `;
 
