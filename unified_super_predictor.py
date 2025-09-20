@@ -390,9 +390,13 @@ class UnifiedSuperPredictor:
         ensemble_price = sum(weighted_prices) if weighted_prices else current_price * (1 + ensemble_return)
         ensemble_confidence = sum(weighted_confidence)
         
-        # Direction and probability
-        direction = "UP" if ensemble_return > 0 else "DOWN"
-        probability_up = 0.5 + (ensemble_return / 0.2)  # Scale to probability
+        # Direction and probability - FIXED: Use actual price difference, not just return
+        direction = "UP" if ensemble_price > current_price else "DOWN"
+        
+        # FIXED: Recalculate expected return to match actual price difference
+        actual_return = (ensemble_price - current_price) / current_price
+        
+        probability_up = 0.5 + (actual_return / 0.2)  # Scale to probability
         probability_up = max(0.1, min(0.9, probability_up))
         
         # Uncertainty quantification
@@ -420,7 +424,7 @@ class UnifiedSuperPredictor:
             prediction_timestamp=datetime.now(timezone.utc),
             predicted_price=ensemble_price,
             current_price=current_price,
-            expected_return=ensemble_return,
+            expected_return=actual_return,
             direction=direction,
             confidence_score=ensemble_confidence,
             uncertainty_score=uncertainty_score,

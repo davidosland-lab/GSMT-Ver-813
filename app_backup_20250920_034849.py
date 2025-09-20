@@ -1,13 +1,3 @@
-
-# Enhanced Local Predictor Integration (Local Deployment Mode)
-try:
-    from enhanced_local_predictor import enhanced_prediction_with_local_mirror
-    ENHANCED_PREDICTOR_AVAILABLE = True
-    print("🚀 Enhanced Local Predictor available - Reduced prediction timeframes active")
-except ImportError as e:
-    print(f"⚠️  Enhanced Local Predictor not available: {e}")
-    ENHANCED_PREDICTOR_AVAILABLE = False
-
 """
 Global Stock Market Tracker - Local Deployment
 24-Hour UTC Timeline Focus for Global Stock Indices with Live Data
@@ -6096,95 +6086,6 @@ async def get_unified_super_prediction(
 async def favicon():
     """Simple favicon endpoint"""
     return Response(content="", status_code=204)
-
-
-# Enhanced Local Predictor Specific Endpoints
-@app.get("/api/enhanced/status")
-async def enhanced_predictor_status():
-    """Get enhanced predictor availability and performance metrics."""
-    try:
-        if not ENHANCED_PREDICTOR_AVAILABLE:
-            return {
-                "available": False,
-                "message": "Enhanced predictor not loaded"
-            }
-        
-        from enhanced_local_predictor import EnhancedLocalPredictor
-        predictor = EnhancedLocalPredictor()
-        metrics = await predictor.get_performance_metrics()
-        
-        return {
-            "available": True,
-            "metrics": metrics,
-            "features": {
-                "reduced_timeframes": "5-15 seconds vs 30-60 seconds",
-                "local_document_analysis": True,
-                "offline_capability": True,
-                "caching_enabled": True
-            }
-        }
-    except Exception as e:
-        return {
-            "available": False,
-            "error": str(e)
-        }
-
-@app.post("/api/enhanced/predict/{symbol}")
-async def enhanced_predict_explicit(symbol: str, timeframe: str = "5d"):
-    """Explicit enhanced prediction endpoint (bypasses fallback logic)."""
-    try:
-        if not ENHANCED_PREDICTOR_AVAILABLE:
-            return {
-                "success": False,
-                "error": "Enhanced predictor not available"
-            }
-        
-        result = await enhanced_prediction_with_local_mirror(symbol, timeframe)
-        result['enhanced_mode'] = True
-        result['prediction_source'] = 'enhanced_explicit'
-        
-        return result
-        
-    except Exception as e:
-        logger.error(f"Enhanced prediction failed for {symbol}: {e}")
-        return {
-            "success": False,
-            "error": str(e),
-            "symbol": symbol,
-            "timeframe": timeframe
-        }
-
-@app.get("/api/enhanced/performance")
-async def enhanced_predictor_performance():
-    """Get detailed performance metrics for enhanced predictor."""
-    try:
-        if not ENHANCED_PREDICTOR_AVAILABLE:
-            return {"error": "Enhanced predictor not available"}
-        
-        from enhanced_local_predictor import EnhancedLocalPredictor
-        predictor = EnhancedLocalPredictor()
-        
-        # Get overall metrics
-        overall_metrics = await predictor.get_performance_metrics()
-        
-        # Get symbol-specific metrics for popular symbols
-        popular_symbols = ['CBA.AX', 'BHP.AX', '^AORD', '^GSPC', '^FTSE']
-        symbol_metrics = {}
-        
-        for symbol in popular_symbols:
-            symbol_data = await predictor.get_performance_metrics(symbol=symbol, days=7)
-            if symbol_data.get('total_predictions', 0) > 0:
-                symbol_metrics[symbol] = symbol_data
-        
-        return {
-            "overall": overall_metrics,
-            "by_symbol": symbol_metrics,
-            "database_stats": predictor.db.get_database_stats()
-        }
-        
-    except Exception as e:
-        return {"error": str(e)}
-
 
 if __name__ == "__main__":
     import uvicorn

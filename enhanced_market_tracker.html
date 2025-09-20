@@ -9,6 +9,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.1/dist/chartjs-chart-financial.min.js"></script>
+
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
     
@@ -92,7 +94,7 @@
         
         .controls-section {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr auto;
+            grid-template-columns: 1fr 1fr 1fr 1fr auto;
             gap: 20px;
             align-items: end;
             margin-bottom: 25px;
@@ -326,6 +328,13 @@
         
         .hidden { display: none !important; }
         
+        @media (max-width: 1200px) {
+            .controls-section {
+                grid-template-columns: 1fr 1fr;
+                gap: 15px;
+            }
+        }
+        
         @media (max-width: 1024px) {
             .controls-section {
                 grid-template-columns: 1fr;
@@ -477,6 +486,24 @@
                     </div>
                 </div>
 
+                <!-- Time Interval Selection -->
+                <div class="control-group">
+                    <label for="intervalSelect">
+                        <i class="fas fa-clock" style="margin-right: 6px; color: #f59e0b;"></i>
+                        Time Interval
+                    </label>
+                    <select id="intervalSelect" class="market-dropdown" onchange="changeTimeInterval()">
+                        <option value="1m">1 Minute</option>
+                        <option value="2m">2 Minutes</option>
+                        <option value="5m">5 Minutes</option>
+                        <option value="15m">15 Minutes</option>
+                        <option value="30m">30 Minutes</option>
+                        <option value="1h" selected>1 Hour</option>
+                        <option value="90m">90 Minutes</option>
+                        <option value="1d">1 Day</option>
+                    </select>
+                </div>
+
                 <!-- Track Button -->
                 <div class="control-group">
                     <button class="track-btn" onclick="startTracking()">
@@ -560,6 +587,7 @@
         let currentChart = null;
         let currentSymbol = '';
         let currentChartView = 'price';
+        let currentTimeInterval = '1h';
         let trackingInterval = null;
         let chartData = [];
 
@@ -646,10 +674,37 @@
             }
         }
 
+        // Time interval selection
+        function changeTimeInterval() {
+            const intervalSelect = document.getElementById('intervalSelect');
+            currentTimeInterval = intervalSelect.value;
+            
+            // If we're currently tracking a symbol, refresh the data with new interval
+            if (currentSymbol && !trackingInterval) {
+                // For one-time refresh
+                fetchMarketData(currentSymbol);
+            } else if (currentSymbol && trackingInterval) {
+                // For ongoing tracking, restart with new interval
+                stopTracking();
+                setTimeout(() => {
+                    startTracking();
+                }, 500);
+            }
+        }
+
         // Initialize Chart.js chart
         function initializeChart() {
+            if (currentChartView === 'candlestick') {
+                initializeCandlestickChart();
+            } else {
+                initializeLineChart();
+            }
+        }
+
+        // Initialize line chart for price and percentage views
+        function initializeLineChart() {
             try {
-                console.log('🎯 Initializing Chart.js...', typeof Chart);
+                console.log('🎯 Initializing Line Chart...', typeof Chart);
                 const ctx = document.getElementById('mainChart').getContext('2d');
                 currentChart = new Chart(ctx, {
                 type: 'line',
@@ -709,9 +764,151 @@
                     }
                 }
             });
-            console.log('✅ Chart.js initialized successfully');
+            console.log('✅ Line Chart initialized successfully');
             } catch (error) {
-                console.error('❌ Chart.js initialization failed:', error);
+                console.error('❌ Line Chart initialization failed:', error);
+            }
+        }
+
+        // Initialize candlestick chart using custom candlestick plugin
+        function initializeCandlestickChart() {
+            try {
+                console.log('🎯 Initializing True Candlestick Chart...', typeof Chart);
+                const ctx = document.getElementById('mainChart').getContext('2d');
+                
+                // Register custom candlestick plugin
+                Chart.register({
+                    id: 'candlestickPlugin',
+                    afterDatasetsDraw: function(chart, args, options) {
+                        if (!chartData || chartData.length === 0) return;
+                        
+                        const ctx = chart.ctx;
+                        const meta = chart.getDatasetMeta(0);
+                        const xAxis = chart.scales.x;
+                        const yAxis = chart.scales.y;
+                        
+                        ctx.save();
+                        
+                        chartData.forEach((data, index) => {
+                            if (!meta.data[index] || meta.data[index].skip) return;
+                            
+                            const x = meta.data[index].x;
+                            const isUp = data.close >= data.open;
+                            
+                            // Calculate y positions
+                            const highY = yAxis.getPixelForValue(data.high);
+                            const lowY = yAxis.getPixelForValue(data.low);
+                            const openY = yAxis.getPixelForValue(data.open);
+                            const closeY = yAxis.getPixelForValue(data.close);
+                            
+                            // Draw wick (thin line from high to low)
+                            ctx.strokeStyle = isUp ? '#059669' : '#dc2626';
+                            ctx.lineWidth = 1;
+                            ctx.beginPath();
+                            ctx.moveTo(x, highY);
+                            ctx.lineTo(x, lowY);
+                            ctx.stroke();
+                            
+                            // Draw body (rectangle from open to close)
+                            const bodyHeight = Math.abs(closeY - openY);
+                            const bodyY = Math.min(openY, closeY);
+                            const bodyWidth = 8; // Fixed width for mobile visibility
+                            
+                            ctx.fillStyle = isUp ? '#10b981' : '#ef4444';
+                            ctx.strokeStyle = isUp ? '#059669' : '#dc2626';
+                            ctx.lineWidth = 1;
+                            
+                            // Fill and stroke the candlestick body
+                            ctx.fillRect(x - bodyWidth/2, bodyY, bodyWidth, bodyHeight);
+                            ctx.strokeRect(x - bodyWidth/2, bodyY, bodyWidth, bodyHeight);
+                        });
+                        
+                        ctx.restore();
+                    }
+                });
+                
+                console.log('🕯️ Creating true candlestick chart with custom plugin...');
+                currentChart = new Chart(ctx, {
+                    type: 'scatter',
+                    data: {
+                        datasets: [{
+                            label: 'OHLC Data',
+                            data: [],
+                            pointRadius: 0, // Hide points, we'll draw candlesticks
+                            showLine: false
+                        }]
+                    },
+                    plugins: ['candlestickPlugin'],
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: '#e2e8f0'
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    title: function(context) {
+                                        return new Date(context[0].label).toLocaleString();
+                                    },
+                                    label: function(context) {
+                                        const data = chartData[context.dataIndex];
+                                        if (!data) return '';
+                                        const isUp = data.close >= data.open;
+                                        const change = ((data.close - data.open) / data.open * 100).toFixed(2);
+                                        return [
+                                            `📈 Open: $${data.open.toFixed(2)}`,
+                                            `🔼 High: $${data.high.toFixed(2)}`, 
+                                            `🔽 Low: $${data.low.toFixed(2)}`,
+                                            `📊 Close: $${data.close.toFixed(2)}`,
+                                            `${isUp ? '📈' : '📉'} Change: ${isUp ? '+' : ''}${change}%`,
+                                            `📦 Volume: ${data.volume.toLocaleString()}`
+                                        ].join('\n');
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: {
+                                    color: '#94a3b8',
+                                    maxTicksLimit: 8
+                                },
+                                grid: {
+                                    color: 'rgba(148, 163, 184, 0.1)'
+                                }
+                            },
+                            y: {
+                                beginAtZero: false,
+                                ticks: {
+                                    color: '#94a3b8',
+                                    callback: function(value) {
+                                        return '$' + value.toFixed(2);
+                                    }
+                                },
+                                grid: {
+                                    color: 'rgba(148, 163, 184, 0.1)'
+                                }
+                            }
+                        }
+                    }
+                });
+
+                
+                console.log('✅ Candlestick Chart initialized successfully');
+                
+                // If we have data available, populate the chart immediately
+                if (chartData && chartData.length > 0) {
+                    console.log('📊 Populating candlestick chart with existing data...');
+                    updateChart();
+                }
+                
+            } catch (error) {
+                console.error('❌ Candlestick Chart initialization failed:', error);
+                // Fallback to line chart
+                initializeLineChart();
             }
         }
 
@@ -791,7 +988,7 @@
         // Fetch market data
         async function fetchMarketData(symbol) {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/stock/${symbol}?period=1d`);
+                const response = await fetch(`${API_BASE_URL}/api/stock/${symbol}?period=1d&interval=${currentTimeInterval}`);
                 
                 if (!response.ok) {
                     throw new Error(`Failed to fetch real market data for ${symbol}: ${response.status} ${response.statusText}`);
@@ -816,14 +1013,14 @@
                     
                     document.getElementById('currentPrice').textContent = `$${latestData.close.toFixed(2)}`;
                     
-                    if (previousData) {
-                        const change = latestData.close - previousData.close;
-                        const changePercent = (change / previousData.close) * 100;
-                        const changeElement = document.getElementById('priceChange');
-                        
-                        changeElement.textContent = `${change >= 0 ? '+' : ''}${change.toFixed(2)} (${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%)`;
-                        changeElement.className = change >= 0 ? 'up' : 'down';
-                    }
+                    // Calculate change from opening price of the day (first data point)
+                    const openingPrice = chartData[0].open;
+                    const change = latestData.close - openingPrice;
+                    const changePercent = (change / openingPrice) * 100;
+                    const changeElement = document.getElementById('priceChange');
+                    
+                    changeElement.textContent = `${change >= 0 ? '+' : ''}${change.toFixed(2)} (${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%)`;
+                    changeElement.className = change >= 0 ? 'up' : 'down';
 
                     // Update chart
                     updateChart();
@@ -844,6 +1041,23 @@
         function updateChart() {
             if (!currentChart || !chartData.length) return;
 
+            // Destroy existing chart and create new one for candlestick vs line charts
+            // Check if we need to switch chart types - candlestick uses scatter type, others use line
+            const isCandlestickChart = currentChart.config.type === 'scatter';
+            const needsCandlestick = currentChartView === 'candlestick';
+            
+            if (needsCandlestick && !isCandlestickChart) {
+                console.log('🔄 Switching to candlestick chart...');
+                currentChart.destroy();
+                initializeCandlestickChart();
+                return;
+            } else if (!needsCandlestick && isCandlestickChart) {
+                console.log('🔄 Switching to line chart...');
+                currentChart.destroy();
+                initializeLineChart();
+                return;
+            }
+
             let labels = [];
             let data = [];
             let label = '';
@@ -858,32 +1072,66 @@
                     break;
 
                 case 'change':
-                    labels = chartData.slice(1).map(d => d.timestamp);
-                    data = chartData.slice(1).map((d, i) => {
-                        const prev = chartData[i];
-                        return ((d.close - prev.close) / prev.close) * 100;
+                    // Calculate percentage change from opening price (first data point)
+                    const openingPrice = chartData[0].open;
+                    labels = chartData.map(d => d.timestamp);
+                    data = chartData.map(d => {
+                        return ((d.close - openingPrice) / openingPrice) * 100;
                     });
-                    label = `${currentSymbol} % Change`;
+                    label = `${currentSymbol} % Change from Open`;
                     borderColor = '#10b981';
                     backgroundColor = 'rgba(16, 185, 129, 0.1)';
                     break;
 
                 case 'candlestick':
-                    // For candlestick, we'll show close prices with volume as background
-                    labels = chartData.map(d => d.timestamp);
-                    data = chartData.map(d => d.close);
-                    label = `${currentSymbol} Candlestick (Close)`;
-                    borderColor = '#f59e0b';
-                    backgroundColor = 'rgba(245, 158, 11, 0.1)';
+                    // For true candlestick scatter chart with custom plugin
+                    if (currentChart.config.type === 'scatter') {
+                        // Create scatter points for positioning (use close prices)
+                        const scatterData = chartData.map((d, index) => ({
+                            x: index, // Use index for x position
+                            y: (d.high + d.low) / 2 // Use midpoint for y positioning
+                        }));
+                        
+                        currentChart.data.datasets[0].data = scatterData;
+                        
+                        // Set up x-axis labels
+                        const timeLabels = chartData.map(d => new Date(d.timestamp).toLocaleTimeString('en-US', {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        }));
+                        
+                        // Update x-axis to use labels
+                        currentChart.options.scales.x.type = 'linear';
+                        currentChart.options.scales.x.ticks.callback = function(value, index) {
+                            return timeLabels[Math.floor(value)] || '';
+                        };
+                        
+                        // Set y-axis range to fit all OHLC data
+                        const allPrices = chartData.flatMap(d => [d.open, d.high, d.low, d.close]);
+                        const minPrice = Math.min(...allPrices);
+                        const maxPrice = Math.max(...allPrices);
+                        const padding = (maxPrice - minPrice) * 0.05;
+                        
+                        currentChart.options.scales.y.min = minPrice - padding;
+                        currentChart.options.scales.y.max = maxPrice + padding;
+                        
+                        currentChart.update('none');
+                        return;
+                    }
                     break;
             }
 
-            // Update chart
-            currentChart.data.labels = labels;
-            currentChart.data.datasets[0].label = label;
-            currentChart.data.datasets[0].data = data;
-            currentChart.data.datasets[0].borderColor = borderColor;
-            currentChart.data.datasets[0].backgroundColor = backgroundColor;
+            // Update chart data
+            if (currentChartView === 'candlestick') {
+                currentChart.data.datasets[0].data = data;
+                currentChart.data.labels = labels;
+            } else {
+                currentChart.data.labels = labels;
+                currentChart.data.datasets[0].label = label;
+                currentChart.data.datasets[0].data = data;
+                currentChart.data.datasets[0].borderColor = borderColor;
+                currentChart.data.datasets[0].backgroundColor = backgroundColor;
+            }
 
             currentChart.update('none'); // No animation for real-time updates
         }
