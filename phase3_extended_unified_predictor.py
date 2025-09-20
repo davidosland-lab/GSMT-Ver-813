@@ -715,8 +715,19 @@ class ExtendedUnifiedSuperPredictor:
         """Run stress tests on positions (P3-007)."""
         
         try:
-            # Simple stress test scenarios
-            current_price = 100.0  # Placeholder
+            # Get current price for stress testing
+            try:
+                # Use yfinance directly for current price
+                import yfinance as yf
+                ticker = yf.Ticker(symbol)
+                hist = ticker.history(period='5d')
+                if not hist.empty:
+                    current_price = float(hist['Close'].iloc[-1])
+                else:
+                    current_price = 100.0  # Fallback
+            except Exception:
+                current_price = 100.0  # Fallback
+            
             position_value = position_sizing.get(symbol, 0.5) * current_price
             
             stress_scenarios = {
@@ -769,8 +780,16 @@ class ExtendedUnifiedSuperPredictor:
         processing_components = kwargs['processing_components']
         start_time = kwargs['start_time']
         
-        # Get current price (placeholder)
-        current_price = 100.0  # In production, fetch from market data
+        # Get current price from actual market data
+        try:
+            market_data = await self._fetch_market_data(symbol, time_horizon)
+            if not market_data.empty:
+                current_price = float(market_data['Close'].iloc[-1])  # Most recent close price
+            else:
+                current_price = 100.0  # Fallback if no data available
+        except Exception as e:
+            self.logger.warning(f"Could not fetch current price for {symbol}: {e}")
+            current_price = 100.0  # Fallback
         
         # Calculate predicted price and direction
         expected_return = bayesian_result.get('expected_return', 0.01)
