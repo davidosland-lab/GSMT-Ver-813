@@ -1488,6 +1488,26 @@ async def root():
         # Fallback to JSON API response
         return await root_api()
 
+@app.get("/landing", response_class=HTMLResponse)
+async def serve_comprehensive_landing_page():
+    """🚀 Comprehensive Landing Page - Global Stock Market Tracker Platform"""
+    try:
+        landing_path = "comprehensive_landing_page.html"
+        if os.path.exists(landing_path):
+            with open(landing_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="Comprehensive landing page not found")
+    except Exception as e:
+        logger.error(f"Error serving comprehensive landing page: {e}")
+        raise HTTPException(status_code=500, detail="Failed to serve comprehensive landing page")
+
+@app.get("/home", response_class=HTMLResponse)
+async def serve_comprehensive_home():
+    """🏠 Alternative Home Page - Comprehensive Landing Page"""
+    return await serve_comprehensive_landing_page()
+
 @app.get("/hub", response_class=HTMLResponse)
 async def serve_interface_hub():
     """Serve the interface hub (same as root)"""
