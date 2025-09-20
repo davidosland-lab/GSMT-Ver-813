@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧪 Prediction API Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-4xl mx-auto">
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h1 class="text-2xl font-bold mb-4">🧪 Unified Super Predictor API Test</h1>
+            
+            <div class="grid md:grid-cols-3 gap-4 mb-6">
+                <button onclick="testPrediction('AAPL', '1d')" class="bg-blue-500 text-white p-3 rounded hover:bg-blue-600">
+                    Test AAPL (1d)
+                </button>
+                <button onclick="testPrediction('CBA.AX', '5d')" class="bg-green-500 text-white p-3 rounded hover:bg-green-600">
+                    Test CBA.AX (5d)
+                </button>
+                <button onclick="testPrediction('TSLA', '1d')" class="bg-purple-500 text-white p-3 rounded hover:bg-purple-600">
+                    Test TSLA (1d)
+                </button>
+            </div>
+            
+            <div id="results" class="bg-gray-50 p-4 rounded min-h-64">
+                <p class="text-gray-500">Click a test button to run predictions...</p>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-xl font-bold mb-4">Manual Test</h2>
+            <div class="flex gap-4 mb-4">
+                <input type="text" id="symbolInput" placeholder="Symbol (e.g., AAPL)" class="border p-2 rounded flex-1">
+                <select id="timeframeInput" class="border p-2 rounded">
+                    <option value="1d">1 Day</option>
+                    <option value="5d">5 Days</option>
+                    <option value="30d">30 Days</option>
+                </select>
+                <button onclick="runCustomTest()" class="bg-indigo-500 text-white px-6 py-2 rounded hover:bg-indigo-600">
+                    Test
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function testPrediction(symbol, timeframe) {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = `
+                <div class="flex items-center gap-2 mb-4">
+                    <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                    <span>Testing ${symbol} (${timeframe})...</span>
+                </div>
+            `;
+            
+            try {
+                const startTime = Date.now();
+                const response = await fetch(`/api/unified-prediction/${symbol}?timeframe=${timeframe}`);
+                const processingTime = Date.now() - startTime;
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                resultsDiv.innerHTML = `
+                    <div class="space-y-4">
+                        <div class="bg-green-50 border border-green-200 rounded p-4">
+                            <h3 class="font-bold text-green-800 mb-2">✅ Prediction Successful!</h3>
+                            <div class="grid md:grid-cols-2 gap-4 text-sm">
+                                <div>
+                                    <p><strong>Symbol:</strong> ${data.symbol}</p>
+                                    <p><strong>Direction:</strong> ${data.prediction.direction}</p>
+                                    <p><strong>Expected Return:</strong> ${(data.prediction.expected_return * 100).toFixed(2)}%</p>
+                                    <p><strong>Confidence:</strong> ${(data.prediction.confidence_score * 100).toFixed(1)}%</p>
+                                </div>
+                                <div>
+                                    <p><strong>Current Price:</strong> $${data.prediction.current_price.toFixed(2)}</p>
+                                    <p><strong>Target Price:</strong> $${data.prediction.predicted_price.toFixed(2)}</p>
+                                    <p><strong>Risk Level:</strong> ${data.risk_assessment.risk_level}</p>
+                                    <p><strong>Processing Time:</strong> ${processingTime}ms</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-blue-50 border border-blue-200 rounded p-4">
+                            <h4 class="font-bold text-blue-800 mb-2">Domain Analysis</h4>
+                            <p><strong>Active Domains:</strong> ${data.domain_analysis.active_domains}</p>
+                            <p><strong>Top Factors:</strong> ${data.feature_analysis.top_factors.slice(0, 3).join(', ')}</p>
+                        </div>
+                        
+                        <details class="bg-gray-50 border rounded p-4">
+                            <summary class="cursor-pointer font-medium">Raw Response Data</summary>
+                            <pre class="mt-2 text-xs overflow-auto">${JSON.stringify(data, null, 2)}</pre>
+                        </details>
+                    </div>
+                `;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `
+                    <div class="bg-red-50 border border-red-200 rounded p-4">
+                        <h3 class="font-bold text-red-800 mb-2">❌ Test Failed</h3>
+                        <p class="text-red-700">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function runCustomTest() {
+            const symbol = document.getElementById('symbolInput').value.trim().toUpperCase();
+            const timeframe = document.getElementById('timeframeInput').value;
+            
+            if (!symbol) {
+                alert('Please enter a symbol');
+                return;
+            }
+            
+            testPrediction(symbol, timeframe);
+        }
+    </script>
+</body>
+</html>

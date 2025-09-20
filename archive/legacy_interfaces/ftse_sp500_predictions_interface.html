@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FTSE & S&P 500 Predictions - Global Stock Market Tracker</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        .prediction-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .prediction-card.positive {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+        .prediction-card.negative {
+            background: linear-gradient(135deg, #ee0979 0%, #ff6a00 100%);
+        }
+        .market-status-open {
+            color: #10b981;
+        }
+        .market-status-closed {
+            color: #ef4444;
+        }
+        .market-status-pre {
+            color: #f59e0b;
+        }
+        .confidence-bar {
+            background: rgba(255,255,255,0.2);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .confidence-fill {
+            background: rgba(255,255,255,0.8);
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+        .loading-spinner {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .chart-container {
+            height: 400px;
+            background: white;
+            border-radius: 8px;
+            padding: 16px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <!-- Header -->
+    <header class="bg-white shadow-md">
+        <div class="container mx-auto px-4 py-6">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <i class="fas fa-chart-line text-3xl text-blue-600"></i>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-800">Multi-Market Predictions</h1>
+                        <p class="text-gray-600">FTSE 100 & S&P 500 AI-Powered Forecasts</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="text-right">
+                        <div class="text-sm text-gray-500">Last Updated</div>
+                        <div id="last-updated" class="font-mono text-sm">--:--:--</div>
+                    </div>
+                    <button id="refresh-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                        <i class="fas fa-refresh mr-2"></i>Refresh
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container mx-auto px-4 py-8">
+        <!-- Controls -->
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Prediction Horizon</label>
+                    <select id="horizon-select" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="5min">5 Minutes</option>
+                        <option value="15min" selected>15 Minutes</option>
+                        <option value="30min">30 Minutes</option>
+                        <option value="1hour">1 Hour</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Auto Refresh</label>
+                    <select id="auto-refresh" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="0">Manual</option>
+                        <option value="30">30 seconds</option>
+                        <option value="60" selected>1 minute</option>
+                        <option value="300">5 minutes</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Actions</label>
+                    <button id="train-models-btn" class="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors">
+                        <i class="fas fa-brain mr-2"></i>Train Models
+                    </button>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                    <div id="system-status" class="w-full px-3 py-2 bg-gray-100 rounded-md text-center">
+                        <i class="fas fa-circle text-yellow-500 mr-2"></i>Loading...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Prediction Cards -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <!-- FTSE 100 Prediction -->
+            <div id="ftse-card" class="prediction-card rounded-xl shadow-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center space-x-3">
+                        <i class="fas fa-flag text-2xl"></i>
+                        <div>
+                            <h2 class="text-xl font-bold">FTSE 100</h2>
+                            <p class="text-sm opacity-90">London Stock Exchange</p>
+                        </div>
+                    </div>
+                    <div id="ftse-status" class="text-right">
+                        <div class="text-sm opacity-75">Market Status</div>
+                        <div class="font-semibold">Loading...</div>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <div class="text-sm opacity-75">Current Price</div>
+                        <div id="ftse-current" class="text-2xl font-bold">---.--</div>
+                    </div>
+                    <div>
+                        <div class="text-sm opacity-75">Predicted Price</div>
+                        <div id="ftse-predicted" class="text-2xl font-bold">---.--</div>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <div class="flex justify-between text-sm opacity-75 mb-1">
+                        <span>Confidence Interval</span>
+                        <span id="ftse-confidence-pct">--%</span>
+                    </div>
+                    <div class="confidence-bar h-2">
+                        <div id="ftse-confidence-fill" class="confidence-fill" style="width: 0%"></div>
+                    </div>
+                    <div class="flex justify-between text-xs opacity-75 mt-1">
+                        <span id="ftse-confidence-low">---.--</span>
+                        <span id="ftse-confidence-high">---.--</span>
+                    </div>
+                </div>
+                
+                <div class="flex justify-between items-center text-sm opacity-90">
+                    <span>Model: <span id="ftse-model" class="font-semibold">--</span></span>
+                    <span>R²: <span id="ftse-accuracy" class="font-semibold">--.---</span></span>
+                </div>
+            </div>
+
+            <!-- S&P 500 Prediction -->
+            <div id="sp500-card" class="prediction-card rounded-xl shadow-lg p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center space-x-3">
+                        <i class="fas fa-flag-usa text-2xl"></i>
+                        <div>
+                            <h2 class="text-xl font-bold">S&P 500</h2>
+                            <p class="text-sm opacity-90">New York Stock Exchange</p>
+                        </div>
+                    </div>
+                    <div id="sp500-status" class="text-right">
+                        <div class="text-sm opacity-75">Market Status</div>
+                        <div class="font-semibold">Loading...</div>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <div class="text-sm opacity-75">Current Price</div>
+                        <div id="sp500-current" class="text-2xl font-bold">---.--</div>
+                    </div>
+                    <div>
+                        <div class="text-sm opacity-75">Predicted Price</div>
+                        <div id="sp500-predicted" class="text-2xl font-bold">---.--</div>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <div class="flex justify-between text-sm opacity-75 mb-1">
+                        <span>Confidence Interval</span>
+                        <span id="sp500-confidence-pct">--%</span>
+                    </div>
+                    <div class="confidence-bar h-2">
+                        <div id="sp500-confidence-fill" class="confidence-fill" style="width: 0%"></div>
+                    </div>
+                    <div class="flex justify-between text-xs opacity-75 mt-1">
+                        <span id="sp500-confidence-low">---.--</span>
+                        <span id="sp500-confidence-high">---.--</span>
+                    </div>
+                </div>
+                
+                <div class="flex justify-between items-center text-sm opacity-90">
+                    <span>Model: <span id="sp500-model" class="font-semibold">--</span></span>
+                    <span>R²: <span id="sp500-accuracy" class="font-semibold">--.---</span></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Prediction Charts -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <i class="fas fa-chart-area mr-2 text-blue-600"></i>FTSE 100 Prediction Trend
+                </h3>
+                <div id="ftse-chart" class="chart-container"></div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <i class="fas fa-chart-area mr-2 text-green-600"></i>S&P 500 Prediction Trend
+                </h3>
+                <div id="sp500-chart" class="chart-container"></div>
+            </div>
+        </div>
+
+        <!-- Model Information -->
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                <i class="fas fa-info-circle mr-2 text-blue-600"></i>Model Information & Features
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <h4 class="font-semibold text-gray-800 mb-3">FTSE 100 Model</h4>
+                    <div id="ftse-features" class="space-y-2">
+                        <div class="text-sm text-gray-600">Loading model features...</div>
+                    </div>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-gray-800 mb-3">S&P 500 Model</h4>
+                    <div id="sp500-features" class="space-y-2">
+                        <div class="text-sm text-gray-600">Loading model features...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class PredictionInterface {
+            constructor() {
+                this.baseUrl = window.location.origin;
+                this.refreshInterval = null;
+                this.charts = {
+                    ftse: null,
+                    sp500: null
+                };
+                
+                this.init();
+            }
+            
+            async init() {
+                console.log('🤖 Initializing FTSE & S&P 500 Predictions Interface...');
+                
+                // Initialize charts
+                this.initCharts();
+                
+                // Setup event handlers
+                this.setupEventHandlers();
+                
+                // Check system status
+                await this.checkSystemStatus();
+                
+                // Load initial predictions
+                await this.loadPredictions();
+                
+                // Setup auto-refresh
+                this.setupAutoRefresh();
+                
+                console.log('✅ Prediction interface initialized');
+            }
+            
+            initCharts() {
+                this.charts.ftse = echarts.init(document.getElementById('ftse-chart'));
+                this.charts.sp500 = echarts.init(document.getElementById('sp500-chart'));
+                
+                // Initial empty chart options
+                const emptyOption = {
+                    title: { text: 'Loading predictions...', left: 'center', top: 'center' },
+                    grid: { left: '10%', right: '10%', top: '15%', bottom: '15%' }
+                };
+                
+                this.charts.ftse.setOption(emptyOption);
+                this.charts.sp500.setOption(emptyOption);
+                
+                // Handle window resize
+                window.addEventListener('resize', () => {
+                    this.charts.ftse?.resize();
+                    this.charts.sp500?.resize();
+                });
+            }
+            
+            setupEventHandlers() {
+                // Refresh button
+                document.getElementById('refresh-btn').addEventListener('click', () => {
+                    this.loadPredictions();
+                });
+                
+                // Train models button
+                document.getElementById('train-models-btn').addEventListener('click', () => {
+                    this.trainModels();
+                });
+                
+                // Horizon select
+                document.getElementById('horizon-select').addEventListener('change', () => {
+                    this.loadPredictions();
+                });
+                
+                // Auto refresh select
+                document.getElementById('auto-refresh').addEventListener('change', () => {
+                    this.setupAutoRefresh();
+                });
+            }
+            
+            async checkSystemStatus() {
+                try {
+                    const response = await fetch(`${this.baseUrl}/api/predictions/status`);
+                    const data = await response.json();
+                    
+                    if (data.status === 'operational') {
+                        document.getElementById('system-status').innerHTML = 
+                            '<i class="fas fa-circle text-green-500 mr-2"></i>Operational';
+                    } else {
+                        document.getElementById('system-status').innerHTML = 
+                            '<i class="fas fa-circle text-red-500 mr-2"></i>Error';
+                    }
+                    
+                    console.log('📊 System status:', data);
+                    
+                } catch (error) {
+                    console.error('❌ Error checking system status:', error);
+                    document.getElementById('system-status').innerHTML = 
+                        '<i class="fas fa-circle text-red-500 mr-2"></i>Offline';
+                }
+            }
+            
+            async trainModels() {
+                try {
+                    console.log('🧠 Training prediction models...');
+                    
+                    const trainBtn = document.getElementById('train-models-btn');
+                    trainBtn.innerHTML = '<i class="fas fa-spinner loading-spinner mr-2"></i>Training...';
+                    trainBtn.disabled = true;
+                    
+                    const response = await fetch(`${this.baseUrl}/api/predictions/train?symbols=^FTSE&symbols=^GSPC`, {
+                        method: 'POST'
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.status === 'completed') {
+                        console.log('✅ Models trained successfully:', data.results);
+                        
+                        // Update system status
+                        document.getElementById('system-status').innerHTML = 
+                            '<i class="fas fa-circle text-green-500 mr-2"></i>Models Trained';
+                        
+                        // Reload predictions
+                        setTimeout(() => this.loadPredictions(), 1000);
+                    } else {
+                        throw new Error('Training failed');
+                    }
+                    
+                } catch (error) {
+                    console.error('❌ Error training models:', error);
+                    alert('Failed to train models. Please try again.');
+                } finally {
+                    const trainBtn = document.getElementById('train-models-btn');
+                    trainBtn.innerHTML = '<i class="fas fa-brain mr-2"></i>Train Models';
+                    trainBtn.disabled = false;
+                }
+            }
+            
+            async loadPredictions() {
+                try {
+                    console.log('🔮 Loading predictions...');
+                    
+                    const horizon = document.getElementById('horizon-select').value;
+                    
+                    const response = await fetch(`${this.baseUrl}/api/predictions/predict`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            symbols: ['^FTSE', '^GSPC'],
+                            horizon: horizon
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.status === 'success') {
+                        console.log('📊 Predictions loaded:', data.predictions);
+                        this.updatePredictionDisplay(data.predictions);
+                        this.updateCharts(data.predictions);
+                    } else {
+                        throw new Error('Failed to load predictions');
+                    }
+                    
+                    // Update last updated time
+                    document.getElementById('last-updated').textContent = new Date().toLocaleTimeString();
+                    
+                } catch (error) {
+                    console.error('❌ Error loading predictions:', error);
+                    this.showError('Failed to load predictions');
+                }
+            }
+            
+            updatePredictionDisplay(predictions) {
+                // Update FTSE prediction
+                const ftse = predictions['^FTSE'];
+                if (ftse && !ftse.error) {
+                    this.updateMarketCard('ftse', ftse, 'GBP');
+                } else {
+                    this.showMarketError('ftse', ftse?.error || 'No data available');
+                }
+                
+                // Update S&P 500 prediction
+                const sp500 = predictions['^GSPC'];
+                if (sp500 && !sp500.error) {
+                    this.updateMarketCard('sp500', sp500, 'USD');
+                } else {
+                    this.showMarketError('sp500', sp500?.error || 'No data available');
+                }
+            }
+            
+            updateMarketCard(market, prediction, currency) {
+                const prefix = market === 'ftse' ? 'ftse' : 'sp500';
+                
+                // Update predicted price
+                document.getElementById(`${prefix}-predicted`).textContent = 
+                    `${prediction.predicted_price.toFixed(2)} ${currency}`;
+                
+                // Update confidence interval
+                const [low, high] = prediction.confidence_interval;
+                document.getElementById(`${prefix}-confidence-low`).textContent = low.toFixed(2);
+                document.getElementById(`${prefix}-confidence-high`).textContent = high.toFixed(2);
+                
+                // Calculate confidence percentage
+                const range = high - low;
+                const confidencePct = Math.max(0, 100 - (range / prediction.predicted_price * 100));
+                document.getElementById(`${prefix}-confidence-pct`).textContent = `${confidencePct.toFixed(0)}%`;
+                document.getElementById(`${prefix}-confidence-fill`).style.width = `${confidencePct}%`;
+                
+                // Update model info
+                document.getElementById(`${prefix}-model`).textContent = prediction.model_used;
+                document.getElementById(`${prefix}-accuracy`).textContent = 
+                    prediction.accuracy_metrics.r2?.toFixed(3) || '0.000';
+                
+                // Update market status
+                const statusElement = document.getElementById(`${prefix}-status`);
+                const marketState = prediction.market_state;
+                statusElement.innerHTML = `
+                    <div class="text-sm opacity-75">Market Status</div>
+                    <div class="font-semibold market-status-${marketState.replace('-', '')}">${marketState.toUpperCase()}</div>
+                `;
+                
+                // Update card color based on prediction vs current (simplified)
+                const card = document.getElementById(`${prefix}-card`);
+                card.className = `prediction-card rounded-xl shadow-lg p-6`;
+            }
+            
+            showMarketError(market, error) {
+                const prefix = market === 'ftse' ? 'ftse' : 'sp500';
+                document.getElementById(`${prefix}-predicted`).textContent = 'Error';
+                document.getElementById(`${prefix}-model`).textContent = error;
+            }
+            
+            updateCharts(predictions) {
+                // This is a simplified chart update
+                // In a real implementation, you'd maintain historical predictions
+                
+                const ftse = predictions['^FTSE'];
+                const sp500 = predictions['^GSPC'];
+                
+                if (ftse && !ftse.error) {
+                    this.updateChart('ftse', ftse);
+                }
+                
+                if (sp500 && !sp500.error) {
+                    this.updateChart('sp500', sp500);
+                }
+            }
+            
+            updateChart(market, prediction) {
+                const chart = this.charts[market];
+                if (!chart) return;
+                
+                const option = {
+                    title: {
+                        text: `${market.toUpperCase()} Prediction`,
+                        left: 'center'
+                    },
+                    tooltip: {
+                        trigger: 'axis',
+                        formatter: function(params) {
+                            return `Prediction: ${prediction.predicted_price.toFixed(2)}<br/>
+                                    Confidence: ${prediction.confidence_interval[0].toFixed(2)} - ${prediction.confidence_interval[1].toFixed(2)}<br/>
+                                    Model: ${prediction.model_used}`;
+                        }
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: ['Current', 'Predicted']
+                    },
+                    yAxis: {
+                        type: 'value',
+                        min: function(value) {
+                            return Math.min(value.min, prediction.confidence_interval[0]) * 0.995;
+                        },
+                        max: function(value) {
+                            return Math.max(value.max, prediction.confidence_interval[1]) * 1.005;
+                        }
+                    },
+                    series: [
+                        {
+                            name: 'Price',
+                            type: 'line',
+                            data: [
+                                prediction.predicted_price * 0.999, // Simulate current price
+                                prediction.predicted_price
+                            ],
+                            smooth: true,
+                            itemStyle: { color: '#3b82f6' }
+                        },
+                        {
+                            name: 'Confidence Band',
+                            type: 'line',
+                            data: [
+                                [0, prediction.confidence_interval[0]],
+                                [1, prediction.confidence_interval[1]]
+                            ],
+                            areaStyle: {
+                                color: 'rgba(59, 130, 246, 0.2)'
+                            },
+                            lineStyle: { opacity: 0 },
+                            symbol: 'none'
+                        }
+                    ]
+                };
+                
+                chart.setOption(option);
+            }
+            
+            setupAutoRefresh() {
+                // Clear existing interval
+                if (this.refreshInterval) {
+                    clearInterval(this.refreshInterval);
+                    this.refreshInterval = null;
+                }
+                
+                const refreshSeconds = parseInt(document.getElementById('auto-refresh').value);
+                
+                if (refreshSeconds > 0) {
+                    this.refreshInterval = setInterval(() => {
+                        console.log('🔄 Auto-refreshing predictions...');
+                        this.loadPredictions();
+                    }, refreshSeconds * 1000);
+                    
+                    console.log(`⏰ Auto-refresh enabled: ${refreshSeconds} seconds`);
+                }
+            }
+            
+            showError(message) {
+                console.error('❌', message);
+                // You could add a toast notification here
+            }
+        }
+        
+        // Initialize when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            window.predictionInterface = new PredictionInterface();
+        });
+    </script>
+</body>
+</html>

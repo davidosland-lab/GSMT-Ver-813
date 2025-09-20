@@ -170,8 +170,8 @@ class AdvancedEnsembleBacktester:
             data = ticker.history(start=start_date, end=end_date, interval='1d')
             
             if data.empty:
-                logger.warning("No real data available, using synthetic data")
-                return self._generate_comprehensive_synthetic_data(symbol, days)
+                logger.error(f"❌ No real historical data available for {symbol} - cannot perform backtesting without real data")
+                raise ValueError(f"No historical data available for {symbol}. Backtesting requires real market data.")
             
             # Calculate technical indicators for backtesting
             data['Daily_Return'] = data['Close'].pct_change()
@@ -190,7 +190,7 @@ class AdvancedEnsembleBacktester:
             
         except Exception as e:
             logger.error(f"Failed to fetch historical data: {e}")
-            return self._generate_comprehensive_synthetic_data(symbol, days)
+            raise e  # Re-raise the original exception - no synthetic data allowed
     
     def _calculate_rsi(self, prices: pd.Series, window: int = 14) -> pd.Series:
         """Calculate RSI technical indicator"""
@@ -201,75 +201,8 @@ class AdvancedEnsembleBacktester:
         rsi = 100 - (100 / (1 + rs))
         return rsi
     
-    def _generate_comprehensive_synthetic_data(self, symbol: str, days: int) -> pd.DataFrame:
-        """Generate realistic synthetic market data with technical indicators"""
-        
-        logger.info("🔧 Generating comprehensive synthetic market data...")
-        
-        dates = pd.date_range(
-            start=datetime.now() - timedelta(days=days),
-            end=datetime.now(),
-            freq='D'
-        )
-        
-        # Advanced market simulation with realistic patterns
-        np.random.seed(42)
-        
-        base_price = 7500  # ASX All Ordinaries level
-        prices = [base_price]
-        volumes = []
-        
-        # Simulate market with trends and volatility clusters
-        trend_change_prob = 0.05  # 5% chance of trend change per day
-        current_trend = 0.0005  # Initial slight upward trend
-        volatility = 0.015  # Base volatility
-        
-        for i in range(len(dates) - 1):
-            # Occasional trend changes
-            if np.random.random() < trend_change_prob:
-                current_trend = np.random.normal(0, 0.001)
-            
-            # Volatility clustering (GARCH-like behavior)
-            if i > 0:
-                prev_return = (prices[-1] - prices[-2]) / prices[-2]
-                volatility = 0.01 + 0.8 * volatility + 0.1 * abs(prev_return)
-                volatility = max(0.005, min(0.04, volatility))  # Bound volatility
-            
-            # Generate return with trend and volatility
-            daily_return = np.random.normal(current_trend, volatility)
-            new_price = prices[-1] * (1 + daily_return)
-            prices.append(new_price)
-            
-            # Realistic volume (higher on big moves)
-            base_volume = 1000000
-            volume_multiplier = 1 + 2 * abs(daily_return) / volatility
-            volume = int(base_volume * volume_multiplier * np.random.uniform(0.8, 1.2))
-            volumes.append(volume)
-        
-        # Add final volume for last day
-        volumes.append(int(1000000 * np.random.uniform(0.8, 1.2)))
-        
-        # Create comprehensive dataframe
-        data = pd.DataFrame({
-            'Open': [p * np.random.uniform(0.998, 1.002) for p in prices],
-            'High': [p * np.random.uniform(1.002, 1.015) for p in prices],
-            'Low': [p * np.random.uniform(0.985, 0.998) for p in prices],
-            'Close': prices,
-            'Volume': volumes
-        }, index=dates)
-        
-        # Calculate all technical indicators
-        data['Daily_Return'] = data['Close'].pct_change()
-        data['Volatility_20d'] = data['Daily_Return'].rolling(20).std()
-        data['SMA_20'] = data['Close'].rolling(20).mean()
-        data['SMA_50'] = data['Close'].rolling(50).mean()
-        data['RSI'] = self._calculate_rsi(data['Close'])
-        
-        data['Direction'] = data['Daily_Return'].apply(
-            lambda x: 'up' if x > 0.005 else 'down' if x < -0.005 else 'sideways'
-        )
-        
-        return data
+    # SYNTHETIC DATA GENERATION REMOVED - LIVE DATA ONLY POLICY
+    # Backtesting requires real historical market data for accurate results
     
     async def _generate_ensemble_backtest_prediction(self,
                                                    symbol: str,

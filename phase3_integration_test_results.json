@@ -1,0 +1,37 @@
+{
+  "direct_AAPL_5d": {
+    "status": "SUCCESS",
+    "phase3_components": 4,
+    "confidence": 0.65,
+    "regime": "Sideways_Medium_Vol"
+  },
+  "direct_CBA.AX_30d": {
+    "status": "SUCCESS",
+    "phase3_components": 4,
+    "confidence": 0.65,
+    "regime": "Sideways_Medium_Vol"
+  },
+  "direct_^GSPC_1d": {
+    "status": "SUCCESS",
+    "phase3_components": 4,
+    "confidence": 0.65,
+    "regime": "Sideways_Medium_Vol"
+  },
+  "app_integration": {
+    "status": "SUCCESS",
+    "missing_fields": 0,
+    "phase3_timeframes": 4,
+    "regime": "Sideways_Medium_Vol"
+  },
+  "api_format": {
+    "status": "SUCCESS",
+    "json_serializable": true,
+    "response_size": 1829,
+    "key_sections_present": true
+  },
+  "performance": {
+    "status": "SUCCESS",
+    "prediction_time": 0.1143026351928711,
+    "performance_rating": "EXCELLENT"
+  }
+}

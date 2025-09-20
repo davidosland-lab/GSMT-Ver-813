@@ -226,8 +226,7 @@ class DataSourceManager:
     
     def __init__(self):
         self.sources = [
-            {"name": "yfinance", "priority": 1, "active": True},
-            {"name": "demo", "priority": 999, "active": True}  # Always available fallback
+            {"name": "yfinance", "priority": 1, "active": True}
         ]
     
     @lru_cache(maxsize=128)
@@ -241,8 +240,9 @@ class DataSourceManager:
             try:
                 if source["name"] == "yfinance":
                     return self._fetch_yfinance_data(symbol, period, interval)
-                elif source["name"] == "demo":
-                    return self._generate_demo_data(symbol, period, interval)
+                else:
+                    logger.error(f"Unknown data source: {source['name']}")
+                    continue
                     
             except Exception as e:
                 logger.warning(f"Data source {source['name']} failed for {symbol}: {str(e)}")
@@ -311,81 +311,7 @@ class DataSourceManager:
             logger.error(f"YFinance error for {symbol}: {str(e)}")
             raise e
     
-    def _generate_demo_data(self, symbol: str, period: TimePeriod, interval: TimeInterval) -> SymbolDataResponse:
-        """Generate realistic demo data for testing"""
-        try:
-            period_config = TIME_PERIODS[period]
-            days = period_config["days"]
-            
-            # Generate realistic base price based on symbol type
-            if symbol.startswith('^'):
-                base_price = np.random.uniform(3000, 40000)  # Index range
-            elif '.AX' in symbol:
-                base_price = np.random.uniform(10, 300)      # Australian stock range
-            else:
-                base_price = np.random.uniform(50, 500)      # US stock range
-            
-            # Calculate number of points based on interval
-            interval_minutes = {
-                TimeInterval.MIN_5: 5,
-                TimeInterval.MIN_15: 15,
-                TimeInterval.MIN_30: 30,
-                TimeInterval.HOUR_1: 60,
-                TimeInterval.DAY_1: 1440,
-                TimeInterval.WEEK_1: 10080
-            }
-            
-            total_minutes = days * 24 * 60
-            minutes_per_point = interval_minutes.get(interval, 5)
-            num_points = min(1000, total_minutes // minutes_per_point)
-            
-            # Generate realistic price movement
-            data_points = []
-            current_price = base_price
-            start_time = datetime.now(AUSTRALIA_TZ) - timedelta(days=days)
-            
-            for i in range(num_points):
-                # Random walk with mean reversion
-                change_percent = np.random.normal(0, 0.02)  # 2% volatility
-                current_price = max(current_price * (1 + change_percent), base_price * 0.5)
-                
-                timestamp = start_time + timedelta(minutes=i * minutes_per_point)
-                percentage_change = ((current_price - base_price) / base_price) * 100
-                
-                # Generate OHLC around current price
-                high = current_price * (1 + abs(np.random.normal(0, 0.01)))
-                low = current_price * (1 - abs(np.random.normal(0, 0.01)))
-                open_price = current_price * (1 + np.random.normal(0, 0.005))
-                
-                data_points.append(MarketDataPoint(
-                    timestamp=timestamp,
-                    timestamp_raw=int(timestamp.timestamp() * 1000),
-                    open=float(open_price),
-                    high=float(high),
-                    low=float(low),
-                    close=float(current_price),
-                    volume=int(np.random.uniform(100000, 10000000)),
-                    percentage_change=percentage_change,
-                    data_source="demo"
-                ))
-            
-            current_change = data_points[-1].percentage_change if data_points else 0
-            
-            return SymbolDataResponse(
-                symbol=symbol,
-                success=True,
-                data=data_points,
-                period=period,
-                interval=interval,
-                points=len(data_points),
-                base_price=base_price,
-                current_change=current_change,
-                data_source="demo"
-            )
-            
-        except Exception as e:
-            logger.error(f"Demo data generation error for {symbol}: {str(e)}")
-            raise HTTPException(status_code=500, detail=f"Failed to generate demo data for {symbol}")
+    # DEMO DATA GENERATION REMOVED - LIVE DATA ONLY POLICY
 
 # Initialize data source manager
 data_manager = DataSourceManager()
@@ -611,6 +537,91 @@ def _get_symbol_suggestions(symbol: str) -> List[str]:
                 suggestions.append(sym_info.symbol)
     
     return suggestions[:5]  # Limit to 5 suggestions
+
+# Pydantic model for prediction request
+class PredictionRequest(BaseModel):
+    timeframe: str = "5d"
+    include_all_domains: bool = True
+    include_social: bool = True
+    include_geopolitical: bool = True
+
+# Unified Prediction Endpoint
+@app.post("/api/unified-prediction/{symbol}")
+async def get_unified_prediction(
+    symbol: str,
+    request: PredictionRequest
+):
+    """Generate unified super prediction using all available modules"""
+    
+    try:
+        logger.info(f"🚀 Generating unified prediction for {symbol} ({request.timeframe})")
+        
+        # Import the unified super predictor
+        import sys
+        import os
+        sys.path.append('/home/user/webapp')
+        
+        from unified_super_predictor import unified_super_predictor
+        
+        # Generate the prediction
+        prediction_result = await unified_super_predictor.generate_unified_prediction(
+            symbol=symbol.upper(),
+            time_horizon=request.timeframe,
+            include_all_domains=request.include_all_domains
+        )
+        
+        # Format the response to match the frontend expectations
+        response_data = {
+            "success": True,
+            "symbol": symbol.upper(),
+            "timeframe": request.timeframe,
+            "prediction": {
+                "direction": prediction_result.direction,
+                "expected_return": prediction_result.expected_return,
+                "predicted_price": prediction_result.predicted_price,
+                "current_price": prediction_result.current_price,
+                "confidence_score": prediction_result.confidence_score,
+                "probability_up": prediction_result.probability_up,
+                "uncertainty_score": prediction_result.uncertainty_score,
+                "confidence_interval": prediction_result.confidence_interval
+            },
+            "domain_analysis": {
+                "active_domains": len([d for d, w in prediction_result.domain_weights.items() if w > 0]),
+                "domain_weights": prediction_result.domain_weights,
+                "domain_predictions": prediction_result.domain_predictions,
+                "domain_confidence": prediction_result.domain_confidence
+            },
+            "feature_analysis": {
+                "top_factors": prediction_result.top_factors,
+                "total_features": len(prediction_result.feature_importance),
+                "feature_importance": prediction_result.feature_importance
+            },
+            "risk_assessment": {
+                "risk_level": "Medium" if prediction_result.risk_score < 0.3 else "High" if prediction_result.risk_score > 0.6 else "Low",
+                "risk_score": prediction_result.risk_score,
+                "risk_factors": prediction_result.risk_factors,
+                "volatility_estimate": prediction_result.volatility_estimate
+            },
+            "system_metadata": {
+                "prediction_methodology": "Multi-Domain Ensemble with Live Data",
+                "expected_accuracy": f"{prediction_result.confidence_score:.1%}",
+                "market_regime": prediction_result.market_regime,
+                "session_type": prediction_result.session_type,
+                "external_factors": prediction_result.external_factors
+            },
+            "processing_time": f"{datetime.now().strftime('%H:%M:%S')} AEST",
+            "timestamp": prediction_result.prediction_timestamp.isoformat()
+        }
+        
+        logger.info(f"✅ Unified prediction completed: {prediction_result.direction} ({prediction_result.confidence_score:.1%} confidence)")
+        return response_data
+        
+    except Exception as e:
+        logger.error(f"❌ Error generating unified prediction: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Prediction generation failed: {str(e)}"
+        )
 
 # Exception handlers
 @app.exception_handler(HTTPException)
