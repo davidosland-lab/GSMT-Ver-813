@@ -46,6 +46,35 @@ warnings.filterwarnings('ignore')
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+@dataclass
+class ExtendedConfig:
+    """Configuration for Extended Phase 3 Unified Super Predictor"""
+    # Base configuration
+    lookback_period: int = 60
+    min_samples: int = 50
+    confidence_threshold: float = 0.7
+    
+    # P3-005: Advanced Feature Engineering
+    enable_advanced_features: bool = True
+    feature_domains: List[str] = field(default_factory=lambda: ['technical', 'cross_asset', 'macro', 'alternative', 'microstructure'])
+    feature_importance_threshold: float = 0.05
+    
+    # P3-006: Reinforcement Learning Integration
+    enable_rl_optimization: bool = True
+    rl_algorithm: str = 'thompson_sampling'
+    rl_learning_rate: float = 0.1
+    rl_exploration_rate: float = 0.1
+    
+    # P3-007: Advanced Risk Management
+    enable_risk_management: bool = True
+    var_confidence_level: float = 0.95
+    max_portfolio_var: float = 0.025
+    position_sizing_method: str = 'kelly'
+    
+    # Performance settings
+    mcmc_samples: int = 1000
+    monte_carlo_simulations: int = 5000
+
 class PredictionDomain(Enum):
     """Enhanced prediction domains for specialized analysis."""
     GENERAL = "general"
@@ -122,9 +151,17 @@ class ExtendedUnifiedSuperPredictor:
     prediction accuracy with sophisticated risk management and adaptive intelligence.
     """
     
-    def __init__(self, config: Dict = None):
+    def __init__(self, config: Union[ExtendedConfig, Dict] = None):
         self.logger = logging.getLogger(__name__)
-        self.config = config or {}
+        
+        # Handle both ExtendedConfig and Dict inputs
+        if isinstance(config, ExtendedConfig):
+            self.extended_config_obj = config
+            self.config = asdict(config)
+        else:
+            self.config = config or {}
+            self.extended_config_obj = ExtendedConfig(**{k: v for k, v in self.config.items() 
+                                                        if k in ExtendedConfig.__dataclass_fields__})
         
         # Core Phase 3 Components (P3-001 to P3-004)
         self.multiframe_arch = None
@@ -143,22 +180,22 @@ class ExtendedUnifiedSuperPredictor:
         self.cba_system = None
         self.intraday_system = None
         
-        # Enhanced configuration
+        # Enhanced configuration (legacy format for compatibility)
         self.enhanced_config = {
             'feature_engineering': {
                 'target_features': self.config.get('target_features', 50),
-                'use_alternative_data': self.config.get('use_alt_data', True),
+                'use_alternative_data': getattr(self.extended_config_obj, 'enable_advanced_features', True),
                 'feature_selection': self.config.get('feature_selection', True)
             },
             'reinforcement_learning': {
                 'n_models': self.config.get('rl_models', 8),
-                'exploration_rate': self.config.get('exploration_rate', 0.1),
-                'learning_rate': self.config.get('rl_learning_rate', 0.05)
+                'exploration_rate': getattr(self.extended_config_obj, 'rl_exploration_rate', 0.1),
+                'learning_rate': getattr(self.extended_config_obj, 'rl_learning_rate', 0.05)
             },
             'risk_management': {
-                'max_var_95': self.config.get('max_var', 0.03),
+                'max_var_95': getattr(self.extended_config_obj, 'max_portfolio_var', 0.025),
                 'max_drawdown': self.config.get('max_dd', 0.10),
-                'position_sizing_method': self.config.get('sizing_method', 'risk_parity')
+                'position_sizing_method': getattr(self.extended_config_obj, 'position_sizing_method', 'kelly')
             }
         }
         

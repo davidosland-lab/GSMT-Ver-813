@@ -5725,47 +5725,99 @@ async def export_candlestick_data(
 
 from ftse_sp500_prediction_system import multi_market_predictor, PredictionResult
 
-# Import Phase 3 Enhanced Unified Super Predictor
+# Import Phase 3 Extended Unified Super Predictor (P3-005 to P3-007)
 try:
-    from phase3_unified_super_predictor import (
-        Phase3UnifiedSuperPredictor,
-        Phase3UnifiedPrediction,
-        PredictionDomain,
-        TimeHorizon
+    from phase3_extended_unified_predictor import (
+        ExtendedUnifiedSuperPredictor,
+        ExtendedPrediction,
+        ExtendedConfig
     )
     
-    # Initialize Phase 3 predictor with configuration
-    phase3_config = {
-        'lookback_period': 60,
-        'min_samples': 50,
-        'confidence_threshold': 0.7,
-        'performance_db_path': 'phase3_performance_monitoring.db',
-        'mcmc_samples': 1000,
-        'prior_alpha': 1.0,
-        'posterior_window': 100,
-        'regime_lookback': 60,
-        'max_memory_records': 10000
-    }
+    # Initialize Extended Phase 3 predictor with full P3-005 to P3-007 configuration
+    extended_config = ExtendedConfig(
+        # Base configuration
+        lookback_period=60,
+        min_samples=50,
+        confidence_threshold=0.7,
+        
+        # P3-005: Advanced Feature Engineering
+        enable_advanced_features=True,
+        feature_domains=['technical', 'cross_asset', 'macro', 'alternative', 'microstructure'],
+        feature_importance_threshold=0.05,
+        
+        # P3-006: Reinforcement Learning Integration
+        enable_rl_optimization=True,
+        rl_algorithm='thompson_sampling',
+        rl_learning_rate=0.1,
+        rl_exploration_rate=0.1,
+        
+        # P3-007: Advanced Risk Management
+        enable_risk_management=True,
+        var_confidence_level=0.95,
+        max_portfolio_var=0.025,
+        position_sizing_method='kelly',
+        
+        # Performance settings
+        mcmc_samples=1000,
+        monte_carlo_simulations=5000
+    )
     
-    unified_super_predictor = Phase3UnifiedSuperPredictor(phase3_config)
-    logger.info("🚀 Phase 3 Enhanced Unified Super Predictor loaded successfully")
+    # Create Extended Unified Super Predictor with all P3 components
+    extended_unified_predictor = ExtendedUnifiedSuperPredictor(extended_config)
+    logger.info("🚀 Phase 3 Extended Unified Super Predictor (P3-005 to P3-007) loaded successfully")
+    
+    # Also maintain backward compatibility
+    unified_super_predictor = extended_unified_predictor  # Alias for compatibility
+    Phase3UnifiedPrediction = ExtendedPrediction  # Type alias
     PHASE3_ENABLED = True
+    EXTENDED_PHASE3_ENABLED = True
     
 except ImportError as e:
-    # Fallback to original unified predictor
+    logger.warning(f"Extended Phase 3 predictor not available: {e}")
+    # Fallback to original Phase 3 predictor
     try:
-        from unified_super_predictor import (
-            unified_super_predictor,
-            UnifiedPrediction as Phase3UnifiedPrediction,
+        from phase3_unified_super_predictor import (
+            Phase3UnifiedSuperPredictor,
+            Phase3UnifiedPrediction,
             PredictionDomain,
             TimeHorizon
         )
-        logger.info("🚀 Original Unified Super Predictor loaded (Phase 3 fallback)")
-        PHASE3_ENABLED = False
+        
+        # Initialize Phase 3 predictor with configuration
+        phase3_config = {
+            'lookback_period': 60,
+            'min_samples': 50,
+            'confidence_threshold': 0.7,
+            'performance_db_path': 'phase3_performance_monitoring.db',
+            'mcmc_samples': 1000,
+            'prior_alpha': 1.0,
+            'posterior_window': 100,
+            'regime_lookback': 60,
+            'max_memory_records': 10000
+        }
+        
+        unified_super_predictor = Phase3UnifiedSuperPredictor(phase3_config)
+        logger.info("🚀 Phase 3 Enhanced Unified Super Predictor loaded successfully (fallback)")
+        PHASE3_ENABLED = True
+        EXTENDED_PHASE3_ENABLED = False
+        
     except ImportError as e2:
-        unified_super_predictor = None
-        logger.warning(f"No Unified Super Predictor available: Phase 3: {e}, Original: {e2}")
-        PHASE3_ENABLED = False
+        # Fallback to original unified predictor
+        try:
+            from unified_super_predictor import (
+                unified_super_predictor,
+                UnifiedPrediction as Phase3UnifiedPrediction,
+                PredictionDomain,
+                TimeHorizon
+            )
+            logger.info("🚀 Original Unified Super Predictor loaded (Phase 3 fallback)")
+            PHASE3_ENABLED = False
+            EXTENDED_PHASE3_ENABLED = False
+        except ImportError as e3:
+            unified_super_predictor = None
+            logger.warning(f"No Unified Super Predictor available: Extended P3: {e}, Phase 3: {e2}, Original: {e3}")
+            PHASE3_ENABLED = False
+            EXTENDED_PHASE3_ENABLED = False
 
 class PredictionRequest(BaseModel):
     symbols: List[str] = Field(default=["^FTSE", "^GSPC"], description="Symbols to predict")
@@ -6022,10 +6074,20 @@ async def get_unified_super_prediction(
                 detail=f"Invalid timeframe. Must be one of: {', '.join(valid_timeframes)}"
             )
         
-        # Generate Phase 3 enhanced unified prediction
-        logger.info(f"🚀 Generating Phase 3 enhanced unified super prediction for {symbol} ({timeframe})")
+        # Generate Extended Phase 3 prediction (P3-005 to P3-007)
+        logger.info(f"🚀 Generating Extended Phase 3 prediction for {symbol} ({timeframe}) with P3-005 to P3-007")
         
-        if PHASE3_ENABLED:
+        if EXTENDED_PHASE3_ENABLED:
+            # Use Extended Unified Predictor with all P3 components
+            unified_result = await extended_unified_predictor.generate_extended_prediction(
+                symbol=symbol,
+                time_horizon=timeframe,
+                include_all_domains=include_all_domains,
+                enable_rl_optimization=True,
+                include_risk_management=True
+            )
+        elif PHASE3_ENABLED:
+            # Fallback to original Phase 3 predictor
             unified_result = await unified_super_predictor.generate_phase3_unified_prediction(
                 symbol=symbol,
                 time_horizon=timeframe,
@@ -6048,7 +6110,7 @@ async def get_unified_super_prediction(
             "symbol": symbol,
             "timeframe": timeframe,
             "processing_time": f"{processing_time:.2f}s",
-            "prediction_type": "PHASE3_UNIFIED_SUPER_PREDICTION" if PHASE3_ENABLED else "UNIFIED_SUPER_PREDICTION",
+            "prediction_type": "EXTENDED_PHASE3_PREDICTION" if EXTENDED_PHASE3_ENABLED else "PHASE3_UNIFIED_SUPER_PREDICTION" if PHASE3_ENABLED else "UNIFIED_SUPER_PREDICTION",
             
             # Core Prediction Results
             "prediction": {
@@ -6073,7 +6135,36 @@ async def get_unified_super_prediction(
                 "active_domains": len(unified_result.domain_predictions)
             },
             
-            # Phase 3 Enhanced Analysis (if available)
+            # Extended Phase 3 Analysis (P3-005 to P3-007)
+            **({"extended_phase3_components": {
+                # P3-005: Advanced Feature Engineering
+                "advanced_features": {
+                    "engineered_features_count": getattr(unified_result, 'advanced_features', {}).get('engineered_features_count', 0),
+                    "feature_importance": getattr(unified_result, 'advanced_features', {}).get('feature_importance', {}),
+                    "domain_contributions": getattr(unified_result, 'advanced_features', {}).get('domain_contributions', {}),
+                    "multimodal_fusion_score": getattr(unified_result, 'advanced_features', {}).get('fusion_score', 0.0)
+                },
+                # P3-006: Reinforcement Learning Integration  
+                "reinforcement_learning": {
+                    "selected_models": getattr(unified_result, 'rl_selected_models', {}).get('selected_model_ids', []),
+                    "model_weights": getattr(unified_result, 'rl_selected_models', {}).get('model_weights', {}),
+                    "rl_algorithm_used": getattr(unified_result, 'rl_selected_models', {}).get('rl_algorithm_used', 'none'),
+                    "adaptation_score": getattr(unified_result, 'rl_selected_models', {}).get('adaptation_score', 0.0)
+                },
+                # P3-007: Advanced Risk Management
+                "risk_management": {
+                    "var_95_percent": getattr(unified_result, 'risk_metrics', {}).get('var_95', 0.0),
+                    "expected_shortfall": getattr(unified_result, 'risk_metrics', {}).get('expected_shortfall_95', 0.0),
+                    "max_drawdown": getattr(unified_result, 'risk_metrics', {}).get('max_drawdown', 0.0),
+                    "sharpe_ratio": getattr(unified_result, 'risk_metrics', {}).get('sharpe_ratio', 0.0),
+                    "recommended_position_size": getattr(unified_result, 'position_sizing', {}).get('recommended_position_size', 0.0),
+                    "position_sizing_method": getattr(unified_result, 'position_sizing', {}).get('position_size_method', 'kelly'),
+                    "stress_test_scenarios": getattr(unified_result, 'stress_test_results', {}).get('scenarios_tested', 0),
+                    "worst_case_loss": getattr(unified_result, 'stress_test_results', {}).get('worst_case_loss', 0.0)
+                }
+            }} if EXTENDED_PHASE3_ENABLED else {}),
+            
+            # Phase 3 Enhanced Analysis (legacy compatibility)
             **({"phase3_enhancements": {
                 "multi_timeframe_analysis": {
                     "timeframe_predictions": getattr(unified_result, 'timeframe_predictions', {}),
@@ -6122,7 +6213,13 @@ async def get_unified_super_prediction(
             
             # System Metadata
             "system_metadata": {
-                "prediction_methodology": "Phase 3 Enhanced Multi-Domain Ensemble" if PHASE3_ENABLED else "Multi-Domain Ensemble with Dynamic Weighting",
+                "prediction_methodology": "Extended Phase 3 Multi-Modal Intelligent Prediction" if EXTENDED_PHASE3_ENABLED else "Phase 3 Enhanced Multi-Domain Ensemble" if PHASE3_ENABLED else "Multi-Domain Ensemble with Dynamic Weighting",
+                "extended_phase3_components": [
+                    "P3-005: Advanced Feature Engineering Pipeline (Multi-modal fusion)",
+                    "P3-006: Reinforcement Learning Integration (Adaptive model selection)",
+                    "P3-007: Advanced Risk Management Framework (VaR, position sizing, stress testing)",
+                    "Extended Unified Predictor (Complete integration layer)"
+                ] if EXTENDED_PHASE3_ENABLED else [],
                 "phase3_components": [
                     "P3_001: Multi-Timeframe Architecture",
                     "P3_002: Bayesian Ensemble Framework", 
@@ -6169,15 +6266,15 @@ async def get_phase3_enhanced_prediction(
     include_regime_detection: bool = Query(True, description="Include market regime detection"),
     include_performance_monitoring: bool = Query(True, description="Include real-time performance monitoring")
 ):
-    """🚀 PHASE 3 ENHANCED PREDICTION - Advanced ML prediction with all Phase 3 components
+    """🚀 EXTENDED PHASE 3 PREDICTION - Ultimate ML prediction with P3-005 to P3-007 components
     
     This endpoint provides access to the most advanced prediction system featuring:
-    - P3_001: Multi-Timeframe Architecture with horizon-specific models
-    - P3_002: Bayesian Ensemble Framework with uncertainty quantification
-    - P3_003: Market Regime Detection with dynamic model weighting
-    - P3_004: Real-Time Performance Monitoring with live adaptation
+    - P3-005: Advanced Feature Engineering Pipeline (Multi-modal fusion)
+    - P3-006: Reinforcement Learning Integration (Adaptive model selection)  
+    - P3-007: Advanced Risk Management Framework (VaR, position sizing, stress testing)
+    - P3_001-004: Multi-Timeframe Architecture, Bayesian Ensemble, Market Regime Detection, Performance Monitoring
     
-    Target Performance: 75%+ ensemble accuracy through sophisticated ML techniques
+    Target Performance: 85%+ ensemble accuracy with risk-adjusted returns through comprehensive AI integration
     """
     try:
         if not unified_super_predictor:
@@ -6209,15 +6306,25 @@ async def get_phase3_enhanced_prediction(
                 detail=f"Invalid timeframe for Phase 3. Must be one of: {', '.join(valid_timeframes)}"
             )
         
-        logger.info(f"🚀 Generating Phase 3 enhanced prediction for {symbol} ({timeframe})")
+        logger.info(f"🚀 Generating Extended Phase 3 prediction for {symbol} ({timeframe}) with P3-005 to P3-007")
         
-        # Generate Phase 3 prediction with full enhancements
-        unified_result = await unified_super_predictor.generate_phase3_unified_prediction(
-            symbol=symbol,
-            time_horizon=timeframe,
-            include_all_domains=True,
-            use_phase3_enhancements=enable_all_enhancements
-        )
+        # Generate Extended Phase 3 prediction with all P3 components
+        if EXTENDED_PHASE3_ENABLED:
+            unified_result = await extended_unified_predictor.generate_extended_prediction(
+                symbol=symbol,
+                time_horizon=timeframe,
+                include_all_domains=True,
+                enable_rl_optimization=True,
+                include_risk_management=True
+            )
+        else:
+            # Fallback to original Phase 3 prediction
+            unified_result = await unified_super_predictor.generate_phase3_unified_prediction(
+                symbol=symbol,
+                time_horizon=timeframe,
+                include_all_domains=True,
+                use_phase3_enhancements=enable_all_enhancements
+            )
         
         processing_time = asyncio.get_event_loop().time() - start_time
         
@@ -6227,7 +6334,7 @@ async def get_phase3_enhanced_prediction(
             "symbol": symbol,
             "timeframe": timeframe,
             "processing_time": f"{processing_time:.2f}s",
-            "prediction_type": "PHASE3_ENHANCED_PREDICTION",
+            "prediction_type": "EXTENDED_PHASE3_PREDICTION" if EXTENDED_PHASE3_ENABLED else "PHASE3_ENHANCED_PREDICTION",
             "phase3_enabled": True,
             
             # Core Prediction Results
@@ -6335,6 +6442,176 @@ async def get_phase3_enhanced_prediction(
         raise HTTPException(
             status_code=500,
             detail=f"Phase 3 enhanced prediction failed: {str(e)}"
+        )
+
+@app.get("/api/extended-phase3-prediction/{symbol}")
+async def get_extended_phase3_prediction(
+    symbol: str,
+    timeframe: str = Query("5d", description="Prediction timeframe: 1d, 5d, 30d, 90d"),
+    enable_advanced_features: bool = Query(True, description="Enable P3-005 Advanced Feature Engineering"),
+    enable_rl_optimization: bool = Query(True, description="Enable P3-006 Reinforcement Learning"),
+    enable_risk_management: bool = Query(True, description="Enable P3-007 Risk Management"),
+    include_all_domains: bool = Query(True, description="Include all feature domains")
+):
+    """🚀 EXTENDED PHASE 3 PREDICTION - Ultimate AI prediction with P3-005, P3-006, P3-007
+    
+    This is the most advanced prediction endpoint featuring the complete Phase 3 extension suite:
+    
+    P3-005: Advanced Feature Engineering Pipeline
+    - Multi-modal feature fusion across technical, cross-asset, macro, alternative, and microstructure data
+    - Dynamic feature importance tracking and caching
+    - Sophisticated cross-domain feature interactions
+    
+    P3-006: Reinforcement Learning Integration  
+    - Multi-Armed Bandit, Q-Learning, and Thompson Sampling for adaptive model selection
+    - Real-time performance tracking and model degradation detection
+    - Dynamic model weighting based on market conditions
+    
+    P3-007: Advanced Risk Management Framework
+    - VaR calculations (Historical, Parametric, Monte Carlo)
+    - Expected Shortfall and comprehensive risk metrics
+    - Position sizing algorithms (Kelly Criterion, Fixed Fractional, Volatility-based)
+    - Stress testing scenarios and portfolio risk analysis
+    
+    Target Performance: 85%+ accuracy with optimized risk-adjusted returns
+    """
+    try:
+        if not EXTENDED_PHASE3_ENABLED:
+            # Fallback to regular Phase 3 endpoint
+            return RedirectResponse(
+                url=f"/api/phase3-prediction/{symbol}?timeframe={timeframe}",
+                status_code=307
+            )
+        
+        start_time = asyncio.get_event_loop().time()
+        
+        # Validate symbol
+        if symbol not in SYMBOLS_DB:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Symbol {symbol} not supported. Use /api/symbols to see available symbols."
+            )
+        
+        # Validate timeframe
+        valid_timeframes = ["1d", "5d", "30d", "90d"]
+        if timeframe not in valid_timeframes:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid timeframe. Must be one of: {', '.join(valid_timeframes)}"
+            )
+        
+        logger.info(f"🚀 Generating Extended Phase 3 prediction for {symbol} ({timeframe}) - P3-005/006/007 active")
+        
+        # Generate Extended Phase 3 prediction with all components
+        prediction = await extended_unified_predictor.generate_extended_prediction(
+            symbol=symbol,
+            time_horizon=timeframe,
+            include_all_domains=include_all_domains,
+            enable_rl_optimization=enable_rl_optimization,
+            include_risk_management=enable_risk_management
+        )
+        
+        processing_time = asyncio.get_event_loop().time() - start_time
+        
+        # Comprehensive Extended Phase 3 response
+        response = {
+            "success": True,
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "processing_time": f"{processing_time:.2f}s",
+            "prediction_type": "EXTENDED_PHASE3_PREDICTION",
+            "components_active": {
+                "p3_005_advanced_features": enable_advanced_features,
+                "p3_006_reinforcement_learning": enable_rl_optimization,
+                "p3_007_risk_management": enable_risk_management
+            },
+            
+            # Core Prediction Results
+            "prediction": {
+                "direction": prediction.direction,
+                "expected_return": prediction.expected_return,
+                "predicted_price": prediction.predicted_price,
+                "current_price": prediction.current_price,
+                "confidence_score": prediction.confidence_score,
+                "uncertainty_score": getattr(prediction, 'uncertainty_score', 0.0),
+                "probability_up": getattr(prediction, 'probability_up', 0.5),
+                "confidence_interval": {
+                    "lower": getattr(prediction, 'confidence_interval', [0, 0])[0],
+                    "upper": getattr(prediction, 'confidence_interval', [0, 0])[1]
+                }
+            },
+            
+            # P3-005: Advanced Feature Engineering Results
+            "advanced_feature_engineering": {
+                "total_features_engineered": prediction.advanced_features.get('engineered_features_count', 0) if prediction.advanced_features else 0,
+                "feature_importance_top10": dict(list(prediction.advanced_features.get('feature_importance', {}).items())[:10]) if prediction.advanced_features else {},
+                "domain_contributions": prediction.advanced_features.get('domain_contributions', {}) if prediction.advanced_features else {},
+                "multimodal_fusion_active": bool(prediction.advanced_features),
+                "feature_domains_processed": list(prediction.advanced_features.get('domain_contributions', {}).keys()) if prediction.advanced_features else []
+            },
+            
+            # P3-006: Reinforcement Learning Results
+            "reinforcement_learning": {
+                "selected_models": prediction.rl_selected_models.get('selected_model_ids', []) if prediction.rl_selected_models else [],
+                "model_weights": prediction.rl_selected_models.get('model_weights', {}) if prediction.rl_selected_models else {},
+                "rl_algorithm_used": prediction.rl_selected_models.get('rl_algorithm_used', 'none') if prediction.rl_selected_models else 'none',
+                "adaptation_active": bool(prediction.rl_selected_models),
+                "model_performance_scores": prediction.rl_selected_models.get('model_performance_scores', {}) if prediction.rl_selected_models else {}
+            },
+            
+            # P3-007: Advanced Risk Management Results
+            "risk_management": {
+                "var_metrics": {
+                    "var_95_percent": prediction.risk_metrics.get('var_95', 0.0) if prediction.risk_metrics else 0.0,
+                    "var_99_percent": prediction.risk_metrics.get('var_99', 0.0) if prediction.risk_metrics else 0.0,
+                    "expected_shortfall_95": prediction.risk_metrics.get('expected_shortfall_95', 0.0) if prediction.risk_metrics else 0.0,
+                    "max_drawdown": prediction.risk_metrics.get('max_drawdown', 0.0) if prediction.risk_metrics else 0.0,
+                    "volatility_annual": prediction.risk_metrics.get('volatility_annual', 0.0) if prediction.risk_metrics else 0.0,
+                    "sharpe_ratio": prediction.risk_metrics.get('sharpe_ratio', 0.0) if prediction.risk_metrics else 0.0
+                },
+                "position_sizing": {
+                    "recommended_position_size": prediction.position_sizing.get('recommended_position_size', 0.0) if prediction.position_sizing else 0.0,
+                    "position_sizing_method": prediction.position_sizing.get('position_size_method', 'kelly') if prediction.position_sizing else 'kelly',
+                    "risk_adjusted_return": prediction.position_sizing.get('risk_adjusted_return', 0.0) if prediction.position_sizing else 0.0
+                },
+                "stress_testing": {
+                    "scenarios_tested": prediction.stress_test_results.get('scenarios_tested', 0) if prediction.stress_test_results else 0,
+                    "worst_case_loss": prediction.stress_test_results.get('worst_case_loss', 0.0) if prediction.stress_test_results else 0.0,
+                    "stress_test_summary": prediction.stress_test_results.get('stress_test_summary', {}) if prediction.stress_test_results else {}
+                }
+            },
+            
+            # System Metadata
+            "system_metadata": {
+                "prediction_methodology": "Extended Phase 3 Multi-Modal Intelligent Prediction with Advanced AI Integration",
+                "extended_components": [
+                    "P3-005: Advanced Feature Engineering Pipeline (Multi-modal fusion)",
+                    "P3-006: Reinforcement Learning Integration (Adaptive model selection)",
+                    "P3-007: Advanced Risk Management Framework (VaR, position sizing, stress testing)"
+                ],
+                "target_performance": "85%+ accuracy with optimized risk-adjusted returns",
+                "ai_techniques": [
+                    "Multi-modal feature fusion across 6 data domains",
+                    "Thompson Sampling and Q-Learning for model adaptation",
+                    "Monte Carlo and Historical VaR risk assessment",
+                    "Kelly Criterion position sizing optimization"
+                ],
+                "prediction_timestamp": getattr(prediction, 'prediction_timestamp', datetime.now(timezone.utc)).isoformat()
+            }
+        }
+        
+        logger.info(f"🎯 Extended Phase 3 prediction completed for {symbol}: {prediction.direction} "
+                   f"(confidence: {prediction.confidence_score:.1%}, components: {sum(response['components_active'].values())}/3)")
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in Extended Phase 3 prediction endpoint: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Extended Phase 3 prediction failed: {str(e)}"
         )
 
 @app.get("/favicon.ico", include_in_schema=False)
