@@ -6513,6 +6513,19 @@ async def get_extended_phase3_prediction(
         
         processing_time = asyncio.get_event_loop().time() - start_time
         
+        # Helper function to safely convert numpy types and handle serialization
+        def safe_convert(value):
+            if hasattr(value, 'item'):  # numpy scalar
+                return value.item()
+            elif isinstance(value, (np.integer, np.floating, np.ndarray)):
+                return float(value) if np.isscalar(value) else value.tolist()
+            elif isinstance(value, dict):
+                return {k: safe_convert(v) for k, v in value.items()}
+            elif isinstance(value, list):
+                return [safe_convert(v) for v in value]
+            else:
+                return value
+        
         # Comprehensive Extended Phase 3 response
         response = {
             "success": True,
@@ -6528,57 +6541,59 @@ async def get_extended_phase3_prediction(
             
             # Core Prediction Results
             "prediction": {
-                "direction": prediction.direction,
-                "expected_return": prediction.expected_return,
-                "predicted_price": prediction.predicted_price,
-                "current_price": prediction.current_price,
-                "confidence_score": prediction.confidence_score,
-                "uncertainty_score": getattr(prediction, 'uncertainty_score', 0.0),
-                "probability_up": getattr(prediction, 'probability_up', 0.5),
+                "direction": str(prediction.direction),
+                "expected_return": safe_convert(prediction.expected_return),
+                "predicted_price": safe_convert(prediction.predicted_price),
+                "current_price": safe_convert(prediction.current_price),
+                "confidence_score": safe_convert(prediction.confidence_score),
+                "uncertainty_score": safe_convert(getattr(prediction, 'uncertainty_score', 0.0)),
+                "probability_up": safe_convert(getattr(prediction, 'probability_up', 0.5)),
                 "confidence_interval": {
-                    "lower": getattr(prediction, 'confidence_interval', [0, 0])[0],
-                    "upper": getattr(prediction, 'confidence_interval', [0, 0])[1]
+                    "lower": safe_convert(getattr(prediction, 'confidence_interval', [0, 0])[0]),
+                    "upper": safe_convert(getattr(prediction, 'confidence_interval', [0, 0])[1])
                 }
             },
             
             # P3-005: Advanced Feature Engineering Results
             "advanced_feature_engineering": {
-                "total_features_engineered": prediction.advanced_features.get('engineered_features_count', 0) if prediction.advanced_features else 0,
-                "feature_importance_top10": dict(list(prediction.advanced_features.get('feature_importance', {}).items())[:10]) if prediction.advanced_features else {},
-                "domain_contributions": prediction.advanced_features.get('domain_contributions', {}) if prediction.advanced_features else {},
-                "multimodal_fusion_active": bool(prediction.advanced_features),
-                "feature_domains_processed": list(prediction.advanced_features.get('domain_contributions', {}).keys()) if prediction.advanced_features else []
+                "total_features_engineered": safe_convert(getattr(prediction, 'engineered_features_count', 0)),
+                "feature_importance_top10": safe_convert(dict(list(getattr(prediction, 'feature_importance', {}).items())[:10])),
+                "feature_selection_ratio": safe_convert(getattr(prediction, 'feature_selection_ratio', 0.0)),
+                "top_factors": safe_convert(getattr(prediction, 'top_factors', [])),
+                "multimodal_fusion_active": hasattr(prediction, 'engineered_features_count')
             },
             
             # P3-006: Reinforcement Learning Results
             "reinforcement_learning": {
-                "selected_models": prediction.rl_selected_models.get('selected_model_ids', []) if prediction.rl_selected_models else [],
-                "model_weights": prediction.rl_selected_models.get('model_weights', {}) if prediction.rl_selected_models else {},
-                "rl_algorithm_used": prediction.rl_selected_models.get('rl_algorithm_used', 'none') if prediction.rl_selected_models else 'none',
-                "adaptation_active": bool(prediction.rl_selected_models),
-                "model_performance_scores": prediction.rl_selected_models.get('model_performance_scores', {}) if prediction.rl_selected_models else {}
+                "rl_recommendations": safe_convert(getattr(prediction, 'rl_recommendations', {})),
+                "adaptive_weights": safe_convert(getattr(prediction, 'adaptive_weights', {})),
+                "exploration_rate": safe_convert(getattr(prediction, 'exploration_rate', 0.0)),
+                "model_selection_rationale": str(getattr(prediction, 'model_selection_rationale', 'none')),
+                "adaptation_active": hasattr(prediction, 'rl_recommendations')
             },
             
             # P3-007: Advanced Risk Management Results
             "risk_management": {
                 "var_metrics": {
-                    "var_95_percent": prediction.risk_metrics.get('var_95', 0.0) if prediction.risk_metrics else 0.0,
-                    "var_99_percent": prediction.risk_metrics.get('var_99', 0.0) if prediction.risk_metrics else 0.0,
-                    "expected_shortfall_95": prediction.risk_metrics.get('expected_shortfall_95', 0.0) if prediction.risk_metrics else 0.0,
-                    "max_drawdown": prediction.risk_metrics.get('max_drawdown', 0.0) if prediction.risk_metrics else 0.0,
-                    "volatility_annual": prediction.risk_metrics.get('volatility_annual', 0.0) if prediction.risk_metrics else 0.0,
-                    "sharpe_ratio": prediction.risk_metrics.get('sharpe_ratio', 0.0) if prediction.risk_metrics else 0.0
+                    "var_95_percent": safe_convert(getattr(prediction, 'risk_metrics', {}).get('var_95', 0.0)),
+                    "var_99_percent": safe_convert(getattr(prediction, 'risk_metrics', {}).get('var_99', 0.0)),
+                    "expected_shortfall_95": safe_convert(getattr(prediction, 'risk_metrics', {}).get('expected_shortfall_95', 0.0)),
+                    "max_drawdown": safe_convert(getattr(prediction, 'risk_metrics', {}).get('max_drawdown', 0.0)),
+                    "volatility_annual": safe_convert(getattr(prediction, 'volatility_estimate', 0.0)),
+                    "sharpe_ratio": safe_convert(getattr(prediction, 'risk_metrics', {}).get('sharpe_ratio', 0.0))
                 },
                 "position_sizing": {
-                    "recommended_position_size": prediction.position_sizing.get('recommended_position_size', 0.0) if prediction.position_sizing else 0.0,
-                    "position_sizing_method": prediction.position_sizing.get('position_size_method', 'kelly') if prediction.position_sizing else 'kelly',
-                    "risk_adjusted_return": prediction.position_sizing.get('risk_adjusted_return', 0.0) if prediction.position_sizing else 0.0
+                    "recommended_position_size": safe_convert(getattr(prediction, 'position_sizing', {}).get('recommended_position_size', 0.0)),
+                    "position_sizing_method": str(getattr(prediction, 'position_sizing', {}).get('position_size_method', 'kelly')),
+                    "risk_adjusted_return": safe_convert(getattr(prediction, 'position_sizing', {}).get('risk_adjusted_return', 0.0))
                 },
                 "stress_testing": {
-                    "scenarios_tested": prediction.stress_test_results.get('scenarios_tested', 0) if prediction.stress_test_results else 0,
-                    "worst_case_loss": prediction.stress_test_results.get('worst_case_loss', 0.0) if prediction.stress_test_results else 0.0,
-                    "stress_test_summary": prediction.stress_test_results.get('stress_test_summary', {}) if prediction.stress_test_results else {}
-                }
+                    "scenarios_tested": safe_convert(getattr(prediction, 'stress_test_results', {}).get('scenarios_tested', 0)),
+                    "worst_case_loss": safe_convert(getattr(prediction, 'stress_test_results', {}).get('worst_case_loss', 0.0)),
+                    "stress_test_summary": safe_convert(getattr(prediction, 'stress_test_results', {}))
+                },
+                "risk_alerts": safe_convert(getattr(prediction, 'risk_alerts', [])),
+                "risk_score": safe_convert(getattr(prediction, 'risk_score', 0.0))
             },
             
             # System Metadata
