@@ -1485,6 +1485,21 @@ async def serve_interface_hub():
     """Serve the interface hub (same as root)"""
     return await root()
 
+@app.get("/cba-tracker", response_class=HTMLResponse)
+async def serve_cba_market_tracker():
+    """🏦 CBA Enhanced Market Tracker - Single Market Focus"""
+    try:
+        cba_tracker_path = "cba_market_tracker.html"
+        if os.path.exists(cba_tracker_path):
+            with open(cba_tracker_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="CBA Market Tracker interface not found")
+    except Exception as e:
+        logger.error(f"Error serving CBA Market Tracker: {e}")
+        raise HTTPException(status_code=500, detail=f"CBA Market Tracker error: {str(e)}")
+
 @app.get("/api/info")
 async def root_api():
     """API info endpoint - JSON version of root info"""
