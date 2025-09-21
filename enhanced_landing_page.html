@@ -597,17 +597,54 @@
             showLoading();
             
             try {
-                const response = await fetch(`${API_BASE}/api/unified-prediction/${symbol}?timeframe=5d`);
-                const data = await response.json();
+                console.log('Making prediction request for symbol:', symbol);
+                console.log('API URL:', `${API_BASE}/api/unified-prediction/${symbol}?timeframe=5d`);
                 
-                if (data.success) {
+                const response = await fetch(`${API_BASE}/api/unified-prediction/${symbol}?timeframe=5d`, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                    },
+                });
+                
+                console.log('Response status:', response.status);
+                console.log('Response ok:', response.ok);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Response data:', data);
+                
+                // Check if this is an error response
+                if (data.detail) {
+                    throw new Error(data.detail);
+                }
+                
+                // The unified prediction API returns data directly (no success wrapper)
+                if (data.symbol && data.prediction) {
                     displayPredictionResult(data);
                 } else {
-                    throw new Error(data.detail || 'Prediction failed');
+                    throw new Error('Invalid response format from prediction API');
                 }
             } catch (error) {
                 console.error('Prediction error:', error);
-                alert('Error generating prediction: ' + error.message);
+                console.error('Error type:', error.constructor.name);
+                console.error('Error message:', error.message);
+                
+                // More specific error messaging
+                let errorMessage = 'Error generating prediction: ';
+                if (error.message.includes('Failed to fetch')) {
+                    errorMessage += 'Network connection failed. Please check your internet connection and try again.';
+                } else if (error.message.includes('HTTP error')) {
+                    errorMessage += `Server error (${error.message}). Please try again later.`;
+                } else {
+                    errorMessage += error.message;
+                }
+                
+                alert(errorMessage);
             } finally {
                 hideLoading();
             }
