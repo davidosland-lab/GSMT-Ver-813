@@ -1,0 +1,94 @@
+{
+  "app_name": "Enhanced Stock Analysis - Local Mirror",
+  "version": "1.0.0",
+  "mode": "local_deployment",
+  
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8001,
+    "debug": false,
+    "reload": false,
+    "workers": 1
+  },
+  
+  "database": {
+    "type": "sqlite",
+    "path": "local_mirror.db",
+    "enable_foreign_keys": true,
+    "connection_timeout": 30
+  },
+  
+  "storage": {
+    "documents_dir": "data/documents",
+    "models_dir": "data/models",
+    "cache_dir": "data/cache",
+    "analysis_dir": "data/analysis",
+    "max_document_age_days": 365,
+    "max_cache_size_mb": 1000
+  },
+  
+  "document_management": {
+    "max_concurrent_downloads": 3,
+    "download_timeout_seconds": 300,
+    "retry_attempts": 3,
+    "rate_limit_delay": 2,
+    "supported_formats": ["pdf", "docx", "html", "txt"],
+    "content_deduplication": true
+  },
+  
+  "analysis": {
+    "finbert_model": "ProsusAI/finbert",
+    "spacy_model": "en_core_web_sm",
+    "max_concurrent_analysis": 2,
+    "analysis_timeout_seconds": 600,
+    "enable_gpu_acceleration": false,
+    "min_confidence_threshold": 0.6,
+    "cache_analysis_results": true
+  },
+  
+  "prediction": {
+    "model_version": "enhanced_local_v1.0",
+    "prediction_weights": {
+      "document_analysis": 0.30,
+      "technical_analysis": 0.40,
+      "market_context": 0.30
+    },
+    "min_documents_for_analysis": 3,
+    "supported_timeframes": ["5m", "30m", "1h", "1d", "5d", "1M", "3M"],
+    "default_timeframe": "5d",
+    "confidence_threshold": 0.65,
+    "enable_ensemble_models": true,
+    "cache_predictions_hours": 1
+  },
+  
+  "market_data": {
+    "primary_source": "yfinance",
+    "backup_source": "local_cache",
+    "cache_duration_minutes": 15,
+    "enable_real_time": false,
+    "supported_markets": ["ASX", "NYSE", "NASDAQ", "FTSE", "DAX"]
+  },
+  
+  "logging": {
+    "level": "INFO",
+    "file": "logs/local_mirror.log",
+    "max_size_mb": 100,
+    "backup_count": 5,
+    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  },
+  
+  "security": {
+    "enable_cors": true,
+    "allowed_origins": ["http://127.0.0.1:*", "http://localhost:*"],
+    "api_rate_limit": 100,
+    "session_timeout_hours": 24
+  },
+  
+  "performance": {
+    "enable_caching": true,
+    "memory_limit_gb": 4,
+    "processing_timeout_minutes": 10,
+    "background_tasks": true,
+    "async_processing": true
+  }
+}

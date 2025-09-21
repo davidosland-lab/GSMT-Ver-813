@@ -129,8 +129,8 @@ class ModelPerformanceBacktester:
             data = ticker.history(start=start_date, end=end_date)
             
             if data.empty:
-                logger.warning(f"No data available for {symbol}, generating synthetic data")
-                return self._generate_synthetic_data(symbol, days)
+                logger.error(f"❌ No historical data available for {symbol} - backtesting requires real market data")
+                raise ValueError(f"No historical data available for {symbol}. Backtesting requires real market data.")
             
             # Calculate daily returns
             data['Daily_Return'] = data['Close'].pct_change()
@@ -141,44 +141,10 @@ class ModelPerformanceBacktester:
             
         except Exception as e:
             logger.error(f"Failed to fetch historical data: {e}")
-            return self._generate_synthetic_data(symbol, days)
+            raise e  # Re-raise the original exception - no synthetic data allowed
     
-    def _generate_synthetic_data(self, symbol: str, days: int) -> pd.DataFrame:
-        """Generate synthetic market data for testing"""
-        
-        logger.info("🔧 Generating synthetic market data for backtesting")
-        
-        dates = pd.date_range(
-            start=datetime.now() - timedelta(days=days),
-            end=datetime.now(),
-            freq='D'
-        )
-        
-        # Simulate realistic market movements
-        np.random.seed(42)  # For reproducible testing
-        
-        base_price = 7500  # ASX All Ordinaries approximate level
-        prices = [base_price]
-        
-        for i in range(len(dates) - 1):
-            # Simulate realistic daily volatility with slight upward bias
-            daily_return = np.random.normal(0.0005, 0.015)  # 0.05% daily drift, 1.5% volatility
-            new_price = prices[-1] * (1 + daily_return)
-            prices.append(new_price)
-        
-        data = pd.DataFrame({
-            'Open': [p * np.random.uniform(0.995, 1.005) for p in prices],
-            'High': [p * np.random.uniform(1.005, 1.025) for p in prices], 
-            'Low': [p * np.random.uniform(0.975, 0.995) for p in prices],
-            'Close': prices,
-            'Volume': [np.random.randint(800000, 1200000) for _ in prices]
-        }, index=dates)
-        
-        # Calculate returns and directions
-        data['Daily_Return'] = data['Close'].pct_change()
-        data['Direction'] = data['Daily_Return'].apply(lambda x: 'up' if x > 0.001 else 'down' if x < -0.001 else 'sideways')
-        
-        return data
+    # SYNTHETIC DATA GENERATION REMOVED - BACKTESTING REQUIRES REAL MARKET DATA ONLY
+    # All backtesting must use actual historical market data for accurate performance evaluation
     
     async def _generate_historical_prediction(self, 
                                             symbol: str, 

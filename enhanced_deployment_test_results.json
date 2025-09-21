@@ -1,0 +1,116 @@
+{
+  "timestamp": "2025-09-20T03:49:47.905018",
+  "tests": {
+    "enhanced_status": {
+      "available": true
+    },
+    "database": {
+      "documents_count": 0,
+      "document_analysis_count": 0,
+      "predictions_count": 0,
+      "system_metrics_count": 0,
+      "cache_entries_count": 0,
+      "database_size_mb": 0.09375
+    },
+    "enhanced_predictions": [
+      {
+        "success": true,
+        "symbol": "CBA.AX",
+        "processing_time": 0.36400270462036133,
+        "current_price": 166.1699981689453,
+        "predicted_price": 166.1699981689453,
+        "confidence": 0.63,
+        "enhanced_mode": true
+      },
+      {
+        "success": true,
+        "symbol": "BHP.AX",
+        "processing_time": 0.24445509910583496,
+        "current_price": 39.63999938964844,
+        "predicted_price": 39.63999938964844,
+        "confidence": 0.63,
+        "enhanced_mode": true
+      },
+      {
+        "success": true,
+        "symbol": "^AORD",
+        "processing_time": 0.16166138648986816,
+        "current_price": 9061.2001953125,
+        "predicted_price": 9061.2001953125,
+        "confidence": 0.63,
+        "enhanced_mode": true
+      },
+      {
+        "success": true,
+        "symbol": "^GSPC",
+        "processing_time": 0.14629650115966797,
+        "current_price": 6664.35986328125,
+        "predicted_price": 6770.98962109375,
+        "confidence": 0.63,
+        "enhanced_mode": true
+      }
+    ],
+    "performance_comparison": [
+      {
+        "symbol": "CBA.AX",
+        "standard": {
+          "success": false,
+          "error": "HTTP 404"
+        },
+        "enhanced": {
+          "success": true,
+          "symbol": "CBA.AX",
+          "processing_time": 0.006231069564819336,
+          "current_price": 166.1699981689453,
+          "predicted_price": 166.1699981689453,
+          "confidence": 0.63,
+          "enhanced_mode": true
+        }
+      }
+    ],
+    "performance_metrics": {
+      "overall": {
+        "total_predictions": 4,
+        "avg_processing_time": 0,
+        "avg_confidence": 0.63,
+        "predictions_with_documents": 0,
+        "document_coverage_percent": 0.0,
+        "recent_predictions": [
+          {
+            "symbol": "^GSPC",
+            "timeframe": "5d",
+            "processing_time": 0.0,
+            "confidence": 0.63
+          },
+          {
+            "symbol": "^AORD",
+            "timeframe": "5d",
+            "processing_time": 0.0,
+            "confidence": 0.63
+          },
+          {
+            "symbol": "BHP.AX",
+            "timeframe": "5d",
+            "processing_time": 0.0,
+            "confidence": 0.63
+          },
+          {
+            "symbol": "CBA.AX",
+            "timeframe": "5d",
+            "processing_time": 0.0,
+            "confidence": 0.63
+          }
+        ]
+      },
+      "by_symbol": {},
+      "database_stats": {
+        "documents_count": 0,
+        "document_analysis_count": 0,
+        "predictions_count": 4,
+        "system_metrics_count": 0,
+        "cache_entries_count": 4,
+        "database_size_mb": 0.09375
+      }
+    }
+  }
+}
