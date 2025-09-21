@@ -245,25 +245,10 @@
                 <div class="mb-4">
                     <h4 class="font-semibold mb-3">Recent Predictions</h4>
                     <div class="space-y-3" id="recent-predictions">
-                        <div class="flex justify-between items-center bg-gray-50 rounded-lg p-3">
-                            <div>
-                                <span class="font-medium">AAPL</span>
-                                <span class="text-sm text-gray-600 ml-2">5d forecast</span>
-                            </div>
-                            <div class="text-right">
-                                <div class="market-up font-semibold">$189.50</div>
-                                <div class="text-xs text-gray-500">94.2% confidence</div>
-                            </div>
-                        </div>
-                        <div class="flex justify-between items-center bg-gray-50 rounded-lg p-3">
-                            <div>
-                                <span class="font-medium">CBA.AX</span>
-                                <span class="text-sm text-gray-600 ml-2">5d forecast</span>
-                            </div>
-                            <div class="text-right">
-                                <div class="market-down font-semibold">$98.75</div>
-                                <div class="text-xs text-gray-500">91.8% confidence</div>
-                            </div>
+                        <!-- Real predictions will be loaded dynamically -->
+                        <div class="text-center text-gray-500 py-4">
+                            <i class="fas fa-chart-line text-2xl mb-2"></i>
+                            <p>Enter a stock symbol above to generate predictions</p>
                         </div>
                     </div>
                 </div>
@@ -290,15 +275,15 @@
                 
                 <!-- CBA Current Status -->
                 <div class="mb-6">
-                    <div class="bg-gradient-to-r from-yellow-50 to-yellow-100 rounded-lg p-4">
+                    <div class="bg-gradient-to-r from-yellow-50 to-yellow-100 rounded-lg p-4" id="cba-status">
                         <div class="flex justify-between items-center mb-2">
                             <span class="text-lg font-bold">CBA.AX</span>
-                            <span class="market-up font-semibold">+2.1%</span>
+                            <span class="text-sm font-medium text-gray-600" id="cba-change">Loading...</span>
                         </div>
-                        <div class="text-2xl font-bold text-yellow-800">$102.45</div>
+                        <div class="text-2xl font-bold text-yellow-800" id="cba-price">Loading...</div>
                         <div class="text-sm text-yellow-700 mt-1">
                             <i class="fas fa-brain mr-1"></i>
-                            Phase 4 Prediction: $105.20 (5d)
+                            <span id="cba-prediction">Loading prediction...</span>
                         </div>
                     </div>
                 </div>
@@ -576,6 +561,11 @@
                 const documents = Math.floor(85 + Math.random() * 10);
                 document.getElementById('documents-analyzed').textContent = documents;
                 
+                // Refresh CBA data every few updates (not every 30 seconds to avoid API overload)
+                if (Math.random() > 0.8) {
+                    loadCBAData();
+                }
+                
             } catch (error) {
                 console.error('Error updating market data:', error);
             }
@@ -584,6 +574,70 @@
         function setupRealTimeUpdates() {
             // Setup WebSocket or polling for real-time updates
             console.log('Setting up real-time market updates...');
+            
+            // Load initial CBA data and sample predictions
+            loadCBAData();
+            loadSamplePredictions();
+        }
+        
+        async function loadCBAData() {
+            try {
+                console.log('Loading real CBA data...');
+                const response = await fetch(`${API_BASE}/api/prediction/cba/enhanced`);
+                const data = await response.json();
+                
+                if (data && data.prediction) {
+                    const prediction = data.prediction;
+                    const currentPrice = prediction.current_price;
+                    const predictedPrice = prediction.predicted_price;
+                    const changePercent = prediction.predicted_change_percent;
+                    
+                    // Update CBA status display
+                    document.getElementById('cba-price').textContent = `$${currentPrice.toFixed(2)}`;
+                    document.getElementById('cba-change').textContent = `${changePercent > 0 ? '+' : ''}${changePercent.toFixed(1)}%`;
+                    document.getElementById('cba-change').className = changePercent >= 0 ? 'market-up font-semibold' : 'market-down font-semibold';
+                    document.getElementById('cba-prediction').textContent = `Phase 4 Prediction: $${predictedPrice.toFixed(2)} (5d)`;
+                    
+                    console.log('CBA data loaded successfully');
+                } else {
+                    console.error('Invalid CBA data format');
+                }
+            } catch (error) {
+                console.error('Error loading CBA data:', error);
+                // Fallback to loading message
+                document.getElementById('cba-price').textContent = 'Error loading';
+                document.getElementById('cba-change').textContent = 'N/A';
+                document.getElementById('cba-prediction').textContent = 'Data unavailable';
+            }
+        }
+        
+        async function loadSamplePredictions() {
+            try {
+                console.log('Loading sample predictions...');
+                const sampleSymbols = ['AAPL', 'MSFT'];
+                
+                for (const symbol of sampleSymbols) {
+                    try {
+                        const response = await fetch(`${API_BASE}/api/unified-prediction/${symbol}?timeframe=5d`);
+                        const data = await response.json();
+                        
+                        if (data.symbol && data.prediction) {
+                            displayPredictionResult(data);
+                        }
+                    } catch (error) {
+                        console.log(`Could not load sample prediction for ${symbol}:`, error.message);
+                    }
+                }
+                
+                // Remove the placeholder if we have real predictions
+                const placeholder = document.querySelector('#recent-predictions .text-center');
+                if (placeholder && document.querySelectorAll('#recent-predictions .bg-blue-50').length > 0) {
+                    placeholder.remove();
+                }
+                
+            } catch (error) {
+                console.error('Error loading sample predictions:', error);
+            }
         }
         
         // Stock Prediction Functions
