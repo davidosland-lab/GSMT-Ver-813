@@ -13,12 +13,12 @@ Global Stock Market Tracker - Local Deployment
 24-Hour UTC Timeline Focus for Global Stock Indices with Live Data
 """
 
-from fastapi import FastAPI, HTTPException, Query, Request, WebSocket
+from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response, JSONResponse
 from pydantic import BaseModel, Field
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Union
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 import pytz
@@ -32,6 +32,15 @@ from dotenv import load_dotenv
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import uuid
+import hashlib
+import mimetypes
+from pathlib import Path
+import tempfile
+import shutil
+import re
+from collections import Counter
+import sqlite3
 
 # Load environment variables
 load_dotenv()
@@ -58,6 +67,15 @@ app = FastAPI(
 # Configuration - NO DEMO DATA
 LIVE_DATA_ENABLED = os.getenv('LIVE_DATA_ENABLED', 'true').lower() == 'true'
 REQUIRE_LIVE_DATA = os.getenv('REQUIRE_LIVE_DATA', 'true').lower() == 'true'
+
+# Document Upload Configuration
+DOCUMENT_STORAGE_PATH = os.path.join(os.path.dirname(__file__), "document_storage")
+DOCUMENT_DB_PATH = os.path.join(os.path.dirname(__file__), "documents.db")
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+# Note: ALLOWED_DOCUMENT_TYPES will be defined after DocumentType enum
+
+# Ensure document storage directory exists
+os.makedirs(DOCUMENT_STORAGE_PATH, exist_ok=True)
 
 # CORS middleware - allow local frontend
 app.add_middleware(
@@ -182,6 +200,73 @@ class AnalysisResponse(BaseModel):
     economic_events: Optional[List[EconomicEvent]] = []  # Economic events affecting selected markets
     market_announcements: Optional[List[MarketAnnouncement]] = []  # Recent market announcements
     economic_summary: Optional[Dict[str, Any]] = None  # Summary of economic factors
+
+# === DOCUMENT UPLOAD AND ANALYSIS MODELS ===
+class DocumentType(str, Enum):
+    PDF = "pdf"
+    DOC = "doc"
+    DOCX = "docx"
+    TXT = "txt"
+    IMAGE = "image"
+    OTHER = "other"
+
+# Document type mapping (defined after enum)
+ALLOWED_DOCUMENT_TYPES = {
+    'application/pdf': DocumentType.PDF,
+    'application/msword': DocumentType.DOC,
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': DocumentType.DOCX,
+    'text/plain': DocumentType.TXT,
+    'image/jpeg': DocumentType.IMAGE,
+    'image/png': DocumentType.IMAGE,
+    'image/jpg': DocumentType.IMAGE
+}
+
+class DocumentAnalysisStatus(str, Enum):
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+class DocumentInsight(BaseModel):
+    insight_type: str  # sentiment, financial_metric, risk_factor, opportunity, etc.
+    content: str
+    confidence: float
+    relevance_score: float
+    extracted_data: Optional[Dict[str, Any]] = None
+
+class StockContext(BaseModel):
+    symbol: str
+    company_name: str
+    sector: Optional[str] = None
+    market_cap: Optional[float] = None
+    current_price: Optional[float] = None
+
+class DocumentAnalysisResult(BaseModel):
+    document_id: str
+    filename: str
+    file_size: int
+    document_type: DocumentType
+    upload_timestamp: datetime
+    analysis_timestamp: Optional[datetime] = None
+    status: DocumentAnalysisStatus
+    stock_context: Optional[StockContext] = None
+    key_insights: List[DocumentInsight] = []
+    sentiment_score: Optional[float] = None  # -1 to 1
+    risk_assessment: Optional[str] = None
+    financial_metrics: Optional[Dict[str, Any]] = None
+    text_content: Optional[str] = None
+    error_message: Optional[str] = None
+
+class DocumentUploadRequest(BaseModel):
+    stock_symbol: Optional[str] = None
+    analysis_focus: Optional[str] = "general"  # general, financial, risk, sentiment, competitive
+    
+class DocumentSearchQuery(BaseModel):
+    query: str
+    stock_symbol: Optional[str] = None
+    document_types: Optional[List[DocumentType]] = None
+    date_range: Optional[Dict[str, datetime]] = None
+    min_confidence: Optional[float] = 0.7
 
 # Comprehensive symbols database - SIGNIFICANTLY EXPANDED GLOBAL MARKETS
 SYMBOLS_DB = {
@@ -505,6 +590,212 @@ PERIOD_CONFIG = {
 }
 
 # Removed candlestick intervals - focusing on 24h timeline
+
+# === DOCUMENT STORAGE AND ANALYSIS FUNCTIONS ===
+
+def init_document_database():
+    """Initialize the document database"""
+    conn = sqlite3.connect(DOCUMENT_DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS documents (
+            document_id TEXT PRIMARY KEY,
+            filename TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            file_size INTEGER NOT NULL,
+            document_type TEXT NOT NULL,
+            mime_type TEXT,
+            upload_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            analysis_timestamp DATETIME,
+            status TEXT DEFAULT 'pending',
+            stock_symbol TEXT,
+            stock_context TEXT,  -- JSON
+            key_insights TEXT,   -- JSON
+            sentiment_score REAL,
+            risk_assessment TEXT,
+            financial_metrics TEXT,  -- JSON
+            text_content TEXT,
+            error_message TEXT,
+            analysis_focus TEXT DEFAULT 'general'
+        )
+    ''')
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS document_insights (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            document_id TEXT,
+            insight_type TEXT,
+            content TEXT,
+            confidence REAL,
+            relevance_score REAL,
+            extracted_data TEXT,  -- JSON
+            FOREIGN KEY (document_id) REFERENCES documents (document_id)
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+
+def extract_text_from_file(file_path: str, file_type: DocumentType) -> str:
+    """Extract text from various file types"""
+    try:
+        if file_type == DocumentType.TXT:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        elif file_type == DocumentType.PDF:
+            # For now, return a placeholder - in production, use PyPDF2 or similar
+            return "PDF text extraction not implemented in demo mode"
+        elif file_type in [DocumentType.DOC, DocumentType.DOCX]:
+            # For now, return a placeholder - in production, use python-docx or similar  
+            return "DOC/DOCX text extraction not implemented in demo mode"
+        elif file_type == DocumentType.IMAGE:
+            # For now, return a placeholder - in production, use OCR
+            return "Image OCR text extraction not implemented in demo mode"
+        else:
+            return "Unknown file type"
+    except Exception as e:
+        logger.error(f"Error extracting text from {file_path}: {e}")
+        return f"Error: Could not extract text from file"
+
+async def analyze_document_content(text_content: str, stock_context: Optional[StockContext] = None, analysis_focus: str = "general") -> Dict[str, Any]:
+    """Analyze document content for stock-relevant insights"""
+    try:
+        # This is a simplified analysis - in production, you'd use AI/ML models
+        insights = []
+        
+        # Basic keyword analysis for financial terms
+        financial_keywords = [
+            'revenue', 'profit', 'earnings', 'quarterly', 'annual', 'growth', 
+            'market share', 'competition', 'risk', 'opportunity', 'investment',
+            'dividend', 'acquisition', 'merger', 'expansion', 'contract'
+        ]
+        
+        text_lower = text_content.lower()
+        found_keywords = [kw for kw in financial_keywords if kw in text_lower]
+        
+        # Generate insights based on found keywords
+        if found_keywords:
+            insights.append(DocumentInsight(
+                insight_type="financial_keywords",
+                content=f"Document contains financial terms: {', '.join(found_keywords)}",
+                confidence=0.8,
+                relevance_score=0.7,
+                extracted_data={"keywords": found_keywords}
+            ))
+        
+        # Basic sentiment analysis (simplified)
+        positive_words = ['growth', 'profit', 'success', 'opportunity', 'expansion', 'strong', 'increase']
+        negative_words = ['loss', 'decline', 'risk', 'decrease', 'challenge', 'weak', 'fall']
+        
+        pos_count = sum([1 for word in positive_words if word in text_lower])
+        neg_count = sum([1 for word in negative_words if word in text_lower])
+        
+        sentiment_score = (pos_count - neg_count) / max(pos_count + neg_count, 1)
+        sentiment_score = max(-1, min(1, sentiment_score))  # Clamp to [-1, 1]
+        
+        if abs(sentiment_score) > 0.2:
+            sentiment_type = "positive" if sentiment_score > 0 else "negative"
+            insights.append(DocumentInsight(
+                insight_type="sentiment",
+                content=f"Document shows {sentiment_type} sentiment (score: {sentiment_score:.2f})",
+                confidence=0.6,
+                relevance_score=0.8,
+                extracted_data={"sentiment_score": sentiment_score}
+            ))
+        
+        # Stock-specific analysis if context provided
+        if stock_context:
+            stock_mentions = text_lower.count(stock_context.symbol.lower()) + text_lower.count(stock_context.company_name.lower())
+            if stock_mentions > 0:
+                insights.append(DocumentInsight(
+                    insight_type="stock_relevance",
+                    content=f"Document mentions {stock_context.symbol} or {stock_context.company_name} {stock_mentions} times",
+                    confidence=0.9,
+                    relevance_score=1.0,
+                    extracted_data={"mention_count": stock_mentions}
+                ))
+        
+        return {
+            "insights": [insight.dict() for insight in insights],
+            "sentiment_score": sentiment_score,
+            "risk_assessment": "medium" if abs(sentiment_score) > 0.3 else "low",
+            "financial_metrics": {"keyword_count": len(found_keywords)},
+            "analysis_quality": "basic_nlp"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error analyzing document content: {e}")
+        return {
+            "insights": [],
+            "sentiment_score": 0.0,
+            "risk_assessment": "unknown",
+            "financial_metrics": {},
+            "error": str(e)
+        }
+
+def save_document_to_db(document_result: DocumentAnalysisResult):
+    """Save document analysis result to database"""
+    conn = sqlite3.connect(DOCUMENT_DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('''
+            INSERT OR REPLACE INTO documents (
+                document_id, filename, file_path, file_size, document_type, 
+                upload_timestamp, analysis_timestamp, status, stock_symbol,
+                stock_context, key_insights, sentiment_score, risk_assessment,
+                financial_metrics, text_content, error_message, analysis_focus
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            document_result.document_id,
+            document_result.filename,
+            "",  # file_path - we'll store relative path
+            document_result.file_size,
+            document_result.document_type.value,
+            document_result.upload_timestamp,
+            document_result.analysis_timestamp,
+            document_result.status.value,
+            document_result.stock_context.symbol if document_result.stock_context else None,
+            json.dumps(document_result.stock_context.dict()) if document_result.stock_context else None,
+            json.dumps([insight.dict() for insight in document_result.key_insights]),
+            document_result.sentiment_score,
+            document_result.risk_assessment,
+            json.dumps(document_result.financial_metrics) if document_result.financial_metrics else None,
+            document_result.text_content,
+            document_result.error_message,
+            "general"
+        ))
+        
+        # Save individual insights
+        for insight in document_result.key_insights:
+            cursor.execute('''
+                INSERT INTO document_insights (
+                    document_id, insight_type, content, confidence, 
+                    relevance_score, extracted_data
+                ) VALUES (?, ?, ?, ?, ?, ?)
+            ''', (
+                document_result.document_id,
+                insight.insight_type,
+                insight.content,
+                insight.confidence,
+                insight.relevance_score,
+                json.dumps(insight.extracted_data) if insight.extracted_data else None
+            ))
+        
+        conn.commit()
+    except Exception as e:
+        logger.error(f"Error saving document to database: {e}")
+        raise e
+    finally:
+        conn.close()
+
+# Initialize document database on startup
+try:
+    init_document_database()
+    logger.info("📄 Document database initialized")
+except Exception as e:
+    logger.error(f"Failed to initialize document database: {e}")
 
 def get_dynamic_market_hours():
     """Get market hours adjusted for current daylight saving time"""
@@ -1527,6 +1818,21 @@ async def serve_cba_market_tracker():
     except Exception as e:
         logger.error(f"Error serving CBA Market Tracker: {e}")
         raise HTTPException(status_code=500, detail=f"CBA Market Tracker error: {str(e)}")
+
+@app.get("/enhanced-landing", response_class=HTMLResponse)
+async def serve_enhanced_landing_page():
+    """🚀 Enhanced Landing Page with Phase 4 Integration - Complete System Overview"""
+    try:
+        file_path = "enhanced_landing_page.html"
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="Enhanced Landing Page not found")
+    except Exception as e:
+        logger.error(f"Error serving Enhanced Landing Page: {e}")
+        raise HTTPException(status_code=500, detail=f"Enhanced Landing Page error: {str(e)}")
 
 @app.get("/api/info")
 async def root_api():
@@ -8075,6 +8381,315 @@ async def remove_symbol_from_scheduler(symbol: str):
             "success": False,
             "error": str(e)
         }
+
+# === DOCUMENT UPLOAD AND ANALYSIS API ENDPOINTS ===
+
+@app.post("/api/documents/upload")
+async def upload_document(
+    file: UploadFile = File(...),
+    stock_symbol: Optional[str] = Form(None),
+    analysis_focus: Optional[str] = Form("general")
+):
+    """Upload and analyze a document for stock-relevant insights"""
+    try:
+        # Validate file size
+        content = await file.read()
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=413, detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB")
+        
+        # Validate file type
+        file_type = ALLOWED_DOCUMENT_TYPES.get(file.content_type)
+        if not file_type:
+            raise HTTPException(status_code=415, detail=f"Unsupported file type: {file.content_type}")
+        
+        # Generate unique document ID
+        document_id = str(uuid.uuid4())
+        
+        # Save file to storage
+        file_extension = Path(file.filename).suffix
+        safe_filename = f"{document_id}{file_extension}"
+        file_path = os.path.join(DOCUMENT_STORAGE_PATH, safe_filename)
+        
+        with open(file_path, "wb") as f:
+            f.write(content)
+        
+        # Get stock context if symbol provided
+        stock_context = None
+        if stock_symbol:
+            try:
+                # Get basic stock info
+                ticker = yf.Ticker(stock_symbol)
+                info = ticker.info
+                stock_context = StockContext(
+                    symbol=stock_symbol,
+                    company_name=info.get('longName', stock_symbol),
+                    sector=info.get('sector'),
+                    market_cap=info.get('marketCap'),
+                    current_price=info.get('currentPrice')
+                )
+            except Exception as e:
+                logger.warning(f"Could not fetch stock context for {stock_symbol}: {e}")
+                stock_context = StockContext(symbol=stock_symbol, company_name=stock_symbol)
+        
+        # Create document analysis result
+        document_result = DocumentAnalysisResult(
+            document_id=document_id,
+            filename=file.filename,
+            file_size=len(content),
+            document_type=file_type,
+            upload_timestamp=datetime.now(timezone.utc),
+            status=DocumentAnalysisStatus.PROCESSING,
+            stock_context=stock_context
+        )
+        
+        # Extract text content
+        text_content = extract_text_from_file(file_path, file_type)
+        document_result.text_content = text_content[:5000]  # Limit stored text
+        
+        # Analyze content
+        analysis_result = await analyze_document_content(text_content, stock_context, analysis_focus)
+        
+        # Update document result with analysis
+        document_result.key_insights = [DocumentInsight(**insight) for insight in analysis_result.get("insights", [])]
+        document_result.sentiment_score = analysis_result.get("sentiment_score", 0.0)
+        document_result.risk_assessment = analysis_result.get("risk_assessment", "unknown")
+        document_result.financial_metrics = analysis_result.get("financial_metrics", {})
+        document_result.analysis_timestamp = datetime.now(timezone.utc)
+        document_result.status = DocumentAnalysisStatus.COMPLETED
+        
+        # Save to database
+        save_document_to_db(document_result)
+        
+        logger.info(f"📄 Successfully analyzed document: {file.filename} ({file_type.value})")
+        
+        return {
+            "success": True,
+            "document_id": document_id,
+            "filename": file.filename,
+            "analysis": document_result.dict(),
+            "message": "Document uploaded and analyzed successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading document: {e}")
+        # Clean up file if it was saved
+        try:
+            if 'file_path' in locals() and os.path.exists(file_path):
+                os.remove(file_path)
+        except:
+            pass
+        
+        raise HTTPException(status_code=500, detail=f"Failed to upload document: {str(e)}")
+
+@app.get("/api/documents/{document_id}")
+async def get_document_analysis(document_id: str):
+    """Get analysis results for a specific document"""
+    try:
+        conn = sqlite3.connect(DOCUMENT_DB_PATH)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT * FROM documents WHERE document_id = ?
+        ''', (document_id,))
+        
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Convert row to dict
+        columns = [description[0] for description in cursor.description]
+        doc_data = dict(zip(columns, row))
+        
+        # Get insights
+        cursor.execute('''
+            SELECT * FROM document_insights WHERE document_id = ?
+        ''', (document_id,))
+        
+        insights_rows = cursor.fetchall()
+        insights_columns = [description[0] for description in cursor.description]
+        insights = [dict(zip(insights_columns, row)) for row in insights_rows]
+        
+        conn.close()
+        
+        # Parse JSON fields
+        doc_data['stock_context'] = json.loads(doc_data['stock_context']) if doc_data['stock_context'] else None
+        doc_data['key_insights'] = json.loads(doc_data['key_insights']) if doc_data['key_insights'] else []
+        doc_data['financial_metrics'] = json.loads(doc_data['financial_metrics']) if doc_data['financial_metrics'] else {}
+        
+        return {
+            "success": True,
+            "document": doc_data,
+            "insights": insights
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting document analysis: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/documents")
+async def list_documents(
+    stock_symbol: Optional[str] = Query(None),
+    limit: Optional[int] = Query(10, ge=1, le=100),
+    offset: Optional[int] = Query(0, ge=0)
+):
+    """List uploaded documents with optional filtering"""
+    try:
+        conn = sqlite3.connect(DOCUMENT_DB_PATH)
+        cursor = conn.cursor()
+        
+        # Build query
+        query = "SELECT * FROM documents"
+        params = []
+        
+        if stock_symbol:
+            query += " WHERE stock_symbol = ?"
+            params.append(stock_symbol)
+        
+        query += " ORDER BY upload_timestamp DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        
+        columns = [description[0] for description in cursor.description]
+        documents = []
+        
+        for row in rows:
+            doc_data = dict(zip(columns, row))
+            # Parse JSON fields
+            doc_data['stock_context'] = json.loads(doc_data['stock_context']) if doc_data['stock_context'] else None
+            doc_data['key_insights'] = json.loads(doc_data['key_insights']) if doc_data['key_insights'] else []
+            doc_data['financial_metrics'] = json.loads(doc_data['financial_metrics']) if doc_data['financial_metrics'] else {}
+            documents.append(doc_data)
+        
+        # Get total count
+        count_query = "SELECT COUNT(*) FROM documents"
+        count_params = []
+        if stock_symbol:
+            count_query += " WHERE stock_symbol = ?"
+            count_params.append(stock_symbol)
+        
+        cursor.execute(count_query, count_params)
+        total_count = cursor.fetchone()[0]
+        
+        conn.close()
+        
+        return {
+            "success": True,
+            "documents": documents,
+            "total_count": total_count,
+            "limit": limit,
+            "offset": offset
+        }
+        
+    except Exception as e:
+        logger.error(f"Error listing documents: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/documents/{document_id}")
+async def delete_document(document_id: str):
+    """Delete a document and its analysis"""
+    try:
+        conn = sqlite3.connect(DOCUMENT_DB_PATH)
+        cursor = conn.cursor()
+        
+        # Check if document exists
+        cursor.execute("SELECT document_id FROM documents WHERE document_id = ?", (document_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Delete from database
+        cursor.execute("DELETE FROM document_insights WHERE document_id = ?", (document_id,))
+        cursor.execute("DELETE FROM documents WHERE document_id = ?", (document_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        # Try to delete physical file
+        try:
+            file_path = os.path.join(DOCUMENT_STORAGE_PATH, f"{document_id}.*")
+            import glob
+            for file in glob.glob(file_path):
+                os.remove(file)
+        except Exception as e:
+            logger.warning(f"Could not delete physical file for {document_id}: {e}")
+        
+        logger.info(f"🗑️ Deleted document: {document_id}")
+        
+        return {
+            "success": True,
+            "message": "Document deleted successfully",
+            "document_id": document_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting document: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/documents/search")
+async def search_documents(query: DocumentSearchQuery):
+    """Search documents by content, insights, or metadata"""
+    try:
+        conn = sqlite3.connect(DOCUMENT_DB_PATH)
+        cursor = conn.cursor()
+        
+        # Build search query
+        sql_query = """
+            SELECT DISTINCT d.* FROM documents d 
+            LEFT JOIN document_insights di ON d.document_id = di.document_id
+            WHERE (
+                d.text_content LIKE ? OR 
+                di.content LIKE ? OR
+                d.filename LIKE ?
+            )
+        """
+        
+        search_term = f"%{query.query}%"
+        params = [search_term, search_term, search_term]
+        
+        if query.stock_symbol:
+            sql_query += " AND d.stock_symbol = ?"
+            params.append(query.stock_symbol)
+        
+        if query.document_types:
+            type_placeholders = ",".join(["?" for _ in query.document_types])
+            sql_query += f" AND d.document_type IN ({type_placeholders})"
+            params.extend([dt.value for dt in query.document_types])
+        
+        sql_query += " ORDER BY d.upload_timestamp DESC"
+        
+        cursor.execute(sql_query, params)
+        rows = cursor.fetchall()
+        
+        columns = [description[0] for description in cursor.description]
+        documents = []
+        
+        for row in rows:
+            doc_data = dict(zip(columns, row))
+            # Parse JSON fields
+            doc_data['stock_context'] = json.loads(doc_data['stock_context']) if doc_data['stock_context'] else None
+            doc_data['key_insights'] = json.loads(doc_data['key_insights']) if doc_data['key_insights'] else []
+            doc_data['financial_metrics'] = json.loads(doc_data['financial_metrics']) if doc_data['financial_metrics'] else {}
+            documents.append(doc_data)
+        
+        conn.close()
+        
+        return {
+            "success": True,
+            "query": query.query,
+            "documents": documents,
+            "total_results": len(documents)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error searching documents: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 if __name__ == "__main__":
