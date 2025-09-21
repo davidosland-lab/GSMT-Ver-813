@@ -456,10 +456,31 @@
             `;
         }
         
-        function updateConfidenceLevel(confidenceInterval) {
-            const confidence = Math.random() * 30 + 60; // Simulate 60-90% confidence
-            document.getElementById('confidenceValue').textContent = `${confidence.toFixed(0)}%`;
-            document.getElementById('confidenceBar').style.width = `${confidence}%`;
+        async function updateConfidenceLevel() {
+            try {
+                // Get real confidence from CBA enhanced prediction API
+                const response = await fetch(`${API_BASE}/api/prediction/cba/enhanced`);
+                const data = await response.json();
+                
+                if (data.success && data.prediction) {
+                    // Calculate confidence from probability and risk metrics
+                    const probUp = data.prediction.probability_up || 0.5;
+                    const probDown = data.prediction.probability_down || 0.5;
+                    const maxProb = Math.max(probUp, probDown);
+                    const confidence = (maxProb * 100).toFixed(0);
+                    
+                    document.getElementById('confidenceValue').textContent = `${confidence}%`;
+                    document.getElementById('confidenceBar').style.width = `${confidence}%`;
+                } else {
+                    // Fallback to loading state instead of fake data
+                    document.getElementById('confidenceValue').textContent = 'Loading...';
+                    document.getElementById('confidenceBar').style.width = '0%';
+                }
+            } catch (error) {
+                console.error('Error loading confidence level:', error);
+                document.getElementById('confidenceValue').textContent = 'N/A';
+                document.getElementById('confidenceBar').style.width = '0%';
+            }
         }
         
         async function loadPublications() {
