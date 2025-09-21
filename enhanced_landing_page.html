@@ -606,8 +606,8 @@
                 await loadSystemMetrics();
                 
                 // Refresh CBA data periodically (every 5th update to avoid API overload)  
-                updateCounter = (updateCounter || 0) + 1;
-                if (updateCounter % 5 === 0) {
+                window.updateCounter = (window.updateCounter || 0) + 1;
+                if (window.updateCounter % 5 === 0) {
                     loadCBAData();
                 }
                 
@@ -630,9 +630,14 @@
                 for (const index of indices) {
                     try {
                         const response = await fetch(`${API_BASE}/api/analysis?symbols=${index.symbol}&chart_type=percentage&time_period=24h`);
+                        
+                        if (!response.ok) {
+                            throw new Error(`HTTP ${response.status}`);
+                        }
+                        
                         const data = await response.json();
                         
-                        if (data.success && data.data[index.symbol]) {
+                        if (data && data.success && data.data && data.data[index.symbol]) {
                             const indexData = data.data[index.symbol];
                             const latestPoint = indexData[indexData.length - 1];
                             const changePercent = latestPoint.percentage_change || 0;
@@ -652,14 +657,14 @@
                         }
                     } catch (error) {
                         console.log(`Could not load data for ${index.name}:`, error.message);
-                        // Add placeholder for failed loads
+                        // Add placeholder for failed loads - shows real status instead of fake data
                         marketContainer.insertAdjacentHTML('beforeend', `
                             <div class="bg-gray-50 rounded-lg p-4">
                                 <div class="flex justify-between items-center">
                                     <span class="text-sm text-gray-600">${index.name}</span>
-                                    <span class="text-sm text-gray-500">N/A</span>
+                                    <span class="text-sm text-gray-500">API Unavailable</span>
                                 </div>
-                                <div class="text-lg font-bold text-gray-400">Loading...</div>
+                                <div class="text-lg font-bold text-gray-400">Data Loading...</div>
                             </div>
                         `);
                     }
