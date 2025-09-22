@@ -498,6 +498,12 @@ class GNNTFTIntegratedPredictor:
             confidence_score = gnn_result.confidence_score
             components_used = ["GNN"]
             
+        elif gnn_result and hasattr(gnn_result, 'predicted_price') and gnn_result.predicted_price:
+            # GNN available but weight issue - force GNN usage
+            predicted_price = gnn_result.predicted_price  
+            confidence_score = gnn_result.confidence_score
+            components_used = ["GNN_FALLBACK"]
+            
         else:
             # Fallback - simple prediction
             predicted_price = current_price * (1 + np.random.normal(0, 0.02))

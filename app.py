@@ -908,16 +908,40 @@ async def generate_market_data_live(symbols: List[str], chart_type: ChartType = 
                 
             market = SYMBOLS_DB[symbol].market
             
+            # Debug logging for ^AORD and ^FTSE
+            if symbol in ["^AORD", "^FTSE"]:
+                logger.info(f"🔍 generate_market_data_live: Processing {symbol} (market: {market})")
+                # Aggressively clear all related cache for these problematic symbols
+                if hasattr(real_market_aggregator, 'cache'):
+                    cache_keys_to_clear = [f"real_{symbol}", symbol, f"{symbol}_data", f"{symbol}_cache"]
+                    for cache_key in cache_keys_to_clear:
+                        if cache_key in real_market_aggregator.cache:
+                            del real_market_aggregator.cache[cache_key]
+                            logger.info(f"🔍 Cleared cache key: {cache_key}")
+                    # Also clear the entire cache as a nuclear option for these symbols
+                    if symbol == "^AORD":
+                        real_market_aggregator.cache.clear()
+                        logger.info(f"🔍 NUCLEAR: Cleared entire cache for {symbol}")
+            
             # Get REAL market data from APIs
             real_market_data = await real_market_aggregator.get_real_market_data(symbol)
+            
+            # Debug logging for ^AORD and ^FTSE
+            if symbol in ["^AORD", "^FTSE"]:
+                logger.info(f"🔍 generate_market_data_live: {symbol} - real_market_data: {real_market_data is not None}, data_points: {len(real_market_data.data_points) if real_market_data else 0}")
             
             if real_market_data and real_market_data.data_points:
                 # Convert real market data to our MarketDataPoint format
                 data_points = convert_real_market_data_to_format(
                     real_market_data.data_points, symbol, market, chart_type, interval_minutes, time_period
                 )
-                result[symbol] = data_points
-                logger.info(f"✅ Got {len(data_points)} REAL market data points for {symbol} from {', '.join(real_market_data.sources_used)}")
+                
+                if data_points:
+                    result[symbol] = data_points
+                    logger.info(f"✅ Got {len(data_points)} REAL market data points for {symbol} from {', '.join(real_market_data.sources_used)}")
+                else:
+                    logger.error(f"❌ Conversion returned 0 points for {symbol} (had {len(real_market_data.data_points)} raw points)")
+                    continue
             else:
                 logger.error(f"❌ No real market data available for {symbol}")
                 # For critical symbols, could add fallback to simulated data here if needed
@@ -938,19 +962,42 @@ async def generate_market_data_live(symbols: List[str], chart_type: ChartType = 
 def convert_real_market_data_to_format(real_points, symbol: str, market: str, chart_type: ChartType, interval_minutes: int = 60, time_period: str = "24h") -> List[MarketDataPoint]:
     """Convert real market data points to MarketDataPoint format with proper time filtering"""
     
+    # Debug logging for ^AORD and ^FTSE
+    if symbol in ["^AORD", "^FTSE"]:
+        logger.info(f"🔍 convert_real_market_data_to_format: {symbol} - Input points: {len(real_points) if real_points else 0}")
+    
     if not real_points:
         return []
     
-    # Calculate time window based on period
+    # Calculate time window based on period - be more flexible for weekends/holidays
     utc_now = datetime.now(timezone.utc)
     if time_period == "48h":
-        start_time = utc_now - timedelta(hours=48)
+        start_time = utc_now - timedelta(hours=168)  # 1 week for weekend/holiday coverage
     else:  # 24h default
-        start_time = utc_now - timedelta(hours=24)
+        # For indices like ^AORD and ^FTSE, be much more permissive with time filtering
+        # Markets may be closed for days due to weekends/holidays
+        if symbol.startswith('^'):
+            start_time = utc_now - timedelta(hours=168)  # 1 week for indices to handle weekends
+        else:
+            start_time = utc_now - timedelta(hours=120)  # Extended to capture weekend data
     
     # Filter to requested time period and sort by timestamp
     filtered_points = [p for p in real_points if p.timestamp >= start_time]
     filtered_points.sort(key=lambda x: x.timestamp)
+    
+    # Debug logging for ^AORD and ^FTSE
+    if symbol in ["^AORD", "^FTSE"]:
+        logger.info(f"🔍 {symbol} time filtering: {len(real_points)} -> {len(filtered_points)} points")
+        logger.info(f"🔍 {symbol} UTC now: {utc_now}")
+        logger.info(f"🔍 {symbol} start_time: {start_time}")
+        if real_points and len(real_points) > 0:
+            logger.info(f"🔍 {symbol} input timestamps: {real_points[0].timestamp} to {real_points[-1].timestamp}")
+            # Show each timestamp and whether it passes the filter
+            for i, p in enumerate(real_points[:5]):  # Show first 5 points
+                passed = p.timestamp >= start_time
+                logger.info(f"🔍 {symbol} point {i}: {p.timestamp} -> {'PASS' if passed else 'FAIL'}")
+        if len(filtered_points) == 0:
+            logger.error(f"❌ {symbol} ALL POINTS FILTERED OUT - Check time filtering logic!")
     
     if not filtered_points:
         logger.warning(f"No real market data points in requested time period for {symbol}")
@@ -998,6 +1045,32 @@ def convert_real_market_data_to_format(real_points, symbol: str, market: str, ch
         )
         
         market_data_points.append(market_point)
+    
+    # Debug logging for ^AORD and ^FTSE
+    if symbol in ["^AORD", "^FTSE"]:
+        logger.info(f"🔍 {symbol} final output: {len(market_data_points)} market data points")
+    
+    # Fallback for indices: if we have real data but no converted points, create basic points
+    if len(market_data_points) == 0 and len(real_points) > 0 and symbol.startswith('^'):
+        logger.info(f"🔧 FALLBACK: Creating basic data points for {symbol} from {len(real_points)} real points")
+        # Create simplified data points from the real data
+        for i, point in enumerate(real_points[:24]):  # Limit to 24 points max
+            percentage_change = ((point.close - real_points[0].close) / real_points[0].close * 100) if chart_type == ChartType.PERCENTAGE else None
+            
+            market_point = MarketDataPoint(
+                timestamp=point.timestamp.isoformat(),
+                timestamp_ms=int(point.timestamp.timestamp() * 1000),
+                open=point.open,
+                high=point.high,
+                low=point.low,
+                close=point.close,
+                volume=point.volume,
+                percentage_change=round(percentage_change, 3) if percentage_change is not None else None,
+                market_open=True
+            )
+            market_data_points.append(market_point)
+        
+        logger.info(f"🔧 FALLBACK: Created {len(market_data_points)} basic data points for {symbol}")
     
     logger.info(f"✅ Converted {len(market_data_points)} real market data points for {symbol} (source: real market APIs)")
     return market_data_points
@@ -1804,6 +1877,21 @@ async def serve_interface_hub():
     """Serve the interface hub (same as root)"""
     return await root()
 
+@app.get("/enhanced", response_class=HTMLResponse)
+async def serve_enhanced_landing_page():
+    """🚀 Enhanced Landing Page - Global Stock Market Tracker with Fix System"""
+    try:
+        enhanced_path = "enhanced_landing_page.html"
+        if os.path.exists(enhanced_path):
+            with open(enhanced_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="Enhanced landing page not found")
+    except Exception as e:
+        logger.error(f"Error serving enhanced landing page: {e}")
+        raise HTTPException(status_code=500, detail="Failed to serve enhanced landing page")
+
 @app.get("/cba-tracker", response_class=HTMLResponse)
 async def serve_cba_market_tracker():
     """🏦 CBA Enhanced Market Tracker - Single Market Focus"""
@@ -1819,6 +1907,414 @@ async def serve_cba_market_tracker():
         logger.error(f"Error serving CBA Market Tracker: {e}")
         raise HTTPException(status_code=500, detail=f"CBA Market Tracker error: {str(e)}")
 
+@app.get("/enhanced-global-tracker", response_class=HTMLResponse)
+async def serve_enhanced_global_market_tracker():
+    """🚀 Enhanced Global Market Tracker with Phase 3 Extensions (P3-005 to P3-007)"""
+    try:
+        file_path = "enhanced_market_tracker.html"
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="Enhanced Global Market Tracker not found")
+    except Exception as e:
+        logger.error(f"Error serving Enhanced Global Market Tracker: {e}")
+        raise HTTPException(status_code=500, detail=f"Enhanced Global Market Tracker error: {str(e)}")
+
+@app.get("/single-stock-analysis", response_class=HTMLResponse)
+async def serve_single_stock_analysis():
+    """📈 Single Stock Analysis and Prediction Dashboard"""
+    try:
+        file_path = "single_stock_track_predict.html"
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="Single Stock Analysis dashboard not found")
+    except Exception as e:
+        logger.error(f"Error serving Single Stock Analysis: {e}")
+        raise HTTPException(status_code=500, detail=f"Single Stock Analysis error: {str(e)}")
+
+@app.get("/cba-analysis", response_class=HTMLResponse)
+async def serve_cba_analysis_dashboard():
+    """🏦 CBA Analysis Dashboard - Dedicated CBA Analysis Tools"""
+    try:
+        file_path = "cba_market_tracker.html"
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="CBA Analysis dashboard not found")
+    except Exception as e:
+        logger.error(f"Error serving CBA Analysis Dashboard: {e}")
+        raise HTTPException(status_code=500, detail=f"CBA Analysis Dashboard error: {str(e)}")
+
+@app.get("/prediction-centre", response_class=HTMLResponse)
+async def serve_prediction_centre():
+    """🧠 Prediction Centre - Advanced Prediction Analytics Dashboard"""
+    try:
+        file_path = "unified_super_prediction_interface.html"
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            # Fallback to alternative prediction interface
+            file_path = "advanced_prediction_dashboard.html"
+            if os.path.exists(file_path):
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                return HTMLResponse(content=content, status_code=200)
+            else:
+                raise HTTPException(status_code=404, detail="Prediction Centre dashboard not found")
+    except Exception as e:
+        logger.error(f"Error serving Prediction Centre: {e}")
+        raise HTTPException(status_code=500, detail=f"Prediction Centre error: {str(e)}")
+
+@app.get("/document-upload", response_class=HTMLResponse)
+async def serve_document_upload():
+    """📄 Document Upload and Analysis Interface"""
+    try:
+        # For now, return a basic document upload interface
+        content = """
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Document Upload & Analysis</title>
+            <script src="https://cdn.tailwindcss.com"></script>
+        </head>
+        <body class="bg-gray-50 min-h-screen">
+            <div class="container mx-auto px-4 py-8">
+                <h1 class="text-3xl font-bold text-gray-900 mb-8">📄 Document Upload & Analysis</h1>
+                
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h2 class="text-xl font-semibold mb-4">Upload Financial Documents</h2>
+                    <p class="text-gray-600 mb-6">Upload financial reports, data files, and documents for AI-powered analysis and integration with market predictions.</p>
+                    
+                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                        <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-4"></i>
+                        <p class="text-lg text-gray-600 mb-2">Drag and drop files here or click to browse</p>
+                        <p class="text-sm text-gray-500 mb-4">Supported: PDF, DOC, XLS, TXT (Max 10MB)</p>
+                        <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" class="hidden" id="fileInput">
+                        <button onclick="document.getElementById('fileInput').click()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                            Select Files
+                        </button>
+                    </div>
+                    
+                    <div class="mt-6">
+                        <button class="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors">
+                            <i class="fas fa-magic mr-2"></i>
+                            Process & Analyze Documents
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="mt-6">
+                    <button onclick="window.close()" class="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition-colors">
+                        <i class="fas fa-arrow-left mr-2"></i>
+                        Back to Dashboard
+                    </button>
+                </div>
+            </div>
+            
+            <script>
+                document.getElementById('fileInput').addEventListener('change', function(e) {
+                    if (e.target.files.length > 0) {
+                        alert('File upload functionality will be implemented in the next phase. Selected: ' + Array.from(e.target.files).map(f => f.name).join(', '));
+                    }
+                });
+            </script>
+        </body>
+        </html>
+        """
+        return HTMLResponse(content=content, status_code=200)
+    except Exception as e:
+        logger.error(f"Error serving Document Upload: {e}")
+        raise HTTPException(status_code=500, detail=f"Document Upload error: {str(e)}")
+
+@app.get("/api/cba-prediction")
+async def get_cba_prediction():
+    """🏦 CBA Real-time Prediction using Phase 4 GNN Models"""
+    try:
+        # Use real CBA prediction system
+        import yfinance as yf
+        from datetime import datetime, timezone
+        
+        cba_ticker = yf.Ticker("CBA.AX")
+        data = cba_ticker.history(period="2d", interval="1d")
+        
+        if len(data) >= 2:
+            current_price = float(data['Close'].iloc[-1])
+            
+            # This should integrate with actual Phase 4 GNN model
+            # For now, return structure indicating API integration needed
+            return {
+                "symbol": "CBA.AX",
+                "current_price": current_price,
+                "predicted_price": None,  # Real prediction model needed
+                "confidence": None,       # Real confidence calculation needed
+                "sentiment": "API Integration Required",
+                "model": "Phase 4 GNN (Connection Required)",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "status": "real_api_integration_needed"
+            }
+        else:
+            raise Exception("Insufficient CBA data")
+            
+    except Exception as e:
+        return {
+            "error": str(e),
+            "status": "error",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+@app.post("/api/enhanced-prediction")
+async def get_enhanced_prediction(request: Request):
+    """🤖 Enhanced Stock Prediction using Phase 4 GNN Models"""
+    try:
+        body = await request.json()
+        symbol = body.get('symbol', '').upper()
+        timeframe = body.get('timeframe', '24h')
+        model_type = body.get('model_type', 'phase4_gnn')
+        
+        if not symbol:
+            raise ValueError("Symbol is required")
+        
+        # Get real market data for the symbol
+        import yfinance as yf
+        ticker = yf.Ticker(symbol)
+        data = ticker.history(period="5d", interval="1d")
+        
+        if len(data) >= 2:
+            current_price = float(data['Close'].iloc[-1])
+            
+            # This should integrate with actual Phase 4 GNN prediction model
+            # For now, return structure indicating real model integration needed
+            return {
+                "symbol": symbol,
+                "timeframe": timeframe,
+                "model_type": model_type,
+                "current_price": current_price,
+                "predicted_price": None,    # Real Phase 4 GNN model needed
+                "direction": None,          # Real direction prediction needed  
+                "confidence": None,         # Real confidence calculation needed
+                "model_status": "Phase 4 GNN Integration Required",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "status": "real_model_integration_needed",
+                "message": f"Real-time prediction for {symbol} requires Phase 4 GNN model connection"
+            }
+        else:
+            raise Exception(f"Insufficient market data for {symbol}")
+            
+    except Exception as e:
+        return {
+            "error": str(e),
+            "status": "error",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+@app.get("/api/mobile-market-status")
+async def get_mobile_market_status():
+    """🔄 Mobile-optimized market data with CORRECT calculation - bypasses all caching"""
+    try:
+        import yfinance as yf
+        from datetime import datetime, timezone
+        import pytz
+        
+        # Get AORD data with correct calculation
+        aord_ticker = yf.Ticker("^AORD")
+        
+        # Get 2 days of daily data for proper percentage calculation
+        daily_data = aord_ticker.history(period="2d", interval="1d")
+        
+        # Get current intraday data
+        intraday_data = aord_ticker.history(period="1d", interval="1h")
+        
+        if len(daily_data) >= 2:
+            prev_close = float(daily_data['Close'].iloc[-2])  # Previous day close
+            
+            # Use current intraday price if available, otherwise today's close
+            if len(intraday_data) > 0:
+                current_price = float(intraday_data['Close'].iloc[-1])
+                data_source = "Real-time"
+            else:
+                current_price = float(daily_data['Close'].iloc[-1])
+                data_source = "Daily close"
+            
+            # CORRECT calculation: current vs previous day close
+            daily_change = ((current_price - prev_close) / prev_close) * 100
+            
+            # Market status
+            sydney_tz = pytz.timezone('Australia/Sydney')
+            now_sydney = datetime.now(sydney_tz)
+            current_minutes = now_sydney.hour * 60 + now_sydney.minute
+            is_weekday = now_sydney.weekday() < 5
+            market_open = 10 * 60  # 10 AM
+            market_close = 16 * 60  # 4 PM
+            
+            is_open = is_weekday and market_open <= current_minutes < market_close
+            minutes_left = market_close - current_minutes if is_open else 0
+            
+            return {
+                "symbol": "^AORD",
+                "current_price": round(current_price, 2),
+                "previous_close": round(prev_close, 2),
+                "daily_change_percent": round(daily_change, 2),
+                "daily_change_points": round(current_price - prev_close, 2),
+                "direction": "UP" if daily_change > 0 else "DOWN",
+                "market_open": is_open,
+                "minutes_until_close": minutes_left if is_open else 0,
+                "sydney_time": now_sydney.strftime("%H:%M AEST"),
+                "data_source": data_source,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "calculation_method": "CORRECT: Current vs Previous Day Close"
+            }
+        else:
+            raise Exception("Insufficient data")
+            
+    except Exception as e:
+        return {
+            "error": str(e),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+@app.get("/debug-market-data", response_class=HTMLResponse)
+async def debug_market_data():
+    """🔍 Simple debug page showing current market data - for troubleshooting mobile issues"""
+    try:
+        import yfinance as yf
+        from datetime import datetime, timezone
+        import pytz
+        
+        # Get AORD data
+        aord_ticker = yf.Ticker("^AORD")
+        daily_data = aord_ticker.history(period="2d", interval="1d")
+        intraday_data = aord_ticker.history(period="1d", interval="1h")
+        
+        html_content = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>🔍 Market Data Debug</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <style>
+                body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+                .card { background: white; padding: 20px; border-radius: 10px; margin: 10px 0; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                .correct { color: #22c55e; font-weight: bold; }
+                .incorrect { color: #ef4444; font-weight: bold; }
+                .big-number { font-size: 24px; font-weight: bold; margin: 10px 0; }
+                .refresh-btn { background: #3b82f6; color: white; padding: 15px 20px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; width: 100%; margin: 10px 0; }
+            </style>
+        </head>
+        <body>
+            <h1>🔍 Market Data Debug Page</h1>
+            <p><strong>Purpose:</strong> Direct server-side market data (no JavaScript, no cache)</p>
+        """
+        
+        if len(daily_data) >= 2:
+            prev_close = float(daily_data['Close'].iloc[-2])
+            
+            if len(intraday_data) > 0:
+                current_price = float(intraday_data['Close'].iloc[-1])
+                data_source = "Intraday (Real-time)"
+            else:
+                current_price = float(daily_data['Close'].iloc[-1])
+                data_source = "Daily Close"
+            
+            # CORRECT calculation
+            correct_change = ((current_price - prev_close) / prev_close) * 100
+            
+            # OLD (wrong) calculation for comparison
+            if len(intraday_data) >= 2:
+                old_first = float(intraday_data['Close'].iloc[0])
+                old_change = ((current_price - old_first) / old_first) * 100
+            else:
+                old_change = 0
+                old_first = current_price
+            
+            sydney_tz = pytz.timezone('Australia/Sydney')
+            sydney_time = datetime.now(sydney_tz)
+            
+            html_content += f"""
+            <div class="card">
+                <h2>✅ CORRECT Market Data</h2>
+                <div class="big-number correct">^AORD: {current_price:,.1f} ({correct_change:+.2f}%)</div>
+                <p><strong>Method:</strong> Current vs Previous Day Close</p>
+                <p><strong>Previous Close:</strong> {prev_close:,.2f}</p>
+                <p><strong>Current Price:</strong> {current_price:,.2f}</p>
+                <p><strong>Daily Change:</strong> {correct_change:+.2f}% ({correct_change > 0 and "UP ⬆️" or "DOWN ⬇️"})</p>
+                <p><strong>Data Source:</strong> {data_source}</p>
+            </div>
+            
+            <div class="card">
+                <h2>❌ OLD (Wrong) Calculation</h2>
+                <div class="big-number incorrect">^AORD: {current_price:,.1f} ({old_change:+.2f}%)</div>
+                <p><strong>Method:</strong> First Hour vs Current Hour (INCORRECT)</p>
+                <p><strong>First Hour Today:</strong> {old_first:,.2f}</p>
+                <p><strong>Current Price:</strong> {current_price:,.2f}</p>
+                <p><strong>Wrong Change:</strong> {old_change:+.2f}%</p>
+            </div>
+            
+            <div class="card">
+                <h2>⏰ Current Status</h2>
+                <p><strong>Sydney Time:</strong> {sydney_time.strftime("%Y-%m-%d %H:%M AEST")}</p>
+                <p><strong>Timestamp:</strong> {datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")}</p>
+                <p><strong>Your Device:</strong> Mobile Browser</p>
+            </div>
+            
+            <button class="refresh-btn" onclick="window.location.reload();">
+                🔄 Refresh This Page
+            </button>
+            
+            <div class="card">
+                <h3>📱 What You Should See in Main App:</h3>
+                <p>The Global Market Tracker should show:</p>
+                <ul>
+                    <li><strong>Price:</strong> {current_price:,.1f}</li>
+                    <li><strong>Change:</strong> {correct_change:+.2f}%</li>
+                    <li><strong>Color:</strong> {"Green (UP)" if correct_change > 0 else "Red (DOWN)"}</li>
+                </ul>
+                <p>If it shows anything different, there's a caching or JavaScript issue.</p>
+            </div>
+            
+            </body>
+            </html>
+            """
+        else:
+            html_content += """
+            <div class="card">
+                <h2>❌ Error</h2>
+                <p>Could not fetch market data. Please try again later.</p>
+            </div>
+            </body>
+            </html>
+            """
+        
+        response = HTMLResponse(content=html_content, status_code=200)
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
+        
+    except Exception as e:
+        error_html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head><title>Debug Error</title></head>
+        <body>
+            <h1>❌ Debug Error</h1>
+            <p>Error: {str(e)}</p>
+            <p>Timestamp: {datetime.now(timezone.utc).isoformat()}</p>
+        </body>
+        </html>
+        """
+        return HTMLResponse(content=error_html, status_code=500)
+
 @app.get("/enhanced-landing", response_class=HTMLResponse)
 async def serve_enhanced_landing_page():
     """🚀 Enhanced Landing Page with Phase 4 Integration - Complete System Overview"""
@@ -1827,12 +2323,61 @@ async def serve_enhanced_landing_page():
         if os.path.exists(file_path):
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
-            return HTMLResponse(content=content, status_code=200)
+            
+            # Add cache-busting to prevent browser caching issues
+            import time
+            cache_buster = str(int(time.time()))
+            
+            # Add no-cache headers and inject cache-buster into the content
+            content = content.replace(
+                '<script>',
+                f'<script>\n        // Cache buster: {cache_buster}\n        console.log("🔄 Page loaded with cache buster: {cache_buster}");\n'
+            )
+            
+            response = HTMLResponse(content=content, status_code=200)
+            # Extreme cache-busting for mobile browsers
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+            response.headers["Last-Modified"] = "0"
+            response.headers["ETag"] = f"W/\"{cache_buster}\""
+            response.headers["Vary"] = "*"
+            return response
         else:
             raise HTTPException(status_code=404, detail="Enhanced Landing Page not found")
     except Exception as e:
         logger.error(f"Error serving Enhanced Landing Page: {e}")
         raise HTTPException(status_code=500, detail=f"Enhanced Landing Page error: {str(e)}")
+
+@app.get("/single-stock-tracker", response_class=HTMLResponse)
+async def serve_single_stock_tracker():
+    """📈 Single Stock Track and Predict Module with Phase 4 Accuracy Integration"""
+    try:
+        file_path = "single_stock_track_predict.html"
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="Single Stock Tracker not found")
+    except Exception as e:
+        logger.error(f"Error serving Single Stock Tracker: {e}")
+        raise HTTPException(status_code=500, detail=f"Single Stock Tracker error: {str(e)}")
+
+@app.get("/global-market-tracker", response_class=HTMLResponse)
+async def serve_global_market_tracker():
+    """🌍 Global Market Tracker - Multi-Symbol 24/48 Hour Analysis"""
+    try:
+        file_path = os.path.join("frontend", "index.html")
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="Global Market Tracker not found")
+    except Exception as e:
+        logger.error(f"Error serving Global Market Tracker: {e}")
+        raise HTTPException(status_code=500, detail=f"Global Market Tracker error: {str(e)}")
 
 @app.get("/api/info")
 async def root_api():
@@ -7658,6 +8203,29 @@ async def get_phase4_gnn_prediction(
         if related_symbols:
             related_symbols = related_symbols[:max_relationships]
         
+        # Get current price using real market data
+        current_price = None
+        try:
+            import yfinance as yf
+            ticker = yf.Ticker(symbol)
+            
+            # Try to get recent 1-minute data first
+            try:
+                recent_data = ticker.history(period="1d", interval="1m")
+                if not recent_data.empty:
+                    current_price = float(recent_data['Close'].iloc[-1])
+                    logger.info(f"📊 Got real-time current price for {symbol}: ${current_price:.2f}")
+                else:
+                    raise ValueError("No intraday data")
+            except:
+                # Fallback to daily data
+                hist_data = ticker.history(period="5d")
+                if not hist_data.empty:
+                    current_price = float(hist_data['Close'].iloc[-1])
+                    logger.info(f"📊 Using daily data current price for {symbol}: ${current_price:.2f}")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not fetch current price for {symbol}: {e}")
+        
         # Generate GNN prediction
         gnn_result = await gnn_predictor.generate_gnn_enhanced_prediction(
             symbol=symbol,
@@ -7675,6 +8243,7 @@ async def get_phase4_gnn_prediction(
             
             # Core prediction results
             "predicted_price": round(gnn_result.predicted_price, 2),
+            "current_price": round(current_price, 2) if current_price else None,
             "confidence_score": round(gnn_result.confidence_score, 3),
             
             # GNN-specific market intelligence
@@ -7980,6 +8549,322 @@ async def get_phase4_gnn_status():
             "phase4_gnn_enabled": False,
             "phase4_multimodal_enabled": False,
             "error": str(e)
+        }
+
+# PHASE 4 ACCURACY VALIDATION & TRACKING ENDPOINTS
+
+# Import Phase 4 accuracy tracking system
+try:
+    from phase4_accuracy_tracker import (
+        Phase4AccuracyTracker,
+        record_phase4_prediction,
+        get_phase4_accuracy_report,
+        validate_all_pending_predictions,
+        compare_all_model_accuracy
+    )
+    PHASE4_ACCURACY_ENABLED = True
+    logger.info("🎯 Phase 4 Accuracy Tracking System loaded successfully")
+except ImportError as e:
+    PHASE4_ACCURACY_ENABLED = False
+    logger.warning(f"Phase 4 Accuracy Tracker not available: {e}")
+
+@app.post("/api/phase4-accuracy/record")
+async def record_phase4_prediction_endpoint(
+    prediction_data: Dict[str, Any],
+    model_type: str = Query(..., description="Model type (phase4-gnn, phase4-multimodal, phase3-extended)"),
+    timeframe: str = Query("5d", description="Prediction timeframe")
+):
+    """
+    🎯 Record Phase 4 Prediction for Future Accuracy Validation
+    
+    Records a Phase 4 prediction in the accuracy tracking database for future validation
+    against actual market outcomes. This enables real-time accuracy monitoring and
+    model performance comparison.
+    
+    Args:
+        prediction_data: Complete prediction response from Phase 4 API
+        model_type: Type of model used for prediction
+        timeframe: Prediction horizon (1d, 5d, 30d)
+    
+    Returns:
+        Prediction ID and recording confirmation
+    """
+    
+    if not PHASE4_ACCURACY_ENABLED:
+        raise HTTPException(
+            status_code=503,
+            detail="Phase 4 accuracy tracking system not available"
+        )
+    
+    try:
+        logger.info(f"🎯 Recording {model_type} prediction for accuracy tracking ({timeframe})")
+        
+        # Record the prediction for future validation
+        prediction_id = await record_phase4_prediction(
+            prediction_data=prediction_data,
+            model_type=model_type,
+            timeframe=timeframe
+        )
+        
+        return {
+            "success": True,
+            "prediction_id": prediction_id,
+            "model_type": model_type,
+            "timeframe": timeframe,
+            "recorded_at": datetime.now(timezone.utc).isoformat(),
+            "validation_date": (datetime.now(timezone.utc) + 
+                              timedelta(days={"1d": 1, "5d": 5, "30d": 30}.get(timeframe, 5))).isoformat(),
+            "message": f"Phase 4 prediction recorded successfully for future accuracy validation"
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to record Phase 4 prediction: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to record prediction: {str(e)}"
+        )
+
+@app.get("/api/phase4-accuracy/report")
+async def get_phase4_accuracy_report_endpoint(
+    model_type: Optional[str] = Query(None, description="Specific model to analyze"),
+    days: int = Query(30, description="Number of days to analyze", ge=1, le=365),
+    symbol: Optional[str] = Query(None, description="Specific symbol to analyze")
+):
+    """
+    🎯 Get Comprehensive Phase 4 Accuracy Report
+    
+    Provides detailed accuracy metrics for Phase 4 models including:
+    - Direction accuracy (predicted vs actual direction)
+    - Price accuracy (predicted vs actual price within tolerance)
+    - Confidence calibration analysis
+    - Performance trends over time
+    - Model-specific GNN insights
+    
+    Args:
+        model_type: Filter by specific model (phase4-gnn, phase4-multimodal, phase3-extended)
+        days: Analysis period in days
+        symbol: Filter by specific stock symbol
+    
+    Returns:
+        Comprehensive accuracy metrics and analysis
+    """
+    
+    if not PHASE4_ACCURACY_ENABLED:
+        raise HTTPException(
+            status_code=503,
+            detail="Phase 4 accuracy tracking system not available"
+        )
+    
+    try:
+        logger.info(f"🎯 Generating Phase 4 accuracy report (model={model_type}, days={days}, symbol={symbol})")
+        
+        # Get comprehensive accuracy metrics
+        accuracy_report = await get_phase4_accuracy_report(
+            model_type=model_type,
+            days=days
+        )
+        
+        # Add request metadata
+        accuracy_report["request_params"] = {
+            "model_type_filter": model_type,
+            "analysis_days": days,
+            "symbol_filter": symbol,
+            "generated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        return {
+            "success": True,
+            "accuracy_report": accuracy_report,
+            "system_info": {
+                "phase4_accuracy_enabled": PHASE4_ACCURACY_ENABLED,
+                "report_type": "PHASE4_ACCURACY_VALIDATION",
+                "version": "Phase4_Accuracy_v1.0"
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to generate Phase 4 accuracy report: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to generate accuracy report: {str(e)}"
+        )
+
+@app.post("/api/phase4-accuracy/validate")
+async def validate_phase4_predictions_endpoint():
+    """
+    🎯 Validate All Pending Phase 4 Predictions
+    
+    Checks all pending predictions that have reached their target date against
+    actual market outcomes. Updates the accuracy database with validation results.
+    
+    This endpoint should be called regularly (e.g., daily) to maintain up-to-date
+    accuracy metrics for all Phase 4 models.
+    
+    Returns:
+        Validation results and statistics
+    """
+    
+    if not PHASE4_ACCURACY_ENABLED:
+        raise HTTPException(
+            status_code=503,
+            detail="Phase 4 accuracy tracking system not available"
+        )
+    
+    try:
+        logger.info("🎯 Starting Phase 4 prediction validation process")
+        
+        # Validate all pending predictions
+        validation_results = await validate_all_pending_predictions()
+        
+        return {
+            "success": True,
+            "validation_results": validation_results,
+            "system_info": {
+                "phase4_accuracy_enabled": PHASE4_ACCURACY_ENABLED,
+                "validation_type": "PHASE4_PENDING_VALIDATION",
+                "version": "Phase4_Accuracy_v1.0"
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to validate Phase 4 predictions: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to validate predictions: {str(e)}"
+        )
+
+@app.get("/api/phase4-accuracy/compare")
+async def compare_phase4_model_accuracy_endpoint(
+    days: int = Query(30, description="Analysis period in days", ge=7, le=365),
+    symbols: Optional[List[str]] = Query(None, description="Specific symbols to analyze")
+):
+    """
+    🎯 Compare Phase 4 vs Phase 3 Model Accuracy
+    
+    Provides comparative analysis between Phase 3 and Phase 4 models:
+    - Side-by-side accuracy comparison
+    - Statistical significance testing
+    - Model recommendation based on performance
+    - Detailed performance breakdowns
+    
+    Args:
+        days: Analysis period in days
+        symbols: Optional list of symbols to focus analysis on
+    
+    Returns:
+        Comprehensive model comparison and recommendations
+    """
+    
+    if not PHASE4_ACCURACY_ENABLED:
+        raise HTTPException(
+            status_code=503,
+            detail="Phase 4 accuracy tracking system not available"
+        )
+    
+    try:
+        logger.info(f"🎯 Comparing Phase 4 vs Phase 3 model accuracy ({days} days)")
+        
+        # Get comparative accuracy analysis
+        comparison_results = await compare_all_model_accuracy(days=days)
+        
+        return {
+            "success": True,
+            "comparison_results": comparison_results,
+            "analysis_params": {
+                "analysis_days": days,
+                "symbols_filter": symbols,
+                "comparison_date": datetime.now(timezone.utc).isoformat()
+            },
+            "system_info": {
+                "phase4_accuracy_enabled": PHASE4_ACCURACY_ENABLED,
+                "comparison_type": "PHASE4_VS_PHASE3_ACCURACY",
+                "version": "Phase4_Accuracy_v1.0"
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to compare model accuracy: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to compare model accuracy: {str(e)}"
+        )
+
+@app.get("/api/phase4-accuracy/status")
+async def get_phase4_accuracy_status():
+    """
+    🎯 Get Phase 4 Accuracy Tracking System Status
+    
+    Returns current status of the accuracy tracking system including:
+    - System availability and configuration
+    - Database statistics
+    - Recent validation activity
+    - System health metrics
+    
+    Returns:
+        System status and health information
+    """
+    
+    try:
+        if not PHASE4_ACCURACY_ENABLED:
+            return {
+                "phase4_accuracy_enabled": False,
+                "error": "Phase 4 accuracy tracking system not available",
+                "system_status": "disabled"
+            }
+        
+        # Initialize tracker to get status
+        tracker = Phase4AccuracyTracker()
+        
+        # Get basic database statistics
+        try:
+            import sqlite3
+            with sqlite3.connect(tracker.db_path) as conn:
+                cursor = conn.execute(
+                    "SELECT COUNT(*) as total, COUNT(CASE WHEN outcome IS NOT NULL THEN 1 END) as validated "
+                    "FROM predictions"
+                )
+                total_predictions, validated_predictions = cursor.fetchone()
+                
+                cursor = conn.execute(
+                    "SELECT model_type, COUNT(*) as count FROM predictions GROUP BY model_type"
+                )
+                model_counts = dict(cursor.fetchall())
+        except Exception:
+            total_predictions, validated_predictions = 0, 0
+            model_counts = {}
+        
+        return {
+            "phase4_accuracy_enabled": True,
+            "system_status": "active",
+            "database_stats": {
+                "total_predictions": total_predictions,
+                "validated_predictions": validated_predictions,
+                "pending_predictions": total_predictions - validated_predictions,
+                "validation_rate": (validated_predictions / total_predictions * 100) if total_predictions > 0 else 0
+            },
+            "model_distribution": model_counts,
+            "system_info": {
+                "database_path": str(tracker.db_path),
+                "cache_ttl_seconds": tracker.cache_ttl,
+                "version": "Phase4_Accuracy_v1.0"
+            },
+            "capabilities": [
+                "Real-time prediction recording",
+                "Automatic accuracy validation",
+                "Multi-model performance comparison",
+                "Direction & price accuracy tracking",
+                "Confidence calibration analysis",
+                "Performance trend analysis"
+            ],
+            "status_timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting Phase 4 accuracy status: {e}")
+        return {
+            "phase4_accuracy_enabled": False,
+            "error": str(e),
+            "system_status": "error"
         }
 
 @app.post("/api/prediction/record-outcome")

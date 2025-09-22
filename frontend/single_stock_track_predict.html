@@ -558,32 +558,23 @@
                     </div>
                 </div>
                 
-                <div class="prediction-controls" id="predictionControls">
-                    <span style="color: #94a3b8; font-weight: 500; margin-right: 10px;">AI Predictions:</span>
-                    <!-- Phase 3 Extended Timeframes (default) -->
-                    <div id="phase3-timeframes">
-                        <button class="prediction-btn" onclick="generatePrediction('1d')" data-timeframe="1d">
-                            1 Day
-                        </button>
-                        <button class="prediction-btn" onclick="generatePrediction('5d')" data-timeframe="5d">
-                            5 Days
-                        </button>
-                        <button class="prediction-btn" onclick="generatePrediction('30d')" data-timeframe="30d">
-                            30 Days
-                        </button>
-                        <button class="prediction-btn" onclick="generatePrediction('90d')" data-timeframe="90d">
-                            90 Days
-                        </button>
-                    </div>
-                    <!-- Phase 4 GNN Prediction (no timeframes needed) -->
-                    <div id="phase4-timeframes" style="display: none;">
-                        <button class="prediction-btn" onclick="generatePrediction('5d')" data-timeframe="5d">
-                            🧠 GNN Market Analysis (5 Days)
-                        </button>
-                        <span style="color: #64748b; font-size: 0.85em; margin-left: 10px;">
-                            Graph Neural Networks analyze market relationships
-                        </span>
-                    </div>
+                <div class="prediction-controls">
+                    <span style="color: #94a3b8; font-weight: 500; margin-right: 10px;">Quick Predictions:</span>
+                    <button class="prediction-btn" onclick="generatePrediction('15min')" data-timeframe="15min">
+                        15 Minutes
+                    </button>
+                    <button class="prediction-btn" onclick="generatePrediction('30min')" data-timeframe="30min">
+                        30 Minutes
+                    </button>
+                    <button class="prediction-btn" onclick="generatePrediction('1h')" data-timeframe="1h">
+                        1 Hour
+                    </button>
+                    <button class="prediction-btn" onclick="generatePrediction('1d')" data-timeframe="1d">
+                        1 Day
+                    </button>
+                    <button class="prediction-btn" onclick="generatePrediction('5d')" data-timeframe="5d">
+                        5 Days
+                    </button>
                 </div>
 
                 <div id="predictionResults" class="prediction-results">
@@ -623,10 +614,10 @@
     </div>
 
     <script>
-        // API Configuration - Dynamic base URL
+        // API Configuration
         const API_BASE_URL = window.location.hostname === 'localhost' ? 
             'http://localhost:8000' : 
-            `${window.location.protocol}//${window.location.host}`;
+            'https://8000-ib2hlmks3ra0wwghsafox-6532622b.e2b.dev';
         
         // Global variables
         let currentChart = null;
@@ -647,7 +638,6 @@
             modelSelector.addEventListener('change', function() {
                 const selectedModel = this.value;
                 
-                // Update model description
                 if (selectedModel === 'phase3') {
                     modelDescription.textContent = 'Advanced multi-modal prediction with 85%+ accuracy (Production Ready)';
                     modelDescription.style.color = '#10b981';
@@ -655,29 +645,8 @@
                     modelDescription.textContent = 'Graph Neural Networks with market relationships - 88%+ accuracy (Experimental)';
                     modelDescription.style.color = '#8b5cf6';
                 }
-                
-                // Switch timeframe displays based on selected model
-                switchTimeframeDisplay(selectedModel);
             });
         });
-        
-        // Switch timeframe display based on AI model
-        function switchTimeframeDisplay(modelType) {
-            const phase3Timeframes = document.getElementById('phase3-timeframes');
-            const phase4Timeframes = document.getElementById('phase4-timeframes');
-            
-            if (modelType === 'phase4-gnn') {
-                // Show Phase 4 GNN controls (no multiple timeframes)
-                phase3Timeframes.style.display = 'none';
-                phase4Timeframes.style.display = 'block';
-                console.log('🧠 Switched to Phase 4 GNN prediction controls');
-            } else {
-                // Show Phase 3 Extended controls (multiple timeframes)
-                phase3Timeframes.style.display = 'block';
-                phase4Timeframes.style.display = 'none';
-                console.log('🔬 Switched to Phase 3 Extended prediction controls');
-            }
-        }
 
         // Load market symbols into dropdown
         async function loadMarketSymbols() {
@@ -712,35 +681,20 @@
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
             console.log('🚀 Enhanced Market Tracker Loaded');
-            console.log('🌐 API Base URL:', API_BASE_URL);
-            
-            // Load market symbols
             loadMarketSymbols();
             
             // Wait for Chart.js to be fully loaded
-            console.log('📊 Chart.js available:', typeof Chart !== 'undefined');
             if (typeof Chart !== 'undefined') {
                 initializeChart();
             } else {
-                console.log('⏳ Waiting for Chart.js to load...');
                 setTimeout(() => {
                     if (typeof Chart !== 'undefined') {
-                        console.log('✅ Chart.js loaded after delay');
                         initializeChart();
                     } else {
-                        console.error('❌ Chart.js failed to load after delay');
+                        console.error('Chart.js failed to load');
                     }
                 }, 1000);
             }
-            
-            // Test if elements are found
-            const trackBtn = document.querySelector('.track-btn');
-            const marketSelect = document.getElementById('marketSelect');
-            const symbolInput = document.getElementById('symbolInput');
-            
-            console.log('🔘 Track button found:', !!trackBtn);
-            console.log('📝 Market select found:', !!marketSelect);  
-            console.log('⌨️ Symbol input found:', !!symbolInput);
         });
 
         // Market selection handler
@@ -1017,64 +971,41 @@
 
         // Start tracking a symbol
         async function startTracking() {
-            console.log('🎯 Start tracking function called');
+            const symbolFromDropdown = document.getElementById('marketSelect').value;
+            const symbolFromInput = document.getElementById('symbolInput').value.trim().toUpperCase();
             
+            const symbol = symbolFromDropdown || symbolFromInput;
+            
+            if (!symbol) {
+                alert('Please select a market or enter a symbol');
+                return;
+            }
+
+            // Stop existing tracking
+            if (trackingInterval) {
+                clearInterval(trackingInterval);
+            }
+
+            currentSymbol = symbol;
+            
+            // Clear previous prediction results when starting new tracking
+            clearPredictionResults();
+            
+            // Show status
+            document.getElementById('statusDisplay').classList.remove('hidden');
+            document.getElementById('currentSymbol').textContent = symbol;
+            
+            // Update track button
+            const trackBtn = document.querySelector('.track-btn');
+            trackBtn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right: 8px;"></i>Loading...';
+            trackBtn.disabled = true;
+
             try {
-                const symbolFromDropdown = document.getElementById('marketSelect').value;
-                const symbolFromInput = document.getElementById('symbolInput').value.trim().toUpperCase();
-                
-                const symbol = symbolFromDropdown || symbolFromInput;
-                console.log('📊 Selected symbol:', symbol);
-                
-                if (!symbol) {
-                    alert('Please select a market or enter a symbol');
-                    return;
-                }
-
-                // Stop existing tracking
-                if (trackingInterval) {
-                    console.log('🛑 Stopping existing tracking interval');
-                    clearInterval(trackingInterval);
-                }
-
-                currentSymbol = symbol;
-                
-                // Clear previous prediction results when starting new tracking
-                clearPredictionResults();
-                
-                // Show status
-                const statusDisplay = document.getElementById('statusDisplay');
-                const currentSymbolEl = document.getElementById('currentSymbol');
-                
-                if (statusDisplay) {
-                    statusDisplay.classList.remove('hidden');
-                    console.log('✅ Status display shown');
-                }
-                
-                if (currentSymbolEl) {
-                    currentSymbolEl.textContent = symbol;
-                }
-                
-                // Update track button
-                const trackBtn = document.querySelector('.track-btn');
-                if (!trackBtn) {
-                    console.error('❌ Track button not found');
-                    return;
-                }
-                
-                trackBtn.innerHTML = '<i class="fas fa-spinner fa-spin" style="margin-right: 8px;"></i>Loading...';
-                trackBtn.disabled = true;
-                
-                console.log('🚀 Starting data fetch for', symbol);
-
                 // Initial data fetch
                 await fetchMarketData(symbol);
                 
-                console.log('✅ Initial data fetch successful');
-                
                 // Start real-time updates (every 30 seconds)
                 trackingInterval = setInterval(() => {
-                    console.log('🔄 Interval update for', symbol);
                     fetchMarketData(symbol);
                 }, 30000);
 
@@ -1082,19 +1013,14 @@
                 trackBtn.innerHTML = '<i class="fas fa-stop" style="margin-right: 8px;"></i>Stop Tracking';
                 trackBtn.onclick = stopTracking;
                 trackBtn.disabled = false;
-                
-                console.log('✅ Tracking started successfully for', symbol);
 
             } catch (error) {
-                console.error('❌ Error starting tracking:', error);
+                console.error('Error starting tracking:', error);
                 alert('Error starting tracking: ' + error.message);
                 
-                const trackBtn = document.querySelector('.track-btn');
-                if (trackBtn) {
-                    trackBtn.innerHTML = '<i class="fas fa-play" style="margin-right: 8px;"></i>Start Tracking';
-                    trackBtn.onclick = startTracking;
-                    trackBtn.disabled = false;
-                }
+                trackBtn.innerHTML = '<i class="fas fa-play" style="margin-right: 8px;"></i>Start Tracking';
+                trackBtn.onclick = startTracking;
+                trackBtn.disabled = false;
             }
         }
 
@@ -1119,19 +1045,13 @@
         // Fetch market data
         async function fetchMarketData(symbol) {
             try {
-                const apiUrl = `${API_BASE_URL}/api/stock/${symbol}?period=1d&interval=${currentTimeInterval}`;
-                console.log('📡 Fetching market data from:', apiUrl);
-                
-                const response = await fetch(apiUrl);
-                
-                console.log('📊 API Response status:', response.status, response.statusText);
+                const response = await fetch(`${API_BASE_URL}/api/stock/${symbol}?period=1d&interval=${currentTimeInterval}`);
                 
                 if (!response.ok) {
                     throw new Error(`Failed to fetch real market data for ${symbol}: ${response.status} ${response.statusText}`);
                 }
 
                 const data = await response.json();
-                console.log('📈 Market data received:', data.success, data.data ? data.data.length + ' data points' : 'no data');
                 
                 if (data.success && data.data && data.data.length > 0) {
                     // Process the data
@@ -1290,27 +1210,19 @@
 
             try {
                 // Get selected AI model
-                let selectedModel = document.getElementById('aiModelSelector').value;
+                const selectedModel = document.getElementById('aiModelSelector').value;
                 console.log(`🔮 Generating ${timeframe} prediction for ${currentSymbol} using ${selectedModel}`);
                 
                 // Determine API endpoint based on selected model
                 let apiEndpoint;
-                const cacheBuster = `&_t=${Date.now()}`; // Force fresh data
                 if (selectedModel === 'phase4-gnn') {
-                    apiEndpoint = `${API_BASE_URL}/api/phase4-gnn-prediction/${currentSymbol}?_t=${Date.now()}`;
+                    apiEndpoint = `${API_BASE_URL}/api/phase4-gnn-prediction/${currentSymbol}`;
                 } else {
                     // Default to Phase 3 Extended
-                    apiEndpoint = `${API_BASE_URL}/api/extended-phase3-prediction/${currentSymbol}?timeframe=${timeframe}&enable_advanced_features=true&enable_rl_optimization=true&enable_risk_management=true&include_all_domains=true${cacheBuster}`;
+                    apiEndpoint = `${API_BASE_URL}/api/extended-phase3-prediction/${currentSymbol}?timeframe=${timeframe}&enable_advanced_features=true&enable_rl_optimization=true&enable_risk_management=true&include_all_domains=true`;
                 }
                 
-                const response = await fetch(apiEndpoint, {
-                    cache: 'no-store', // Prevent browser caching
-                    headers: {
-                        'Cache-Control': 'no-cache, no-store, must-revalidate',
-                        'Pragma': 'no-cache',
-                        'Expires': '0'
-                    }
-                });
+                const response = await fetch(apiEndpoint);
                 
                 if (!response.ok) {
                     throw new Error(`Prediction failed: ${response.status} ${response.statusText}`);
@@ -1318,14 +1230,10 @@
 
                 const predictionData = await response.json();
                 
-                console.log(`🔍 Debug - API endpoint called: ${apiEndpoint}`);
-                console.log(`📊 Debug - Current price from API: ${predictionData.current_price}`);
-                console.log('🎯 Full prediction response:', predictionData);
-                
                 // Handle different response formats for Phase 3 vs Phase 4
-                let currentSelectedModel = document.getElementById('aiModelSelector').value;
+                const selectedModel = document.getElementById('aiModelSelector').value;
                 
-                if (currentSelectedModel === 'phase4-gnn') {
+                if (selectedModel === 'phase4-gnn') {
                     // Phase 4 GNN has different structure
                     if (predictionData.predicted_price) {
                         displayPredictionResults(predictionData, timeframe, 'phase4-gnn');
@@ -1418,15 +1326,12 @@
                     current_price: 0 // Will try to get from GNN insights
                 };
                 
-                // Use real current price from API response
-                if (data.current_price) {
-                    currentPrice = data.current_price;
-                } else if (data.gnn_insights && data.gnn_insights.current_price) {
+                // Try to get current price from GNN insights if available
+                if (data.gnn_insights && data.gnn_insights.current_price) {
                     currentPrice = data.gnn_insights.current_price;
                 } else {
-                    // Fallback: Estimate current price (prediction is typically close to current for realistic predictions)
+                    // Estimate current price (prediction is typically close to current for realistic predictions)
                     currentPrice = data.predicted_price * 0.95; // Assume 5% gain prediction
-                    console.warn('⚠️ Using estimated current price - real price not available from API');
                 }
                 
                 prediction.current_price = currentPrice;
@@ -1489,23 +1394,23 @@
                         </div>
                         <div>
                             <strong>🚀 GNN Prediction:</strong> ${data.prediction_type || 'PHASE4_GNN_MARKET_RELATIONSHIP_PREDICTION'}<br>
-                            <strong>🧠 Node Importance:</strong> ${(data.gnn_insights && data.gnn_insights.node_importance) ? data.gnn_insights.node_importance.toFixed(4) : 'N/A'}<br>
-                            <strong>🌐 Graph Centrality:</strong> ${(data.gnn_insights && data.gnn_insights.graph_centrality) ? data.gnn_insights.graph_centrality.toFixed(4) : 'N/A'}
+                            <strong>🧠 Node Importance:</strong> ${data.gnn_insights?.node_importance?.toFixed(4) || 'N/A'}<br>
+                            <strong>🌐 Graph Centrality:</strong> ${data.gnn_insights?.graph_centrality?.toFixed(4) || 'N/A'}
                         </div>
                     </div>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 15px;">
                         <div style="padding: 8px; background: rgba(139, 92, 246, 0.2); border-radius: 6px; font-size: 0.8em;">
-                            <strong>🔗 Market Relationships:</strong> ${(data.gnn_insights && data.gnn_insights.total_relationships) || 'Analyzing...'}
+                            <strong>🔗 Market Relationships:</strong> ${data.gnn_insights?.total_relationships || 'Analyzing...'}
                         </div>
                         <div style="padding: 8px; background: rgba(45, 90, 160, 0.2); border-radius: 6px; font-size: 0.8em;">
-                            <strong>⚠️ Systemic Risk:</strong> ${(data.gnn_insights && data.gnn_insights.systemic_risk_score) ? data.gnn_insights.systemic_risk_score.toFixed(3) : 'N/A'}
+                            <strong>⚠️ Systemic Risk:</strong> ${data.gnn_insights?.systemic_risk_score?.toFixed(3) || 'N/A'}
                         </div>
                         <div style="padding: 8px; background: rgba(34, 197, 94, 0.2); border-radius: 6px; font-size: 0.8em;">
-                            <strong>💡 Sector Influence:</strong> ${(data.gnn_insights && data.gnn_insights.sector_influence) ? data.gnn_insights.sector_influence.toFixed(3) : 'N/A'}
+                            <strong>💡 Sector Influence:</strong> ${data.gnn_insights?.sector_influence?.toFixed(3) || 'N/A'}
                         </div>
                     </div>
                     <div style="margin-top: 15px; padding: 10px; background: rgba(30, 41, 59, 0.4); border-radius: 8px; font-size: 0.85em;">
-                        <strong>🧬 Key Relationships:</strong> ${(data.gnn_insights && data.gnn_insights.key_relationships) ? data.gnn_insights.key_relationships.slice(0, 3).map(rel => rel[0]).join(', ') : 'Loading market relationships...'}
+                        <strong>🧬 Key Relationships:</strong> ${data.gnn_insights?.key_relationships?.slice(0, 3).map(rel => rel[0]).join(', ') || 'Loading market relationships...'}
                     </div>
                 `;
             } else {
@@ -1519,23 +1424,23 @@
                         </div>
                         <div>
                             <strong>🚀 Phase 3 Extended:</strong> ${data.prediction_type || 'EXTENDED_PHASE3_PREDICTION'}<br>
-                            <strong>🧠 AI Features:</strong> ${(data.advanced_feature_engineering && data.advanced_feature_engineering.total_features_engineered) || 'N/A'} engineered<br>
-                            <strong>⚖️ Risk Management:</strong> ${(data.risk_management && data.risk_management.risk_management_active) ? 'Active' : 'Inactive'}
+                            <strong>🧠 AI Features:</strong> ${data.advanced_feature_engineering?.total_features_engineered || 'N/A'} engineered<br>
+                            <strong>⚖️ Risk Management:</strong> ${data.risk_management?.risk_management_active ? 'Active' : 'Inactive'}
                         </div>
                     </div>
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 15px;">
                         <div style="padding: 8px; background: rgba(45, 90, 160, 0.2); border-radius: 6px; font-size: 0.8em;">
-                            <strong>P3-005 Advanced Features:</strong> ${(data.components_active && data.components_active.p3_005_advanced_features) ? '✅ Active' : '❌ Inactive'}
+                            <strong>P3-005 Advanced Features:</strong> ${data.components_active?.p3_005_advanced_features ? '✅ Active' : '❌ Inactive'}
                         </div>
                         <div style="padding: 8px; background: rgba(139, 92, 246, 0.2); border-radius: 6px; font-size: 0.8em;">
-                            <strong>P3-006 Reinforcement Learning:</strong> ${(data.components_active && data.components_active.p3_006_reinforcement_learning) ? '✅ Active' : '❌ Inactive'}
+                            <strong>P3-006 Reinforcement Learning:</strong> ${data.components_active?.p3_006_reinforcement_learning ? '✅ Active' : '❌ Inactive'}
                         </div>
                         <div style="padding: 8px; background: rgba(239, 68, 68, 0.2); border-radius: 6px; font-size: 0.8em;">
-                            <strong>P3-007 Risk Management:</strong> ${(data.components_active && data.components_active.p3_007_risk_management) ? '✅ Active' : '❌ Inactive'}
+                            <strong>P3-007 Risk Management:</strong> ${data.components_active?.p3_007_risk_management ? '✅ Active' : '❌ Inactive'}
                         </div>
                     </div>
                     <div style="margin-top: 15px; padding: 10px; background: rgba(30, 41, 59, 0.4); border-radius: 8px; font-size: 0.85em;">
-                        <strong>🔍 Top Factors:</strong> ${(data.advanced_feature_engineering && data.advanced_feature_engineering.top_factors) ? data.advanced_feature_engineering.top_factors.slice(0, 5).join(', ') : 'Feature analysis in progress...'}
+                        <strong>🔍 Top Factors:</strong> ${data.advanced_feature_engineering?.top_factors?.slice(0, 5).join(', ') || 'Feature analysis in progress...'}
                     </div>
                 `;
             }
@@ -1659,8 +1564,8 @@
                 console.log('📊 Fetching accuracy metrics...');
                 
                 // Get current model type
-                let currentModelSelection = document.getElementById('aiModelSelector').value;
-                const modelType = currentModelSelection === 'phase4-gnn' ? 'phase4-gnn' : 'phase3-extended';
+                const selectedModel = document.getElementById('aiModelSelector').value;
+                const modelType = selectedModel === 'phase4-gnn' ? 'phase4-gnn' : 'phase3-extended';
                 
                 // Call accuracy report endpoint
                 const response = await fetch(
@@ -1792,7 +1697,7 @@
                     <div style="margin-top: 10px; padding: 8px; background: rgba(100, 116, 139, 0.1); border-radius: 6px; font-size: 0.75em; color: #64748b;">
                         <i class="fas fa-info-circle"></i> 
                         Calibration: ${metrics.confidence_calibration || 'analyzing'} | 
-                        Generated: ${new Date((accuracyData.analysis_period && accuracyData.analysis_period.generated_at) || Date.now()).toLocaleString()}
+                        Generated: ${new Date(accuracyData.analysis_period?.generated_at).toLocaleString()}
                     </div>
                 </div>
             `;
