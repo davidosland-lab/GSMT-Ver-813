@@ -398,8 +398,8 @@ class GlobalMarketTracker {
             marketCard.innerHTML = `
                 <div class="flex items-start justify-between mb-3">
                     <div>
-                        <h4 class="text-sm font-medium text-gray-900">${symbolInfo.name}</h4>
-                        <p class="text-xs text-gray-600">${symbol} • ${symbolInfo.market}</p>
+                        <h4 class="text-sm font-medium text-gray-900">${symbolInfo?.name || symbol}</h4>
+                        <p class="text-xs text-gray-600">${symbol} • ${symbolInfo?.market || 'Unknown'}</p>
                     </div>
                     <button onclick="window.tracker.removeMarket('${symbol}')" 
                             class="text-gray-400 hover:text-red-600 transition-colors">
@@ -589,17 +589,30 @@ class GlobalMarketTracker {
         
         // Create series for each selected index
         Object.entries(data.data).forEach(([symbol, points]) => {
+            try {
             const symbolInfo = data.metadata[symbol];
             
-            // Add null check for symbolInfo
+            // Add comprehensive null check for symbolInfo and its properties
             if (!symbolInfo) {
                 console.warn(`⚠️ No metadata found for symbol ${symbol}, skipping...`);
                 return;
             }
             
+            // Additional safety checks for symbolInfo properties
+            console.log(`🔍 Processing symbol ${symbol}:`, {
+                hasMetadata: !!symbolInfo,
+                name: symbolInfo?.name,
+                market: symbolInfo?.market,
+                pointsCount: points?.length
+            });
+            
+            if (!symbolInfo.name && !symbolInfo.market) {
+                console.warn(`⚠️ symbolInfo exists but has no name or market for ${symbol}:`, symbolInfo);
+            }
+            
             // Check if this is previous day data
             const isPreviousDay = symbol.endsWith('_prev_day');
-            const baseName = isPreviousDay ? symbolInfo.name.replace(' (Previous Day)', '') : symbolInfo.name;
+            const baseName = isPreviousDay ? (symbolInfo.name || symbol).replace(' (Previous Day)', '') : (symbolInfo.name || symbol);
             
             // Skip previous day data to avoid duplicate series (user request: remove duplicate data for cleaner charts)
             if (isPreviousDay) {
@@ -704,12 +717,12 @@ class GlobalMarketTracker {
                     window.candlestickXAxisData = candlestickXAxis;
                     
                     // Enhanced candlestick series with market-specific colors
-                    const marketColors = this.getMarketColors(symbolInfo.market || 'Default');
+                    const marketColors = this.getMarketColors(symbolInfo?.market || 'Default');
                     
                     // Adjust styling for previous day data
                     const seriesName = isPreviousDay ? 
-                        `${baseName} (${symbolInfo.market || 'Unknown'}) - Previous Day` : 
-                        `${symbolInfo.name || symbol} (${symbolInfo.market || 'Unknown'})`;
+                        `${baseName} (${symbolInfo?.market || 'Unknown'}) - Previous Day` : 
+                        `${symbolInfo?.name || symbol} (${symbolInfo?.market || 'Unknown'})`;
                     
                     const candlestickSeries = {
                         name: seriesName,
@@ -821,7 +834,7 @@ class GlobalMarketTracker {
                 });
                 
                 series.push({
-                    name: isPreviousDay ? `${baseName} (Previous Day)` : (symbolInfo.name || symbol),
+                    name: isPreviousDay ? `${baseName} (Previous Day)` : (symbolInfo?.name || symbol),
                     type: 'line',
                     data: values,
                     smooth: true,
@@ -894,7 +907,7 @@ class GlobalMarketTracker {
             };
             
             // Calculate exact market open position based on timeline
-            if (symbolInfo.market && marketOpenTimes[symbolInfo.market]) {
+            if (symbolInfo?.market && marketOpenTimes[symbolInfo.market]) {
                 const targetOpen = marketOpenTimes[symbolInfo.market];
                 
                 // Calculate the expected timeline position for market open
@@ -926,7 +939,7 @@ class GlobalMarketTracker {
             }
             
             // Calculate exact market close position based on timeline
-            if (symbolInfo.market && marketCloseTimes[symbolInfo.market]) {
+            if (symbolInfo?.market && marketCloseTimes[symbolInfo.market]) {
                 const targetClose = marketCloseTimes[symbolInfo.market];
                 
                 // Calculate the expected timeline position for market close
@@ -957,13 +970,13 @@ class GlobalMarketTracker {
                 const labelOffset = symbolIndex * 20; // 20px offset per symbol
                 
                 markLines.push({
-                    name: `${symbolInfo.market || "Market"} Open`,
+                    name: `${symbolInfo?.market || "Market"} Open`,
                     xAxis: xAxisData[marketOpenStart],
                     lineStyle: { color: '#10b981', type: 'dashed', width: 2 },
                     label: { 
                         show: true, 
                         position: 'start',
-                        formatter: `${symbolInfo.market}\nOpen`,
+                        formatter: `${symbolInfo?.market || 'Market'}\nOpen`,
                         color: '#10b981',
                         fontSize: 10,
                         offset: [5, labelOffset], // Horizontal and vertical offset
@@ -980,13 +993,13 @@ class GlobalMarketTracker {
                 const labelOffset = symbolIndex * 20; // 20px offset per symbol
                 
                 markLines.push({
-                    name: `${symbolInfo.market || "Market"} Close`, 
+                    name: `${symbolInfo?.market || "Market"} Close`, 
                     xAxis: xAxisData[marketCloseEnd],
                     lineStyle: { color: '#ef4444', type: 'dashed', width: 2 },
                     label: { 
                         show: true, 
                         position: 'end',
-                        formatter: `${symbolInfo.market}\nClose`,
+                        formatter: `${symbolInfo?.market || 'Market'}\nClose`,
                         color: '#ef4444',
                         fontSize: 10,
                         offset: [-5, labelOffset], // Horizontal and vertical offset
@@ -995,6 +1008,10 @@ class GlobalMarketTracker {
                         borderRadius: 4
                     }
                 });
+            }
+            } catch (error) {
+                console.error(`❌ Error processing symbol ${symbol}:`, error);
+                console.error(`❌ Error details - symbolInfo:`, symbolInfo, `points:`, points);
             }
         });
         
@@ -1286,7 +1303,7 @@ class GlobalMarketTracker {
                     
                     const marketColors = this.getMarketColors(market);
                     marketSeries.push({
-                        name: `${symbolInfo.name || symbol}`,
+                        name: `${symbolInfo?.name || symbol}`,
                         type: 'candlestick',
                         data: candlestickData,
                         xAxisIndex: marketIndex,
@@ -1344,7 +1361,7 @@ class GlobalMarketTracker {
                     });
                     
                     marketSeries.push({
-                        name: symbolInfo.name || symbol,
+                        name: symbolInfo?.name || symbol,
                         type: 'line',
                         data: values,
                         xAxisIndex: marketIndex,
