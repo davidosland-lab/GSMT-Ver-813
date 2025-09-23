@@ -2439,6 +2439,21 @@ async def serve_phase4_landing():
     """🚀 Phase 4 P4-002 Landing Page (Short URL)"""
     return await serve_comprehensive_phase4_landing()
 
+@app.get("/technical-analysis", response_class=HTMLResponse)
+async def serve_technical_analysis():
+    """📊 Technical Analysis Module - Single Stock Candlestick Charts & Indicators"""
+    try:
+        file_path = "technical_analysis_module.html"
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="Technical Analysis module not found")
+    except Exception as e:
+        logger.error(f"Error serving Technical Analysis module: {e}")
+        raise HTTPException(status_code=500, detail="Failed to serve Technical Analysis module")
+
 @app.get("/enhanced-landing", response_class=HTMLResponse)
 async def serve_enhanced_landing_page():
     """🚀 Enhanced Landing Page with Phase 4 Integration - Complete System Overview"""
