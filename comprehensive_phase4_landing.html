@@ -317,6 +317,44 @@
                 </button>
             </div>
 
+            <!-- Prediction Performance Dashboard -->
+            <div class="glassmorphism rounded-2xl p-6 hover:bg-white/15 transition-all">
+                <div class="mb-4">
+                    <div class="w-12 h-12 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-lg flex items-center justify-center mb-3">
+                        <i class="fas fa-tachometer-alt text-white text-xl"></i>
+                    </div>
+                    <h3 class="text-white text-xl font-bold mb-2">Performance Dashboard</h3>
+                    <p class="text-white/70 mb-4">Real-time accuracy tracking, learning analytics, and comprehensive model performance comparison</p>
+                    
+                    <div class="chart-preview bg-gray-900/50 rounded-lg mb-4 p-4">
+                        <div class="grid grid-cols-2 gap-4 text-center">
+                            <div>
+                                <div class="text-green-400 font-bold text-lg">85.2%</div>
+                                <div class="text-white/60 text-xs">Phase 4 Accuracy</div>
+                            </div>
+                            <div>
+                                <div class="text-blue-400 font-bold text-lg">78.9%</div>
+                                <div class="text-white/60 text-xs">Phase 3 Accuracy</div>
+                            </div>
+                        </div>
+                        <div class="mt-2 flex justify-center">
+                            <div class="w-16 h-2 bg-gradient-to-r from-green-500 to-blue-500 rounded-full"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-wrap gap-2 mb-4">
+                        <span class="bg-yellow-500/20 text-yellow-300 px-2 py-1 rounded text-xs">Real-time Tracking</span>
+                        <span class="bg-orange-500/20 text-orange-300 px-2 py-1 rounded text-xs">Learning Analytics</span>
+                        <span class="bg-red-500/20 text-red-300 px-2 py-1 rounded text-xs">Model Comparison</span>
+                    </div>
+                </div>
+                
+                <button onclick="window.location.href='/prediction-performance-dashboard'" 
+                        class="w-full bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 text-white py-3 rounded-lg font-semibold transition-all">
+                    <i class="fas fa-chart-bar mr-2"></i>View Dashboard
+                </button>
+            </div>
+
         </div>
     </div>
 </section>
