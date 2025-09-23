@@ -76,16 +76,6 @@ class GlobalMarketTracker {
                 this.loadPreset(['^AORD', '^AXJO', '^GSPC', '^IXIC', '^DJI']); // ASX + Major US indices
             }, 1000); // Wait for initialization to complete
             
-            // AUTO-TEST: Switch to candlestick after 10 seconds for testing
-            setTimeout(() => {
-                console.log('🧪 AUTO-TEST: Switching to candlestick mode...');
-                const chartTypeSelect = document.getElementById('chart-type');
-                if (chartTypeSelect) {
-                    chartTypeSelect.value = 'candlestick';
-                    this.handleChartTypeChange();
-                }
-            }, 10000);
-            
             // Auto-refresh every 5 minutes
             this.startAutoRefresh();
             
@@ -659,7 +649,6 @@ class GlobalMarketTracker {
         const symbolInfo = data.metadata[firstSymbol];
         
         console.log(`🔄 Processing ${points.length} points for symbol ${firstSymbol}`);
-        console.log(`🔄 Sample input data structure:`, points[0]);
         
         points.forEach((point, index) => {
             // Only include market open periods with complete OHLC data
@@ -678,10 +667,6 @@ class GlobalMarketTracker {
                 };
                 
                 klineData.push(klinePoint);
-                
-                if (index < 5) {
-                    console.log(`🔄 Sample KLine point ${index}:`, klinePoint);
-                }
             }
         });
         
@@ -689,8 +674,6 @@ class GlobalMarketTracker {
         klineData.sort((a, b) => a.timestamp - b.timestamp);
         
         console.log(`🔄 Converted ${klineData.length} valid points from ${points.length} total points`);
-        console.log(`🔄 First converted point:`, klineData[0]);
-        console.log(`🔄 Last converted point:`, klineData[klineData.length - 1]);
         
         return klineData;
     }
