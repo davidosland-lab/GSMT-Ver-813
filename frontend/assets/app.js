@@ -76,15 +76,7 @@ class GlobalMarketTracker {
                 this.loadPreset(['^AORD', '^AXJO', '^GSPC', '^IXIC', '^DJI']); // ASX + Major US indices
             }, 1000); // Wait for initialization to complete
             
-            // AUTO-TEST: Test candlestick with ECharts after 10 seconds
-            setTimeout(() => {
-                console.log('🧪 AUTO-TEST: Switching to ECharts candlestick mode...');
-                const chartTypeSelect = document.getElementById('chart-type');
-                if (chartTypeSelect) {
-                    chartTypeSelect.value = 'candlestick';
-                    this.handleChartTypeChange();
-                }
-            }, 10000);
+            // Production ready - removed auto-test for stability
             
             // Auto-refresh every 5 minutes
             this.startAutoRefresh();
@@ -579,9 +571,9 @@ class GlobalMarketTracker {
             
             if (noDataMessage) noDataMessage.classList.add('hidden');
             
-            // SIMPLIFIED APPROACH: Use ECharts for all chart types for reliability
-            // KLineChart integration caused cascade failures, so using proven ECharts
-            console.log(`📊 Rendering ${chartType} charts with ECharts (reliable approach)...`);
+            // FIXED APPROACH: Use ECharts with proper null handling for candlestick charts
+            // Candlestick null value issue has been resolved with dense array creation
+            console.log(`📊 Rendering ${chartType} charts with ECharts (null-safe approach)...`);
             this.renderECharts(data);
             
         } catch (error) {
@@ -985,100 +977,76 @@ class GlobalMarketTracker {
                     (symbolInfo && symbolInfo.market === 'Australia');
                 console.log(`🕯️ Processing ${isAustralianMarket ? 'Australian' : 'Global'} market data for ${symbol} (start: ${startHour}:00 AEST), ${points.length} total points`);
                 
-                // Create candlestick data array - filter to only include market open periods
-                const candlestickData = [];
+                // FIXED: Create dense candlestick data without null values for ECharts compatibility
+                const rawCandlestickData = [];
                 const candlestickXAxis = [];
                 
-                // Map data points to fixed x-axis positions based on their actual timestamps
+                // First pass: collect all valid candlestick data points with timestamps
                 points.forEach((point, index) => {
-                    // Parse the actual timestamp to determine correct x-axis position
-                    // Handle ISO format: "2025-09-16T13:30:00+00:00"
-                    const timestamp = new Date(point.timestamp);
-                    
-                    // Convert UTC time to AEST (Australian Eastern Standard Time)
-                    // AEST is UTC+10 (standard time) or UTC+11 (daylight saving time)
-                    // For simplicity, we'll use UTC+10. For full DST support, we'd need to check the date
-                    const aestOffset = 10; // Hours to add to UTC to get AEST
-                    const utcHours = timestamp.getUTCHours();
-                    const utcMinutes = timestamp.getUTCMinutes();
-                    
-                    // Convert to AEST by adding the offset
-                    const aestTotalMinutes = (utcHours * 60) + utcMinutes + (aestOffset * 60);
-                    const hourNum = Math.floor((aestTotalMinutes / 60) % 24);
-                    const minuteNum = aestTotalMinutes % 60;
-                    
-                    // Calculate the correct x-axis index based on time relative to market start
-                    let xAxisIndex = -1;
-                    
-                    if (selectedInterval === 5) {
-                        // 5-minute intervals: calculate position from market opening time
-                        const totalMinutesFromStart = ((hourNum >= startHour ? hourNum - startHour : hourNum + 24 - startHour) * 60) + minuteNum;
-                        xAxisIndex = Math.floor(totalMinutesFromStart / 5);
-                    } else if (selectedInterval === 30) {
-                        // 30-minute intervals
-                        const totalMinutesFromStart = ((hourNum >= startHour ? hourNum - startHour : hourNum + 24 - startHour) * 60) + minuteNum;
-                        xAxisIndex = Math.floor(totalMinutesFromStart / 30);
-                    } else {
-                        // 1-hour intervals
-                        xAxisIndex = hourNum >= startHour ? hourNum - startHour : hourNum + 24 - startHour;
-                    }
-                    
-                    // Ensure we have valid data for all time slots in fixed x-axis
-                    while (candlestickData.length <= xAxisIndex) {
-                        candlestickData.push(null); // Fill gaps with null
-                    }
-                    
-                    // Ensure candlestick X-axis has corresponding labels
-                    while (candlestickXAxis.length <= xAxisIndex) {
-                        const timeLabel = `${hourNum.toString().padStart(2,'0')}:${minuteNum.toString().padStart(2,'0')}`;
-                        candlestickXAxis.push(timeLabel);
-                    }
-                    
                     if (point.market_open && point.open !== null && point.high !== null && 
-                        point.low !== null && point.close !== null && xAxisIndex >= 0) {
+                        point.low !== null && point.close !== null) {
+                        
+                        // Parse the actual timestamp
+                        const timestamp = new Date(point.timestamp);
+                        
+                        // Convert UTC time to AEST (Australian Eastern Standard Time)
+                        const aestOffset = 10; // Hours to add to UTC to get AEST
+                        const utcHours = timestamp.getUTCHours();
+                        const utcMinutes = timestamp.getUTCMinutes();
+                        
+                        // Convert to AEST by adding the offset
+                        const aestTotalMinutes = (utcHours * 60) + utcMinutes + (aestOffset * 60);
+                        const hourNum = Math.floor((aestTotalMinutes / 60) % 24);
+                        const minuteNum = aestTotalMinutes % 60;
+                        
+                        // Create time label for this data point
+                        const timeLabel = `${hourNum.toString().padStart(2,'0')}:${minuteNum.toString().padStart(2,'0')}`;
+                        
                         // For percentage-based candlesticks, data is already in percentage format
                         const ohlc = [point.open, point.close, point.low, point.high];
                         
                         // Add all OHLC values to allValues for y-axis scaling
                         allValues.push(point.open, point.close, point.low, point.high);
                         
-                        candlestickData[xAxisIndex] = ohlc;
+                        // Store valid data point with its time label
+                        rawCandlestickData.push({
+                            timeLabel: timeLabel,
+                            ohlc: ohlc,
+                            timestamp: timestamp.getTime()
+                        });
                         
                         if (index >= 14 && index <= 21) {
-                            console.log(`📊 AEST ${hourNum.toString().padStart(2,'0')}:${minuteNum.toString().padStart(2,'0')} (UTC ${utcHours.toString().padStart(2,'0')}:${utcMinutes.toString().padStart(2,'0')}) -> xIndex ${xAxisIndex} [Start: ${startHour}:00]: OHLC% = [${ohlc.map(v => v.toFixed(2)).join(', ')}]%, market_open: ${point.market_open}`);
-                        }
-                    } else {
-                        if (index >= 14 && index <= 21) {
-                            console.log(`⏸️ AEST ${hourNum.toString().padStart(2,'0')}:${minuteNum.toString().padStart(2,'0')} (UTC ${utcHours.toString().padStart(2,'0')}:${utcMinutes.toString().padStart(2,'0')}) -> xIndex ${xAxisIndex} [Start: ${startHour}:00]: Market closed or null data, market_open: ${point.market_open}`);
+                            console.log(`📊 Valid OHLC data: AEST ${timeLabel} (UTC ${utcHours.toString().padStart(2,'0')}:${utcMinutes.toString().padStart(2,'0')}) OHLC% = [${ohlc.map(v => v.toFixed(2)).join(', ')}]%`);
                         }
                     }
                 });
                 
-                // Ensure candlestick X-axis and data arrays are the same length
-                while (candlestickData.length < candlestickXAxis.length) {
-                    candlestickData.push(null);
-                }
-                while (candlestickXAxis.length < candlestickData.length) {
-                    const lastTime = candlestickXAxis[candlestickXAxis.length - 1] || '00:00';
-                    candlestickXAxis.push(lastTime); // Fill with placeholder
-                }
+                // Sort by timestamp to ensure proper chronological order
+                rawCandlestickData.sort((a, b) => a.timestamp - b.timestamp);
                 
-                // Count actual non-null data points
-                const validDataCount = candlestickData.filter(d => d !== null).length;
-                console.log(`🕯️ Candlestick data for ${symbol}: ${validDataCount} valid data points out of ${candlestickData.length} total slots, from ${points.length} input points`);
-                console.log(`🔍 Sample candlestick data:`, candlestickData.slice(0, 3));
+                // Second pass: create dense arrays for ECharts (no null values)
+                const candlestickData = rawCandlestickData.map(item => item.ohlc);
+                rawCandlestickData.forEach(item => {
+                    candlestickXAxis.push(item.timeLabel);
+                });
+                
+                // Count actual data points (all should be valid since we filtered nulls)
+                const validDataCount = candlestickData.length;
+                console.log(`🕯️ FIXED: Dense candlestick data for ${symbol}: ${validDataCount} valid data points (no nulls), from ${points.length} input points`);
+                console.log(`🔍 Sample dense candlestick data:`, candlestickData.slice(0, 3));
                 console.log(`🔍 Sample X-axis labels:`, candlestickXAxis.slice(0, 3));
                 
                 if (validDataCount === 0) {
                     console.warn(`⚠️ No valid candlestick data for ${symbol} - all market closed or null OHLC values`);
                 } else {
-                    // Use the candlestick-specific x-axis data
+                    // Use the candlestick-specific x-axis data (dense, no gaps)
                     window.candlestickXAxisData = candlestickXAxis;
                     
                     // Enhanced candlestick series with market-specific colors
                     console.log(`🎨 Getting colors for market: ${symbolInfo?.market || 'Default'}`);
                     const marketColors = this.getMarketColors(symbolInfo?.market || 'Default');
                     console.log(`🎨 Market colors retrieved:`, marketColors);
+                    console.log(`✅ CANDLESTICK FIX: Creating series with ${candlestickData.length} dense data points (no null values)`);
                     
                     // Adjust styling for previous day data
                     const seriesName = isPreviousDay ? 
@@ -1127,17 +1095,18 @@ class GlobalMarketTracker {
                         }
                     };
                     
-                    console.log(`📊 Adding percentage candlestick series for ${symbol}: ${candlestickData.length} total points (${candlestickData.filter(d => d !== null).length} with data)`);
+                    console.log(`📊 FIXED: Adding dense candlestick series for ${symbol}: ${candlestickData.length} valid points (no null values)`);
                     console.log(`🕯️ Candlestick series configuration:`, candlestickSeries);
                     
-                    // Add defensive check before pushing series
-                    if (candlestickSeries && candlestickSeries.data && candlestickSeries.name) {
-                        console.log(`✅ Candlestick series for ${symbol} is valid, pushing to series array`);
+                    // Add defensive check before pushing series (now with dense data)
+                    if (candlestickSeries && candlestickSeries.data && candlestickSeries.name && candlestickSeries.data.length > 0) {
+                        console.log(`✅ FIXED: Dense candlestick series for ${symbol} is valid, pushing to series array`);
                         series.push(candlestickSeries);
                     } else {
                         console.error(`❌ Candlestick series for ${symbol} is invalid:`, {
                             hasData: !!candlestickSeries?.data,
                             hasName: !!candlestickSeries?.name,
+                            dataLength: candlestickSeries?.data?.length,
                             series: candlestickSeries
                         });
                     }
@@ -1635,58 +1604,65 @@ class GlobalMarketTracker {
                 }
                 
                 if (chartType === 'candlestick') {
-                    const candlestickData = new Array(marketXAxisData.length).fill(null);
+                    // FIXED: Create dense candlestick data for individual market charts
+                    const rawMarketCandlestickData = [];
+                    const marketCandlestickXAxis = [];
                     
+                    // First pass: collect valid candlestick data points
                     points.forEach((point, index) => {
-                        // Parse timestamp to determine correct x-axis position
-                        // Handle ISO format: "2025-09-16T13:30:00+00:00"
-                        const timestamp = new Date(point.timestamp);
-                        
-                        // Convert UTC time to AEST (Australian Eastern Standard Time)
-                        const aestOffset = 10; // Hours to add to UTC to get AEST
-                        const utcHours = timestamp.getUTCHours();
-                        const utcMinutes = timestamp.getUTCMinutes();
-                        
-                        // Convert to AEST by adding the offset
-                        const aestTotalMinutes = (utcHours * 60) + utcMinutes + (aestOffset * 60);
-                        const hourNum = Math.floor((aestTotalMinutes / 60) % 24);
-                        const minuteNum = aestTotalMinutes % 60;
-                        
-                        // Calculate x-axis index based on market start time
-                        let xAxisIndex = -1;
-                        if (selectedInterval === 5) {
-                            const totalMinutesFromStart = ((hourNum >= startHour ? hourNum - startHour : hourNum + 24 - startHour) * 60) + minuteNum;
-                            xAxisIndex = Math.floor(totalMinutesFromStart / 5);
-                        } else if (selectedInterval === 30) {
-                            const totalMinutesFromStart = ((hourNum >= startHour ? hourNum - startHour : hourNum + 24 - startHour) * 60) + minuteNum;
-                            xAxisIndex = Math.floor(totalMinutesFromStart / 30);
-                        } else {
-                            xAxisIndex = hourNum >= startHour ? hourNum - startHour : hourNum + 24 - startHour;
-                        }
-                        
-                        if (xAxisIndex >= 0 && xAxisIndex < marketXAxisData.length &&
-                            point.market_open && point.open !== null && point.high !== null && 
+                        if (point.market_open && point.open !== null && point.high !== null && 
                             point.low !== null && point.close !== null) {
+                            
+                            // Parse timestamp to determine correct position
+                            const timestamp = new Date(point.timestamp);
+                            
+                            // Convert UTC time to AEST
+                            const aestOffset = 10;
+                            const utcHours = timestamp.getUTCHours();
+                            const utcMinutes = timestamp.getUTCMinutes();
+                            
+                            const aestTotalMinutes = (utcHours * 60) + utcMinutes + (aestOffset * 60);
+                            const hourNum = Math.floor((aestTotalMinutes / 60) % 24);
+                            const minuteNum = aestTotalMinutes % 60;
+                            
+                            const timeLabel = `${hourNum.toString().padStart(2,'0')}:${minuteNum.toString().padStart(2,'0')}`;
                             const ohlc = [point.open, point.close, point.low, point.high];
+                            
                             allValues.push(point.open, point.close, point.low, point.high);
-                            candlestickData[xAxisIndex] = ohlc;
+                            
+                            rawMarketCandlestickData.push({
+                                timeLabel: timeLabel,
+                                ohlc: ohlc,
+                                timestamp: timestamp.getTime()
+                            });
                         }
                     });
                     
-                    const marketColors = this.getMarketColors(market);
-                    marketSeries.push({
-                        name: `${symbolInfo?.name || symbol}`,
-                        type: 'candlestick',
-                        data: candlestickData,
-                        xAxisIndex: marketIndex,
-                        yAxisIndex: marketIndex,
-                        itemStyle: {
-                            color: marketColors.bull,
-                            color0: marketColors.bear,
-                            borderColor: marketColors.bull,
-                            borderColor0: marketColors.bear
-                        }
+                    // Sort and create dense arrays
+                    rawMarketCandlestickData.sort((a, b) => a.timestamp - b.timestamp);
+                    const candlestickData = rawMarketCandlestickData.map(item => item.ohlc);
+                    rawMarketCandlestickData.forEach(item => {
+                        marketCandlestickXAxis.push(item.timeLabel);
                     });
+                    
+                    if (candlestickData.length > 0) {
+                        const marketColors = this.getMarketColors(market);
+                        marketSeries.push({
+                            name: `${symbolInfo?.name || symbol}`,
+                            type: 'candlestick',
+                            data: candlestickData,
+                            xAxisIndex: marketIndex,
+                            yAxisIndex: marketIndex,
+                            itemStyle: {
+                                color: marketColors.bull,
+                                color0: marketColors.bear,
+                                borderColor: marketColors.bull,
+                                borderColor0: marketColors.bear
+                            }
+                        });
+                        
+                        console.log(`📊 FIXED: Market ${market} - ${symbol}: Created dense candlestick series with ${candlestickData.length} points`);
+                    }
                 } else {
                     // Line charts - map to fixed x-axis positions
                     const values = new Array(marketXAxisData.length).fill(null);
@@ -1755,10 +1731,14 @@ class GlobalMarketTracker {
                 textStyle: { fontSize: 14, fontWeight: 'bold' }
             });
             
-            // Add x-axis for this market
+            // Add x-axis for this market (use candlestick-specific axis if available)
+            const xAxisData = (chartType === 'candlestick' && marketCandlestickXAxis && marketCandlestickXAxis.length > 0) 
+                ? marketCandlestickXAxis 
+                : marketXAxisData;
+                
             allXAxes.push({
                 type: 'category',
-                data: marketXAxisData,
+                data: xAxisData,
                 gridIndex: marketIndex,
                 name: 'AEST Time',
                 nameLocation: 'middle',
