@@ -74,25 +74,35 @@
                 <!-- Symbol Selection -->
                 <div>
                     <label for="symbol-select" class="block text-sm font-medium text-gray-700 mb-2">Symbol</label>
-                    <select id="symbol-select" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm">
-                        <option value="^AORD">All Ordinaries (^AORD)</option>
-                        <option value="^AXJO">ASX 200 (^AXJO)</option>
-                        <option value="CBA.AX">Commonwealth Bank (CBA.AX)</option>
-                        <option value="WOW.AX">Woolworths (WOW.AX)</option>
-                        <option value="WBC.AX">Westpac (WBC.AX)</option>
-                        <option value="BHP.AX">BHP Group (BHP.AX)</option>
-                        <option value="RIO.AX">Rio Tinto (RIO.AX)</option>
-                        <option value="CSL.AX">CSL Limited (CSL.AX)</option>
-                        <option value="WES.AX">Wesfarmers (WES.AX)</option>
-                        <option value="TLS.AX">Telstra (TLS.AX)</option>
-                        <option value="^GSPC">S&P 500 (^GSPC)</option>
-                        <option value="^IXIC">NASDAQ (^IXIC)</option>
-                        <option value="^DJI">Dow Jones (^DJI)</option>
-                        <option value="AAPL">Apple (AAPL)</option>
-                        <option value="MSFT">Microsoft (MSFT)</option>
-                        <option value="GOOGL">Google (GOOGL)</option>
-                        <option value="TSLA">Tesla (TSLA)</option>
-                    </select>
+                    <div class="flex space-x-2">
+                        <select id="symbol-select" class="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                            <option value="">Select from list...</option>
+                            <option value="^AORD">All Ordinaries (^AORD)</option>
+                            <option value="^AXJO">ASX 200 (^AXJO)</option>
+                            <option value="CBA.AX">Commonwealth Bank (CBA.AX)</option>
+                            <option value="WOW.AX">Woolworths (WOW.AX)</option>
+                            <option value="WBC.AX">Westpac (WBC.AX)</option>
+                            <option value="BHP.AX">BHP Group (BHP.AX)</option>
+                            <option value="RIO.AX">Rio Tinto (RIO.AX)</option>
+                            <option value="CSL.AX">CSL Limited (CSL.AX)</option>
+                            <option value="WES.AX">Wesfarmers (WES.AX)</option>
+                            <option value="TLS.AX">Telstra (TLS.AX)</option>
+                            <option value="^GSPC">S&P 500 (^GSPC)</option>
+                            <option value="^IXIC">NASDAQ (^IXIC)</option>
+                            <option value="^DJI">Dow Jones (^DJI)</option>
+                            <option value="AAPL">Apple (AAPL)</option>
+                            <option value="MSFT">Microsoft (MSFT)</option>
+                            <option value="GOOGL">Google (GOOGL)</option>
+                            <option value="TSLA">Tesla (TSLA)</option>
+                        </select>
+                    </div>
+                    <input 
+                        type="text" 
+                        id="custom-symbol" 
+                        placeholder="Or enter custom symbol (e.g., QAN.AX, META, NVDA)" 
+                        class="w-full mt-2 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    >
+                    <p class="text-xs text-gray-500 mt-1">Use dropdown or enter any valid Yahoo Finance symbol</p>
                 </div>
                 
                 <!-- Time Period -->
@@ -398,8 +408,16 @@
             }
 
             async performAnalysis() {
-                const symbol = document.getElementById('symbol-select').value;
+                // Get symbol from dropdown or custom input
+                const dropdownSymbol = document.getElementById('symbol-select').value;
+                const customSymbol = document.getElementById('custom-symbol').value.trim().toUpperCase();
+                const symbol = customSymbol || dropdownSymbol;
                 const period = document.getElementById('time-period').value;
+                
+                if (!symbol) {
+                    this.showError('Please select a symbol from the dropdown or enter a custom symbol');
+                    return;
+                }
                 
                 // Adjust interval based on period
                 this.adjustIntervalForPeriod(period);
@@ -921,6 +939,28 @@
         // Initialize the application when DOM is loaded
         document.addEventListener('DOMContentLoaded', function() {
             window.technicalAnalysis = new TechnicalAnalysis();
+            
+            // Sync dropdown and custom input
+            const symbolSelect = document.getElementById('symbol-select');
+            const customSymbol = document.getElementById('custom-symbol');
+            
+            // When dropdown changes, clear custom input
+            symbolSelect.addEventListener('change', function() {
+                if (this.value) {
+                    customSymbol.value = '';
+                    customSymbol.placeholder = 'Or enter custom symbol (e.g., QAN.AX, META, NVDA)';
+                }
+            });
+            
+            // When custom input changes, clear dropdown selection
+            customSymbol.addEventListener('input', function() {
+                if (this.value.trim()) {
+                    symbolSelect.value = '';
+                    this.placeholder = 'Custom symbol entered';
+                } else {
+                    this.placeholder = 'Or enter custom symbol (e.g., QAN.AX, META, NVDA)';
+                }
+            });
         });
     </script>
 </body>

@@ -9016,11 +9016,17 @@ async def get_candlestick_data_for_technical_analysis(
     try:
         import yfinance as yf
         
-        # Validate symbol
-        if symbol not in SYMBOLS_DB:
-            raise HTTPException(status_code=400, detail=f"Unsupported symbol: {symbol}")
-        
-        symbol_info = SYMBOLS_DB[symbol]
+        # Check if symbol is in our predefined database first
+        if symbol in SYMBOLS_DB:
+            symbol_info = SYMBOLS_DB[symbol]
+        else:
+            # For custom symbols, create basic info and validate via yfinance
+            symbol_info = SymbolInfo(
+                symbol=symbol, 
+                name=f"Custom Symbol ({symbol})", 
+                market="Unknown", 
+                category="Stock"
+            )
         logger.info(f"📊 Fetching candlestick data for {symbol} ({period}, {interval})")
         
         # Fetch data using yfinance
