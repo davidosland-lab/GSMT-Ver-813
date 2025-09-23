@@ -169,11 +169,31 @@ class GlobalMarketTracker {
     }
 
     initializeChart() {
+        console.log('📊 Initializing chart...');
         const chartElement = document.getElementById('main-chart');
-        this.chartInstance = echarts.init(chartElement);
+        console.log('📊 Chart element found:', !!chartElement, chartElement);
+        console.log('📊 ECharts available:', typeof echarts !== 'undefined', typeof echarts);
         
-        // Set initial empty state
-        this.updateChart([]);
+        if (!chartElement) {
+            console.error('❌ Chart element #main-chart not found!');
+            return;
+        }
+        
+        if (typeof echarts === 'undefined') {
+            console.error('❌ ECharts library not loaded!');
+            return;
+        }
+        
+        try {
+            this.chartInstance = echarts.init(chartElement);
+            console.log('📊 Chart instance created:', !!this.chartInstance);
+            
+            // Set initial empty state
+            this.updateChart([]);
+            console.log('📊 Chart initialization complete');
+        } catch (error) {
+            console.error('❌ Chart initialization failed:', error);
+        }
     }
 
     updateUTCClock() {
@@ -458,13 +478,19 @@ class GlobalMarketTracker {
     }
 
     async analyzeSelectedIndices() {
-        if (this.selectedIndices.size === 0) return;
+        console.log('🔍 analyzeSelectedIndices called, selected:', this.selectedIndices.size);
+        if (this.selectedIndices.size === 0) {
+            console.log('⚠️ No indices selected');
+            return;
+        }
         
         // Check if we're in historical mode and delegate to historical data loading
         if (this.isHistoricalMode) {
+            console.log('📅 Historical mode, loading historical data');
             return await this.loadHistoricalData();
         }
         
+        console.log('📊 Starting live data analysis');
         this.showLoading(true);
         
         try {
@@ -505,11 +531,13 @@ class GlobalMarketTracker {
     }
 
     updateChart(data) {
+        console.log('📊 updateChart called with data:', data);
         const noDataMessage = document.getElementById('no-data-message');
         
-        if (!data.data || Object.keys(data.data).length === 0) {
-            noDataMessage.classList.remove('hidden');
-            this.chartInstance.clear();
+        if (!data || !data.data || Object.keys(data.data).length === 0) {
+            console.log('📊 No data available, showing no-data message');
+            if (noDataMessage) noDataMessage.classList.remove('hidden');
+            if (this.chartInstance) this.chartInstance.clear();
             return;
         }
         
