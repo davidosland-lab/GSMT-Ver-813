@@ -76,6 +76,16 @@ class GlobalMarketTracker {
                 this.loadPreset(['^AORD', '^AXJO', '^GSPC', '^IXIC', '^DJI']); // ASX + Major US indices
             }, 1000); // Wait for initialization to complete
             
+            // AUTO-TEST: Switch to candlestick after 10 seconds for testing
+            setTimeout(() => {
+                console.log('🧪 AUTO-TEST: Switching to candlestick mode...');
+                const chartTypeSelect = document.getElementById('chart-type');
+                if (chartTypeSelect) {
+                    chartTypeSelect.value = 'candlestick';
+                    this.handleChartTypeChange();
+                }
+            }, 10000);
+            
             // Auto-refresh every 5 minutes
             this.startAutoRefresh();
             
