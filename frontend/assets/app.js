@@ -1011,194 +1011,71 @@ class GlobalMarketTracker {
             }
             
             if (chartType === 'candlestick') {
-                // For candlestick charts, preserve all 24 time slots with null for market-closed periods
-                const isAustralianMarket = symbol === '^AORD' || symbol === '^AXJO' || symbol.endsWith('.AX') || 
-                    (symbolInfo && symbolInfo.market === 'Australia');
-                console.log(`🕯️ Processing ${isAustralianMarket ? 'Australian' : 'Global'} market data for ${symbol} (start: ${startHour}:00 AEST), ${points.length} total points`);
+                // COMPLETE REWRITE: Simplified candlestick implementation
+                console.log(`🕯️ NEW APPROACH: Creating candlestick chart for ${symbol}`);
                 
-                // FIXED: Create dense candlestick data without null values for ECharts compatibility
-                const rawCandlestickData = [];
-                const candlestickXAxis = [];
+                // Create a simple, guaranteed-to-work candlestick dataset
+                const simpleCandlestickData = [];
+                const simpleCandlestickXAxis = [];
                 
-                // First pass: collect all valid candlestick data points with timestamps
+                // Process only valid market data points
                 points.forEach((point, index) => {
-                    if (point.market_open && point.open !== null && point.high !== null && 
-                        point.low !== null && point.close !== null) {
+                    // Only process if market is open and we have complete OHLC data
+                    if (point.market_open === true && 
+                        point.open != null && point.high != null && 
+                        point.low != null && point.close != null) {
                         
-                        // Parse the actual timestamp
+                        // Convert all values to guaranteed numbers
+                        const o = Number(point.open);
+                        const h = Number(point.high);
+                        const l = Number(point.low);
+                        const c = Number(point.close);
+                        
+                        // Skip if any value is invalid
+                        if (isNaN(o) || isNaN(h) || isNaN(l) || isNaN(c) || 
+                            !isFinite(o) || !isFinite(h) || !isFinite(l) || !isFinite(c)) {
+                            return;
+                        }
+                        
+                        // Create simple time label
                         const timestamp = new Date(point.timestamp);
+                        const hours = ((timestamp.getUTCHours() + 10) % 24).toString().padStart(2, '0');
+                        const minutes = timestamp.getUTCMinutes().toString().padStart(2, '0');
+                        const timeLabel = `${hours}:${minutes}`;
                         
-                        // Convert UTC time to AEST (Australian Eastern Standard Time)
-                        const aestOffset = 10; // Hours to add to UTC to get AEST
-                        const utcHours = timestamp.getUTCHours();
-                        const utcMinutes = timestamp.getUTCMinutes();
+                        // Add to arrays - ECharts format: [open, close, low, high]
+                        simpleCandlestickData.push([o, c, l, h]);
+                        simpleCandlestickXAxis.push(timeLabel);
                         
-                        // Convert to AEST by adding the offset
-                        const aestTotalMinutes = (utcHours * 60) + utcMinutes + (aestOffset * 60);
-                        const hourNum = Math.floor((aestTotalMinutes / 60) % 24);
-                        const minuteNum = aestTotalMinutes % 60;
-                        
-                        // Create time label for this data point
-                        const timeLabel = `${hourNum.toString().padStart(2,'0')}:${minuteNum.toString().padStart(2,'0')}`;
-                        
-                        // For percentage-based candlesticks, data is already in percentage format
-                        // CRITICAL: Ensure all values are valid numbers before creating OHLC array
-                        const open = parseFloat(point.open);
-                        const close = parseFloat(point.close);
-                        const low = parseFloat(point.low);
-                        const high = parseFloat(point.high);
-                        
-                        // Additional validation: ensure parsed values are valid numbers
-                        if (isNaN(open) || isNaN(close) || isNaN(low) || isNaN(high)) {
-                            console.warn(`⚠️ Skipping point with invalid OHLC values: O=${point.open} C=${point.close} L=${point.low} H=${point.high}`);
-                            return; // Skip this point
-                        }
-                        
-                        // ECharts candlestick expects [open, close, low, high] format
-                        const ohlc = [open, close, low, high];
-                        
-                        // Double-check the OHLC array before proceeding
-                        if (ohlc.some(val => val === null || val === undefined || isNaN(val))) {
-                            console.warn(`⚠️ Skipping point with null/NaN in OHLC array: [${ohlc.join(', ')}]`);
-                            return; // Skip this point
-                        }
-                        
-                        // Add all OHLC values to allValues for y-axis scaling
-                        allValues.push(open, close, low, high);
-                        
-                        // Store valid data point with its time label
-                        rawCandlestickData.push({
-                            timeLabel: timeLabel,
-                            ohlc: ohlc,
-                            timestamp: timestamp.getTime()
-                        });
-                        
-                        if (index >= 14 && index <= 21) {
-                            console.log(`📊 Valid OHLC data: AEST ${timeLabel} (UTC ${utcHours.toString().padStart(2,'0')}:${utcMinutes.toString().padStart(2,'0')}) OHLC% = [${ohlc.map(v => v.toFixed(2)).join(', ')}]%`);
-                        }
+                        // Add to values for y-axis scaling
+                        allValues.push(o, h, l, c);
                     }
                 });
                 
-                // Sort by timestamp to ensure proper chronological order
-                rawCandlestickData.sort((a, b) => a.timestamp - b.timestamp);
+                console.log(`🕯️ NEW APPROACH: Processed ${simpleCandlestickData.length} valid candlestick points for ${symbol}`);
                 
-                // Second pass: create dense arrays for ECharts (no null values)
-                const candlestickData = rawCandlestickData.map(item => item.ohlc);
-                rawCandlestickData.forEach(item => {
-                    candlestickXAxis.push(item.timeLabel);
-                });
-                
-                // CIRCUIT BREAKER: Final validation of candlestick data before proceeding
-                const finalValidation = candlestickData.every(ohlc => {
-                    return Array.isArray(ohlc) && 
-                           ohlc.length === 4 && 
-                           ohlc.every(val => typeof val === 'number' && !isNaN(val) && isFinite(val));
-                });
-                
-                if (!finalValidation) {
-                    console.error(`❌ CIRCUIT BREAKER: Final validation failed for candlestick data`);
-                    console.error(`Invalid data detected:`, candlestickData.filter(ohlc => 
-                        !Array.isArray(ohlc) || 
-                        ohlc.length !== 4 || 
-                        !ohlc.every(val => typeof val === 'number' && !isNaN(val) && isFinite(val))
-                    ));
+                // Only create series if we have valid data
+                if (simpleCandlestickData.length > 0) {
+                    // Set global x-axis for candlestick
+                    window.candlestickXAxisData = simpleCandlestickXAxis;
                     
-                    // Don't create candlestick series if data is invalid
-                    console.warn(`⚠️ Skipping candlestick series for ${symbol} due to invalid data`);
-                    return; // Skip this symbol entirely
-                }
-                
-                // Count actual data points (all should be valid since we filtered nulls)
-                const validDataCount = candlestickData.length;
-                console.log(`🕯️ FIXED: Dense candlestick data for ${symbol}: ${validDataCount} valid data points (no nulls), from ${points.length} input points`);
-                console.log(`🔍 Sample dense candlestick data:`, candlestickData.slice(0, 3));
-                console.log(`🔍 Sample X-axis labels:`, candlestickXAxis.slice(0, 3));
-                
-                // CRITICAL FIX: Ensure arrays are exactly the same length
-                if (candlestickData.length !== candlestickXAxis.length) {
-                    console.error(`❌ ARRAY MISMATCH: candlestickData.length (${candlestickData.length}) !== candlestickXAxis.length (${candlestickXAxis.length})`);
-                    // Force alignment - this might be the source of ECharts errors
-                    const minLength = Math.min(candlestickData.length, candlestickXAxis.length);
-                    candlestickData.length = minLength;
-                    candlestickXAxis.length = minLength;
-                    console.log(`🔧 FORCED ALIGNMENT: Both arrays now have length ${minLength}`);
-                }
-                
-                if (validDataCount === 0) {
-                    console.warn(`⚠️ No valid candlestick data for ${symbol} - all market closed or null OHLC values`);
-                } else {
-                    // Use the candlestick-specific x-axis data (dense, no gaps)
-                    window.candlestickXAxisData = candlestickXAxis;
-                    console.log(`✅ Set global candlestickXAxisData with ${candlestickXAxis.length} entries`);
-                    
-                    // Enhanced candlestick series with market-specific colors
-                    console.log(`🎨 Getting colors for market: ${symbolInfo?.market || 'Default'}`);
-                    const marketColors = this.getMarketColors(symbolInfo?.market || 'Default');
-                    console.log(`🎨 Market colors retrieved:`, marketColors);
-                    console.log(`✅ CANDLESTICK FIX: Creating series with ${candlestickData.length} dense data points (no null values)`);
-                    
-                    // Adjust styling for previous day data
-                    const seriesName = isPreviousDay ? 
-                        `${baseName} (${symbolInfo?.market || 'Unknown'}) - Previous Day` : 
-                        `${symbolInfo?.name || symbol} (${symbolInfo?.market || 'Unknown'})`;
-                    
+                    // Create simple candlestick series
                     const candlestickSeries = {
-                        name: seriesName,
+                        name: `${symbolInfo?.name || symbol} Candlestick`,
                         type: 'candlestick',
-                        data: candlestickData,
-                        itemStyle: isPreviousDay ? {
-                            // Previous day styling - more transparent/faded
-                            color: marketColors?.bull ? this.addAlpha(marketColors.bull, 0.4) : '#00da3c',
-                            color0: marketColors?.bear ? this.addAlpha(marketColors.bear, 0.4) : '#ec0000',
-                            borderColor: marketColors?.bull ? this.addAlpha(marketColors.bull, 0.6) : '#00da3c',
-                            borderColor0: marketColors?.bear ? this.addAlpha(marketColors.bear, 0.6) : '#ec0000'
-                        } : {
-                            color: marketColors?.bull || '#00da3c',      // Bull candle color with fallback
-                            color0: marketColors?.bear || '#ec0000',     // Bear candle color with fallback
-                            borderColor: marketColors?.bull || '#00da3c', // Bull border with fallback
-                            borderColor0: marketColors?.bear || '#ec0000' // Bear border with fallback
-                        },
-                        tooltip: {
-                            formatter: function(param) {
-                                const [open, close, low, high] = param.value;
-                                const change = (close - open).toFixed(2);
-                                const safeChangeColor = close >= open ? '#00da3c' : '#ec0000'; // Use safe default colors
-                                return `
-                                    <div style="margin: 0px 0 0; line-height:1;">
-                                        <div style="margin: 0px 0 0; line-height:1;">
-                                            ${param.marker}<strong>${param.seriesName}</strong><br/>
-                                            <span style="display:inline-block;margin-right:5px;border-radius:10px;width:9px;height:9px;background-color:#333;"></span>
-                                            Open: ${open.toFixed(3)}%<br/>
-                                            <span style="display:inline-block;margin-right:5px;border-radius:10px;width:9px;height:9px;background-color:#333;"></span>
-                                            Close: ${close.toFixed(3)}%<br/>
-                                            <span style="display:inline-block;margin-right:5px;border-radius:10px;width:9px;height:9px;background-color:#333;"></span>
-                                            High: ${high.toFixed(3)}%<br/>
-                                            <span style="display:inline-block;margin-right:5px;border-radius:10px;width:9px;height:9px;background-color:#333;"></span>
-                                            Low: ${low.toFixed(3)}%<br/>
-                                            <span style="display:inline-block;margin-right:5px;border-radius:10px;width:9px;height:9px;background-color:${safeChangeColor};"></span>
-                                            Change: <span style="color:${safeChangeColor}">${change}%</span>
-                                        </div>
-                                    </div>
-                                `;
-                            }
+                        data: simpleCandlestickData,
+                        itemStyle: {
+                            color: '#00da3c',        // Bull color
+                            color0: '#ec0000',       // Bear color  
+                            borderColor: '#00da3c',  // Bull border
+                            borderColor0: '#ec0000'  // Bear border
                         }
                     };
                     
-                    console.log(`📊 FIXED: Adding dense candlestick series for ${symbol}: ${candlestickData.length} valid points (no null values)`);
-                    console.log(`🕯️ Candlestick series configuration:`, candlestickSeries);
-                    
-                    // Add defensive check before pushing series (now with dense data)
-                    if (candlestickSeries && candlestickSeries.data && candlestickSeries.name && candlestickSeries.data.length > 0) {
-                        console.log(`✅ FIXED: Dense candlestick series for ${symbol} is valid, pushing to series array`);
-                        series.push(candlestickSeries);
-                    } else {
-                        console.error(`❌ Candlestick series for ${symbol} is invalid:`, {
-                            hasData: !!candlestickSeries?.data,
-                            hasName: !!candlestickSeries?.name,
-                            dataLength: candlestickSeries?.data?.length,
-                            series: candlestickSeries
-                        });
-                    }
+                    console.log(`✅ NEW APPROACH: Adding candlestick series with ${simpleCandlestickData.length} points`);
+                    series.push(candlestickSeries);
+                } else {
+                    console.warn(`⚠️ NEW APPROACH: No valid candlestick data for ${symbol}`);
                 }
             } else {
                 // Handle line charts (percentage and price) - map to fixed x-axis positions

@@ -2419,6 +2419,26 @@ async def debug_market_data():
         """
         return HTMLResponse(content=error_html, status_code=500)
 
+@app.get("/comprehensive_phase4_landing.html", response_class=HTMLResponse)
+async def serve_comprehensive_phase4_landing():
+    """🚀 Comprehensive Phase 4 P4-002 Landing Page - GNN Implementation Showcase"""
+    try:
+        file_path = "comprehensive_phase4_landing.html"
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="Comprehensive Phase 4 landing page not found")
+    except Exception as e:
+        logger.error(f"Error serving comprehensive Phase 4 landing page: {e}")
+        raise HTTPException(status_code=500, detail="Failed to serve comprehensive Phase 4 landing page")
+
+@app.get("/phase4", response_class=HTMLResponse)
+async def serve_phase4_landing():
+    """🚀 Phase 4 P4-002 Landing Page (Short URL)"""
+    return await serve_comprehensive_phase4_landing()
+
 @app.get("/enhanced-landing", response_class=HTMLResponse)
 async def serve_enhanced_landing_page():
     """🚀 Enhanced Landing Page with Phase 4 Integration - Complete System Overview"""
