@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Navigation Test</title>
+</head>
+<body>
+    <h1>Navigation Link Test</h1>
+    
+    <script>
+        // Test the exact same function as in the main page
+        function openGlobalStockTracker() {
+            console.log('Opening Global Stock Market Tracker...');
+            window.open('/enhanced-global-tracker', '_blank');
+        }
+        
+        // Test all navigation functions
+        function testNavigation() {
+            console.log('Testing Global Stock Market Tracker navigation...');
+            
+            // Check if function exists
+            if (typeof openGlobalStockTracker === 'function') {
+                console.log('✅ openGlobalStockTracker function exists');
+                
+                // Test the route manually
+                fetch('/enhanced-global-tracker')
+                    .then(response => {
+                        if (response.ok) {
+                            console.log('✅ /enhanced-global-tracker route is accessible');
+                            return response.text();
+                        } else {
+                            console.log('❌ /enhanced-global-tracker route failed:', response.status);
+                        }
+                    })
+                    .then(html => {
+                        if (html && html.includes('Enhanced Global Market Tracker')) {
+                            console.log('✅ Route serves correct Global Market Tracker content');
+                        } else {
+                            console.log('❌ Route does not serve Global Market Tracker content');
+                        }
+                    })
+                    .catch(error => {
+                        console.log('❌ Error testing route:', error);
+                    });
+            } else {
+                console.log('❌ openGlobalStockTracker function does not exist');
+            }
+        }
+        
+        // Run test when page loads
+        window.onload = testNavigation;
+        
+        // Manual test button
+        document.body.innerHTML += '<br><button onclick="openGlobalStockTracker()">Test Global Market Tracker Navigation</button>';
+    </script>
+</body>
+</html>

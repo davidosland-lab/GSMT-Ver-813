@@ -94,6 +94,15 @@ class YahooFinanceRealAPI:
                     ))
                 
                 if result:
+                    # Debug logging for ^AORD timestamp ranges
+                    if symbol == "^AORD":
+                        logger.info(f"🔍 yfinance {symbol}: Got {len(result)} data points from {result[0].timestamp} to {result[-1].timestamp}")
+                        # Convert to AEST for debugging
+                        aest = timezone(timedelta(hours=11))  # AEST = UTC+11 (assuming DST)
+                        first_aest = result[0].timestamp.astimezone(aest)
+                        last_aest = result[-1].timestamp.astimezone(aest)
+                        logger.info(f"🔍 yfinance {symbol}: AEST times from {first_aest.strftime('%Y-%m-%d %H:%M:%S AEST')} to {last_aest.strftime('%Y-%m-%d %H:%M:%S AEST')}")
+                    
                     logger.info(f"✅ yfinance: Got {len(result)} real data points for {symbol}")
                     return result
         

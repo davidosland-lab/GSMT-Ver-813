@@ -591,6 +591,12 @@ class GlobalMarketTracker {
         Object.entries(data.data).forEach(([symbol, points]) => {
             const symbolInfo = data.metadata[symbol];
             
+            // Add null check for symbolInfo
+            if (!symbolInfo) {
+                console.warn(`⚠️ No metadata found for symbol ${symbol}, skipping...`);
+                return;
+            }
+            
             // Check if this is previous day data
             const isPreviousDay = symbol.endsWith('_prev_day');
             const baseName = isPreviousDay ? symbolInfo.name.replace(' (Previous Day)', '') : symbolInfo.name;
@@ -650,8 +656,14 @@ class GlobalMarketTracker {
                         candlestickData.push(null); // Fill gaps with null
                     }
                     
+                    // Ensure candlestick X-axis has corresponding labels
+                    while (candlestickXAxis.length <= xAxisIndex) {
+                        const timeLabel = `${hourNum.toString().padStart(2,'0')}:${minuteNum.toString().padStart(2,'0')}`;
+                        candlestickXAxis.push(timeLabel);
+                    }
+                    
                     if (point.market_open && point.open !== null && point.high !== null && 
-                        point.low !== null && point.close !== null && xAxisIndex >= 0 && xAxisIndex < xAxisData.length) {
+                        point.low !== null && point.close !== null && xAxisIndex >= 0) {
                         // For percentage-based candlesticks, data is already in percentage format
                         const ohlc = [point.open, point.close, point.low, point.high];
                         
@@ -670,29 +682,34 @@ class GlobalMarketTracker {
                     }
                 });
                 
-                // Ensure candlestick data array matches the x-axis length
-                while (candlestickData.length < xAxisData.length) {
+                // Ensure candlestick X-axis and data arrays are the same length
+                while (candlestickData.length < candlestickXAxis.length) {
                     candlestickData.push(null);
                 }
+                while (candlestickXAxis.length < candlestickData.length) {
+                    const lastTime = candlestickXAxis[candlestickXAxis.length - 1] || '00:00';
+                    candlestickXAxis.push(lastTime); // Fill with placeholder
+                }
                 
-                console.log(`🕯️ Candlestick data for ${symbol}: ${candlestickData.length} valid out of ${points.length} total points`);
+                // Count actual non-null data points
+                const validDataCount = candlestickData.filter(d => d !== null).length;
+                console.log(`🕯️ Candlestick data for ${symbol}: ${validDataCount} valid data points out of ${candlestickData.length} total slots, from ${points.length} input points`);
                 console.log(`🔍 Sample candlestick data:`, candlestickData.slice(0, 3));
+                console.log(`🔍 Sample X-axis labels:`, candlestickXAxis.slice(0, 3));
                 
-                if (candlestickData.length === 0) {
+                if (validDataCount === 0) {
                     console.warn(`⚠️ No valid candlestick data for ${symbol} - all market closed or null OHLC values`);
                 } else {
-                    // Use the filtered x-axis data that matches candlestick data points
-                    if (!window.candlestickXAxisData) {
-                        window.candlestickXAxisData = candlestickXAxis;
-                    }
+                    // Use the candlestick-specific x-axis data
+                    window.candlestickXAxisData = candlestickXAxis;
                     
                     // Enhanced candlestick series with market-specific colors
-                    const marketColors = this.getMarketColors(symbolInfo.market);
+                    const marketColors = this.getMarketColors(symbolInfo.market || 'Default');
                     
                     // Adjust styling for previous day data
                     const seriesName = isPreviousDay ? 
-                        `${baseName} (${symbolInfo.market}) - Previous Day` : 
-                        `${symbolInfo.name} (${symbolInfo.market})`;
+                        `${baseName} (${symbolInfo.market || 'Unknown'}) - Previous Day` : 
+                        `${symbolInfo.name || symbol} (${symbolInfo.market || 'Unknown'})`;
                     
                     const candlestickSeries = {
                         name: seriesName,
@@ -804,7 +821,7 @@ class GlobalMarketTracker {
                 });
                 
                 series.push({
-                    name: isPreviousDay ? `${baseName} (Previous Day)` : symbolInfo.name,
+                    name: isPreviousDay ? `${baseName} (Previous Day)` : (symbolInfo.name || symbol),
                     type: 'line',
                     data: values,
                     smooth: true,
@@ -877,7 +894,7 @@ class GlobalMarketTracker {
             };
             
             // Calculate exact market open position based on timeline
-            if (marketOpenTimes[symbolInfo.market]) {
+            if (symbolInfo.market && marketOpenTimes[symbolInfo.market]) {
                 const targetOpen = marketOpenTimes[symbolInfo.market];
                 
                 // Calculate the expected timeline position for market open
@@ -909,7 +926,7 @@ class GlobalMarketTracker {
             }
             
             // Calculate exact market close position based on timeline
-            if (marketCloseTimes[symbolInfo.market]) {
+            if (symbolInfo.market && marketCloseTimes[symbolInfo.market]) {
                 const targetClose = marketCloseTimes[symbolInfo.market];
                 
                 // Calculate the expected timeline position for market close
@@ -940,7 +957,7 @@ class GlobalMarketTracker {
                 const labelOffset = symbolIndex * 20; // 20px offset per symbol
                 
                 markLines.push({
-                    name: `${symbolInfo.market} Open`,
+                    name: `${symbolInfo.market || "Market"} Open`,
                     xAxis: xAxisData[marketOpenStart],
                     lineStyle: { color: '#10b981', type: 'dashed', width: 2 },
                     label: { 
@@ -963,7 +980,7 @@ class GlobalMarketTracker {
                 const labelOffset = symbolIndex * 20; // 20px offset per symbol
                 
                 markLines.push({
-                    name: `${symbolInfo.market} Close`, 
+                    name: `${symbolInfo.market || "Market"} Close`, 
                     xAxis: xAxisData[marketCloseEnd],
                     lineStyle: { color: '#ef4444', type: 'dashed', width: 2 },
                     label: { 
@@ -1216,6 +1233,12 @@ class GlobalMarketTracker {
             Object.entries(marketSymbols).forEach(([symbol, points]) => {
                 const symbolInfo = data.metadata[symbol];
                 
+                // Add null check for symbolInfo
+                if (!symbolInfo) {
+                    console.warn(`⚠️ No metadata found for symbol ${symbol} in market chart, skipping...`);
+                    return;
+                }
+                
                 // Skip previous day data to avoid duplicate series (user request: remove duplicate data for cleaner charts)
                 if (symbol.endsWith('_prev_day')) {
                     console.log(`⏭️ Skipping previous day data for ${symbol} in market chart to avoid duplicate series`);
@@ -1263,7 +1286,7 @@ class GlobalMarketTracker {
                     
                     const marketColors = this.getMarketColors(market);
                     marketSeries.push({
-                        name: `${symbolInfo.name}`,
+                        name: `${symbolInfo.name || symbol}`,
                         type: 'candlestick',
                         data: candlestickData,
                         xAxisIndex: marketIndex,
@@ -1321,7 +1344,7 @@ class GlobalMarketTracker {
                     });
                     
                     marketSeries.push({
-                        name: symbolInfo.name,
+                        name: symbolInfo.name || symbol,
                         type: 'line',
                         data: values,
                         xAxisIndex: marketIndex,

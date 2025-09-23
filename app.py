@@ -981,68 +981,114 @@ def convert_real_market_data_to_format(real_points, symbol: str, market: str, ch
         else:
             start_time = utc_now - timedelta(hours=120)  # Extended to capture weekend data
     
-    # Filter to requested time period and sort by timestamp
-    filtered_points = [p for p in real_points if p.timestamp >= start_time]
-    filtered_points.sort(key=lambda x: x.timestamp)
+    # Sort all points by timestamp first
+    all_points = sorted(real_points, key=lambda x: x.timestamp)
+    
+    # Find previous day's closing price (latest point from previous day)
+    today_start = utc_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday_points = [p for p in all_points if p.timestamp < today_start]
+    previous_day_close = yesterday_points[-1].close if yesterday_points else None
+    
+    # Filter to current day only for display
+    current_day_points = [p for p in all_points if p.timestamp >= today_start]
     
     # Debug logging for ^AORD and ^FTSE
     if symbol in ["^AORD", "^FTSE"]:
-        logger.info(f"🔍 {symbol} time filtering: {len(real_points)} -> {len(filtered_points)} points")
-        logger.info(f"🔍 {symbol} UTC now: {utc_now}")
-        logger.info(f"🔍 {symbol} start_time: {start_time}")
-        if real_points and len(real_points) > 0:
-            logger.info(f"🔍 {symbol} input timestamps: {real_points[0].timestamp} to {real_points[-1].timestamp}")
-            # Show each timestamp and whether it passes the filter
-            for i, p in enumerate(real_points[:5]):  # Show first 5 points
-                passed = p.timestamp >= start_time
-                logger.info(f"🔍 {symbol} point {i}: {p.timestamp} -> {'PASS' if passed else 'FAIL'}")
-        if len(filtered_points) == 0:
-            logger.error(f"❌ {symbol} ALL POINTS FILTERED OUT - Check time filtering logic!")
+        logger.info(f"🔍 {symbol} all points: {len(all_points)}, yesterday: {len(yesterday_points)}, today: {len(current_day_points)}")
+        logger.info(f"🔍 {symbol} previous day close: {previous_day_close}")
+        logger.info(f"🔍 {symbol} today start: {today_start}")
+        if all_points:
+            logger.info(f"🔍 {symbol} data range: {all_points[0].timestamp} to {all_points[-1].timestamp}")
     
-    if not filtered_points:
-        logger.warning(f"No real market data points in requested time period for {symbol}")
-        return []
+    # Use current day points for display, but need previous close for percentage calculation
+    if not current_day_points:
+        logger.warning(f"No current day market data points for {symbol}")
+        # If no current day data, use recent points from yesterday for display
+        if yesterday_points:
+            current_day_points = yesterday_points[-10:]  # Use last 10 points from yesterday
+            logger.info(f"🔧 {symbol} Using {len(current_day_points)} recent points from previous day")
+        else:
+            return []
     
-    # Get base price for percentage calculations (first point's close)
-    # LIVE DATA ONLY: No synthetic fallback prices
-    if not filtered_points:
+    # Set base price for percentage calculations
+    if previous_day_close is not None:
+        base_price = previous_day_close
+        logger.info(f"📊 {symbol} Using previous day close as base: {base_price}")
+    elif current_day_points:
+        base_price = current_day_points[0].close
+        logger.info(f"📊 {symbol} Using first current point as base: {base_price}")
+    else:
         logger.error(f"No market data available for {symbol}. Cannot calculate base price.")
         return []
-    base_price = filtered_points[0].close
     
     # Convert to MarketDataPoint format
     market_data_points = []
     
-    for point in filtered_points:
-        # Calculate percentage change from base
-        percentage_change = ((point.close - base_price) / base_price * 100) if chart_type == ChartType.PERCENTAGE else None
+    for point in current_day_points:
+        # Calculate percentage change from base (previous day's close)
+        # For candlestick charts, we also need percentage values for OHLC display
+        if chart_type == ChartType.PERCENTAGE or chart_type == ChartType.CANDLESTICK:
+            percentage_change = ((point.close - base_price) / base_price * 100)
+        else:
+            percentage_change = None
         
         # Determine market status based on time and market
         hour = point.timestamp.hour
         market_open = True  # Default assume open for real data
         
         if chart_type == ChartType.CANDLESTICK:
-            # Determine market hours based on market region
-            if market == "US" and (hour < 14 or hour > 21):  # US market 9:30 AM - 4 PM ET (14:30-21:00 UTC)
-                market_open = False
-            elif market == "UK" and (hour < 8 or hour > 16):  # UK market 8 AM - 4:30 PM GMT
-                market_open = False
-            elif market == "Australia" and (hour < 23 or hour > 7):  # ASX roughly 10 AM - 4 PM AEST
-                market_open = False
-            elif market == "Japan" and (hour < 0 or hour > 6):  # JSE roughly 9 AM - 3 PM JST
-                market_open = False
+            # For candlestick charts, we want to show all available real data
+            # Market hours filtering is less strict since we're showing percentage changes
+            # Default to market_open=True for real data unless clearly outside trading hours
+            
+            # Convert UTC hour to market local time for better market hours detection
+            if market == "US":
+                # US EST/EDT: UTC-5/-4, market hours 9:30 AM - 4 PM (14:30-21:00 UTC roughly)
+                market_open = 14 <= hour <= 21
+            elif market == "UK": 
+                # UK GMT/BST: UTC+0/+1, market hours 8 AM - 4:30 PM (8:00-16:30 UTC roughly)
+                market_open = 8 <= hour <= 16
+            elif market == "Australia":
+                # Australia AEST: UTC+10/+11, market hours 10 AM - 4 PM AEST
+                # In UTC, this is roughly 23:00 previous day to 07:00 current day
+                market_open = (hour >= 23) or (hour <= 7)
+            elif market == "Japan":
+                # Japan JST: UTC+9, market hours 9 AM - 3 PM JST (00:00-06:00 UTC)
+                market_open = 0 <= hour <= 6
+            else:
+                # For other markets or unknown, assume market open for real data
+                market_open = True
         
-        market_point = MarketDataPoint(
-            timestamp=point.timestamp.isoformat(),
-            timestamp_ms=int(point.timestamp.timestamp() * 1000),
-            open=point.open,
-            high=point.high,
-            low=point.low,
-            close=point.close,
-            volume=point.volume,
-            percentage_change=round(percentage_change, 4) if percentage_change is not None else None,
-            market_open=market_open
-        )
+        # For candlestick charts, convert OHLC values to percentages
+        if chart_type == ChartType.CANDLESTICK:
+            open_pct = ((point.open - base_price) / base_price * 100)
+            high_pct = ((point.high - base_price) / base_price * 100)
+            low_pct = ((point.low - base_price) / base_price * 100)
+            close_pct = ((point.close - base_price) / base_price * 100)
+            
+            market_point = MarketDataPoint(
+                timestamp=point.timestamp.isoformat(),
+                timestamp_ms=int(point.timestamp.timestamp() * 1000),
+                open=round(open_pct, 4),
+                high=round(high_pct, 4),
+                low=round(low_pct, 4),
+                close=round(close_pct, 4),
+                volume=point.volume,
+                percentage_change=round(percentage_change, 4) if percentage_change is not None else None,
+                market_open=market_open
+            )
+        else:
+            market_point = MarketDataPoint(
+                timestamp=point.timestamp.isoformat(),
+                timestamp_ms=int(point.timestamp.timestamp() * 1000),
+                open=point.open,
+                high=point.high,
+                low=point.low,
+                close=point.close,
+                volume=point.volume,
+                percentage_change=round(percentage_change, 4) if percentage_change is not None else None,
+                market_open=market_open
+            )
         
         market_data_points.append(market_point)
     
@@ -1054,20 +1100,43 @@ def convert_real_market_data_to_format(real_points, symbol: str, market: str, ch
     if len(market_data_points) == 0 and len(real_points) > 0 and symbol.startswith('^'):
         logger.info(f"🔧 FALLBACK: Creating basic data points for {symbol} from {len(real_points)} real points")
         # Create simplified data points from the real data
+        fallback_base = base_price if 'base_price' in locals() else real_points[0].close
         for i, point in enumerate(real_points[:24]):  # Limit to 24 points max
-            percentage_change = ((point.close - real_points[0].close) / real_points[0].close * 100) if chart_type == ChartType.PERCENTAGE else None
+            if chart_type == ChartType.PERCENTAGE or chart_type == ChartType.CANDLESTICK:
+                percentage_change = ((point.close - fallback_base) / fallback_base * 100)
+            else:
+                percentage_change = None
             
-            market_point = MarketDataPoint(
-                timestamp=point.timestamp.isoformat(),
-                timestamp_ms=int(point.timestamp.timestamp() * 1000),
-                open=point.open,
-                high=point.high,
-                low=point.low,
-                close=point.close,
-                volume=point.volume,
-                percentage_change=round(percentage_change, 3) if percentage_change is not None else None,
-                market_open=True
-            )
+            # For candlestick charts, convert OHLC values to percentages
+            if chart_type == ChartType.CANDLESTICK:
+                open_pct = ((point.open - fallback_base) / fallback_base * 100)
+                high_pct = ((point.high - fallback_base) / fallback_base * 100)
+                low_pct = ((point.low - fallback_base) / fallback_base * 100)
+                close_pct = ((point.close - fallback_base) / fallback_base * 100)
+                
+                market_point = MarketDataPoint(
+                    timestamp=point.timestamp.isoformat(),
+                    timestamp_ms=int(point.timestamp.timestamp() * 1000),
+                    open=round(open_pct, 4),
+                    high=round(high_pct, 4),
+                    low=round(low_pct, 4),
+                    close=round(close_pct, 4),
+                    volume=point.volume,
+                    percentage_change=round(percentage_change, 3) if percentage_change is not None else None,
+                    market_open=True
+                )
+            else:
+                market_point = MarketDataPoint(
+                    timestamp=point.timestamp.isoformat(),
+                    timestamp_ms=int(point.timestamp.timestamp() * 1000),
+                    open=point.open,
+                    high=point.high,
+                    low=point.low,
+                    close=point.close,
+                    volume=point.volume,
+                    percentage_change=round(percentage_change, 3) if percentage_change is not None else None,
+                    market_open=True
+                )
             market_data_points.append(market_point)
         
         logger.info(f"🔧 FALLBACK: Created {len(market_data_points)} basic data points for {symbol}")
@@ -1909,18 +1978,33 @@ async def serve_cba_market_tracker():
 
 @app.get("/enhanced-global-tracker", response_class=HTMLResponse)
 async def serve_enhanced_global_market_tracker():
-    """🚀 Enhanced Global Market Tracker with Phase 3 Extensions (P3-005 to P3-007)"""
+    """🌍 Global Stock Market Tracker - 24H AEST Timeline with Multi-Index Selection"""
     try:
-        file_path = "enhanced_market_tracker.html"
+        file_path = os.path.join("frontend", "index.html")
         if os.path.exists(file_path):
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
             return HTMLResponse(content=content, status_code=200)
         else:
-            raise HTTPException(status_code=404, detail="Enhanced Global Market Tracker not found")
+            raise HTTPException(status_code=404, detail="Global Stock Market Tracker not found")
     except Exception as e:
-        logger.error(f"Error serving Enhanced Global Market Tracker: {e}")
-        raise HTTPException(status_code=500, detail=f"Enhanced Global Market Tracker error: {str(e)}")
+        logger.error(f"Error serving Global Stock Market Tracker: {e}")
+        raise HTTPException(status_code=500, detail=f"Global Stock Market Tracker error: {str(e)}")
+
+@app.get("/test-candlestick", response_class=HTMLResponse)
+async def serve_candlestick_test():
+    """🕯️ Test page for candlestick chart functionality debugging"""
+    try:
+        file_path = "test_candlestick_workflow.html"
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            return HTMLResponse(content=content, status_code=200)
+        else:
+            raise HTTPException(status_code=404, detail="Candlestick test file not found")
+    except Exception as e:
+        logger.error(f"Error serving candlestick test: {e}")
+        raise HTTPException(status_code=500, detail=f"Candlestick test error: {str(e)}")
 
 @app.get("/single-stock-analysis", response_class=HTMLResponse)
 async def serve_single_stock_analysis():
@@ -2118,6 +2202,26 @@ async def get_enhanced_prediction(request: Request):
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
+@app.get("/test-navigation", response_class=HTMLResponse)
+async def test_navigation():
+    """🧪 Navigation Test Page"""
+    try:
+        with open("test_navigation.html", 'r', encoding='utf-8') as f:
+            content = f.read()
+        return HTMLResponse(content=content, status_code=200)
+    except Exception as e:
+        return HTMLResponse(content=f"<html><body><h1>Test Error</h1><p>{str(e)}</p></body></html>", status_code=500)
+
+@app.get("/click-test", response_class=HTMLResponse)
+async def click_test():
+    """🧪 Click Test Page"""
+    try:
+        with open("click_test.html", 'r', encoding='utf-8') as f:
+            content = f.read()
+        return HTMLResponse(content=content, status_code=200)
+    except Exception as e:
+        return HTMLResponse(content=f"<html><body><h1>Test Error</h1><p>{str(e)}</p></body></html>", status_code=500)
+
 @app.get("/api/mobile-market-status")
 async def get_mobile_market_status():
     """🔄 Mobile-optimized market data with CORRECT calculation - bypasses all caching"""
@@ -2129,8 +2233,8 @@ async def get_mobile_market_status():
         # Get AORD data with correct calculation
         aord_ticker = yf.Ticker("^AORD")
         
-        # Get 2 days of daily data for proper percentage calculation
-        daily_data = aord_ticker.history(period="2d", interval="1d")
+        # Get 5 days of daily data for proper percentage calculation (handles weekends)
+        daily_data = aord_ticker.history(period="5d", interval="1d")
         
         # Get current intraday data
         intraday_data = aord_ticker.history(period="1d", interval="1h")
