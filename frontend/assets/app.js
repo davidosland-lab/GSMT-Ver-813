@@ -758,7 +758,9 @@ class GlobalMarketTracker {
                     window.candlestickXAxisData = candlestickXAxis;
                     
                     // Enhanced candlestick series with market-specific colors
+                    console.log(`🎨 Getting colors for market: ${symbolInfo?.market || 'Default'}`);
                     const marketColors = this.getMarketColors(symbolInfo?.market || 'Default');
+                    console.log(`🎨 Market colors retrieved:`, marketColors);
                     
                     // Adjust styling for previous day data
                     const seriesName = isPreviousDay ? 
@@ -771,21 +773,21 @@ class GlobalMarketTracker {
                         data: candlestickData,
                         itemStyle: isPreviousDay ? {
                             // Previous day styling - more transparent/faded
-                            color: this.addAlpha(marketColors.bull, 0.4),      // Faded bull candle
-                            color0: this.addAlpha(marketColors.bear, 0.4),     // Faded bear candle
-                            borderColor: this.addAlpha(marketColors.bull, 0.6), // Faded bull border
-                            borderColor0: this.addAlpha(marketColors.bear, 0.6) // Faded bear border
+                            color: marketColors?.bull ? this.addAlpha(marketColors.bull, 0.4) : '#00da3c',
+                            color0: marketColors?.bear ? this.addAlpha(marketColors.bear, 0.4) : '#ec0000',
+                            borderColor: marketColors?.bull ? this.addAlpha(marketColors.bull, 0.6) : '#00da3c',
+                            borderColor0: marketColors?.bear ? this.addAlpha(marketColors.bear, 0.6) : '#ec0000'
                         } : {
-                            color: marketColors.bull,      // Bull candle color
-                            color0: marketColors.bear,     // Bear candle color  
-                            borderColor: marketColors.bull, // Bull border
-                            borderColor0: marketColors.bear // Bear border
+                            color: marketColors?.bull || '#00da3c',      // Bull candle color with fallback
+                            color0: marketColors?.bear || '#ec0000',     // Bear candle color with fallback
+                            borderColor: marketColors?.bull || '#00da3c', // Bull border with fallback
+                            borderColor0: marketColors?.bear || '#ec0000' // Bear border with fallback
                         },
                         tooltip: {
                             formatter: function(param) {
                                 const [open, close, low, high] = param.value;
                                 const change = (close - open).toFixed(2);
-                                const changeColor = close >= open ? marketColors.bull : marketColors.bear;
+                                const safeChangeColor = close >= open ? '#00da3c' : '#ec0000'; // Use safe default colors
                                 return `
                                     <div style="margin: 0px 0 0; line-height:1;">
                                         <div style="margin: 0px 0 0; line-height:1;">
@@ -798,8 +800,8 @@ class GlobalMarketTracker {
                                             High: ${high.toFixed(3)}%<br/>
                                             <span style="display:inline-block;margin-right:5px;border-radius:10px;width:9px;height:9px;background-color:#333;"></span>
                                             Low: ${low.toFixed(3)}%<br/>
-                                            <span style="display:inline-block;margin-right:5px;border-radius:10px;width:9px;height:9px;background-color:${changeColor};"></span>
-                                            Change: <span style="color:${changeColor}">${change}%</span>
+                                            <span style="display:inline-block;margin-right:5px;border-radius:10px;width:9px;height:9px;background-color:${safeChangeColor};"></span>
+                                            Change: <span style="color:${safeChangeColor}">${change}%</span>
                                         </div>
                                     </div>
                                 `;
@@ -809,7 +811,18 @@ class GlobalMarketTracker {
                     
                     console.log(`📊 Adding percentage candlestick series for ${symbol}: ${candlestickData.length} total points (${candlestickData.filter(d => d !== null).length} with data)`);
                     console.log(`🕯️ Candlestick series configuration:`, candlestickSeries);
-                    series.push(candlestickSeries);
+                    
+                    // Add defensive check before pushing series
+                    if (candlestickSeries && candlestickSeries.data && candlestickSeries.name) {
+                        console.log(`✅ Candlestick series for ${symbol} is valid, pushing to series array`);
+                        series.push(candlestickSeries);
+                    } else {
+                        console.error(`❌ Candlestick series for ${symbol} is invalid:`, {
+                            hasData: !!candlestickSeries?.data,
+                            hasName: !!candlestickSeries?.name,
+                            series: candlestickSeries
+                        });
+                    }
                 }
             } else {
                 // Handle line charts (percentage and price) - map to fixed x-axis positions
