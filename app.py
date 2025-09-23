@@ -9006,6 +9006,64 @@ async def get_phase4_accuracy_status():
             "system_status": "error"
         }
 
+@app.get("/api/candlestick-data/{symbol}")
+async def get_candlestick_data_for_technical_analysis(
+    symbol: str,
+    period: str = Query("5d", description="Time period (1d, 5d, 1mo, 3mo, 6mo, 1y)"),
+    interval: str = Query("1d", description="Interval (1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo)")
+):
+    """Get candlestick data for technical analysis module using yfinance"""
+    try:
+        import yfinance as yf
+        
+        # Validate symbol
+        if symbol not in SYMBOLS_DB:
+            raise HTTPException(status_code=400, detail=f"Unsupported symbol: {symbol}")
+        
+        symbol_info = SYMBOLS_DB[symbol]
+        logger.info(f"📊 Fetching candlestick data for {symbol} ({period}, {interval})")
+        
+        # Fetch data using yfinance
+        ticker = yf.Ticker(symbol)
+        hist_data = ticker.history(period=period, interval=interval)
+        
+        if hist_data.empty:
+            raise HTTPException(status_code=404, detail=f"No historical data available for {symbol}")
+        
+        # Convert to our format
+        data_points = []
+        for timestamp, row in hist_data.iterrows():
+            data_points.append({
+                "timestamp": timestamp.isoformat(),
+                "open": float(row['Open']),
+                "high": float(row['High']),
+                "low": float(row['Low']),
+                "close": float(row['Close']),
+                "volume": int(row['Volume']) if not pd.isna(row['Volume']) else 0
+            })
+        
+        logger.info(f"✅ Retrieved {len(data_points)} candlestick data points for {symbol}")
+        
+        return {
+            "symbol": symbol,
+            "period": period,
+            "interval": interval,
+            "data": data_points,
+            "metadata": {
+                "name": symbol_info.name,
+                "market": symbol_info.market,
+                "category": symbol_info.category,
+                "currency": symbol_info.currency
+            },
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching candlestick data for {symbol}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch candlestick data: {str(e)}")
+
 @app.post("/api/prediction/record-outcome")
 async def record_prediction_outcome(data: dict):
     """Record actual outcome for a prediction to enable learning."""
