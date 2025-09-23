@@ -252,6 +252,12 @@
                 document.getElementById('symbol-select').addEventListener('change', () => {
                     this.performAnalysis();
                 });
+                
+                // Auto-analyze default symbol on page load
+                setTimeout(() => {
+                    console.log('🚀 Auto-analyzing default symbol...');
+                    this.performAnalysis();
+                }, 1000);
             }
 
             showStatus(message) {
