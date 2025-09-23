@@ -866,6 +866,45 @@ class GlobalMarketTracker {
     }
     
     renderECharts(data) {
+        // CRITICAL: Check if chart instance is available and healthy
+        if (!this.chartInstance) {
+            console.error('❌ CRITICAL: Chart instance is null or undefined');
+            console.log('🔄 Attempting to reinitialize chart...');
+            
+            try {
+                const chartContainer = document.getElementById('market-chart');
+                if (chartContainer) {
+                    this.chartInstance = echarts.init(chartContainer);
+                    console.log('✅ Chart instance reinitialized successfully');
+                } else {
+                    console.error('❌ Chart container element not found');
+                    return;
+                }
+            } catch (error) {
+                console.error('❌ Failed to reinitialize chart:', error);
+                return;
+            }
+        }
+        
+        // Additional health check
+        try {
+            // Test if the chart instance is responsive
+            this.chartInstance.getWidth();
+        } catch (error) {
+            console.error('❌ Chart instance appears corrupted, reinitializing...');
+            try {
+                const chartContainer = document.getElementById('market-chart');
+                if (chartContainer) {
+                    this.chartInstance.dispose();
+                    this.chartInstance = echarts.init(chartContainer);
+                    console.log('✅ Chart instance reinitialized after corruption');
+                }
+            } catch (reinitError) {
+                console.error('❌ Failed to recover from chart corruption:', reinitError);
+                return;
+            }
+        }
+        
         // Check plot mode selection
         const plotMode = document.getElementById('plot-mode').value;
         
@@ -1003,10 +1042,29 @@ class GlobalMarketTracker {
                         const timeLabel = `${hourNum.toString().padStart(2,'0')}:${minuteNum.toString().padStart(2,'0')}`;
                         
                         // For percentage-based candlesticks, data is already in percentage format
-                        const ohlc = [point.open, point.close, point.low, point.high];
+                        // CRITICAL: Ensure all values are valid numbers before creating OHLC array
+                        const open = parseFloat(point.open);
+                        const close = parseFloat(point.close);
+                        const low = parseFloat(point.low);
+                        const high = parseFloat(point.high);
+                        
+                        // Additional validation: ensure parsed values are valid numbers
+                        if (isNaN(open) || isNaN(close) || isNaN(low) || isNaN(high)) {
+                            console.warn(`⚠️ Skipping point with invalid OHLC values: O=${point.open} C=${point.close} L=${point.low} H=${point.high}`);
+                            return; // Skip this point
+                        }
+                        
+                        // ECharts candlestick expects [open, close, low, high] format
+                        const ohlc = [open, close, low, high];
+                        
+                        // Double-check the OHLC array before proceeding
+                        if (ohlc.some(val => val === null || val === undefined || isNaN(val))) {
+                            console.warn(`⚠️ Skipping point with null/NaN in OHLC array: [${ohlc.join(', ')}]`);
+                            return; // Skip this point
+                        }
                         
                         // Add all OHLC values to allValues for y-axis scaling
-                        allValues.push(point.open, point.close, point.low, point.high);
+                        allValues.push(open, close, low, high);
                         
                         // Store valid data point with its time label
                         rawCandlestickData.push({
@@ -1030,17 +1088,48 @@ class GlobalMarketTracker {
                     candlestickXAxis.push(item.timeLabel);
                 });
                 
+                // CIRCUIT BREAKER: Final validation of candlestick data before proceeding
+                const finalValidation = candlestickData.every(ohlc => {
+                    return Array.isArray(ohlc) && 
+                           ohlc.length === 4 && 
+                           ohlc.every(val => typeof val === 'number' && !isNaN(val) && isFinite(val));
+                });
+                
+                if (!finalValidation) {
+                    console.error(`❌ CIRCUIT BREAKER: Final validation failed for candlestick data`);
+                    console.error(`Invalid data detected:`, candlestickData.filter(ohlc => 
+                        !Array.isArray(ohlc) || 
+                        ohlc.length !== 4 || 
+                        !ohlc.every(val => typeof val === 'number' && !isNaN(val) && isFinite(val))
+                    ));
+                    
+                    // Don't create candlestick series if data is invalid
+                    console.warn(`⚠️ Skipping candlestick series for ${symbol} due to invalid data`);
+                    return; // Skip this symbol entirely
+                }
+                
                 // Count actual data points (all should be valid since we filtered nulls)
                 const validDataCount = candlestickData.length;
                 console.log(`🕯️ FIXED: Dense candlestick data for ${symbol}: ${validDataCount} valid data points (no nulls), from ${points.length} input points`);
                 console.log(`🔍 Sample dense candlestick data:`, candlestickData.slice(0, 3));
                 console.log(`🔍 Sample X-axis labels:`, candlestickXAxis.slice(0, 3));
                 
+                // CRITICAL FIX: Ensure arrays are exactly the same length
+                if (candlestickData.length !== candlestickXAxis.length) {
+                    console.error(`❌ ARRAY MISMATCH: candlestickData.length (${candlestickData.length}) !== candlestickXAxis.length (${candlestickXAxis.length})`);
+                    // Force alignment - this might be the source of ECharts errors
+                    const minLength = Math.min(candlestickData.length, candlestickXAxis.length);
+                    candlestickData.length = minLength;
+                    candlestickXAxis.length = minLength;
+                    console.log(`🔧 FORCED ALIGNMENT: Both arrays now have length ${minLength}`);
+                }
+                
                 if (validDataCount === 0) {
                     console.warn(`⚠️ No valid candlestick data for ${symbol} - all market closed or null OHLC values`);
                 } else {
                     // Use the candlestick-specific x-axis data (dense, no gaps)
                     window.candlestickXAxisData = candlestickXAxis;
+                    console.log(`✅ Set global candlestickXAxisData with ${candlestickXAxis.length} entries`);
                     
                     // Enhanced candlestick series with market-specific colors
                     console.log(`🎨 Getting colors for market: ${symbolInfo?.market || 'Default'}`);
@@ -1511,12 +1600,155 @@ class GlobalMarketTracker {
                 }])
         };
         
+        // CRITICAL VALIDATION: Check for data integrity before setting option
+        console.log('🔍 PRE-SETOPTION VALIDATION (Combined Chart):');
+        let hasValidationErrors = false;
+        
+        if (option.series && option.series.length > 0) {
+            option.series.forEach((s, i) => {
+                console.log(`📊 Validating series ${i}: ${s.name} (${s.type})`);
+                
+                if (s.type === 'candlestick') {
+                    // COMPREHENSIVE CANDLESTICK VALIDATION
+                    console.log(`🕯️ Candlestick data validation for series ${i}:`, {
+                        dataLength: s.data?.length,
+                        dataType: typeof s.data,
+                        isArray: Array.isArray(s.data),
+                        sample: s.data?.slice(0, 2)
+                    });
+                    
+                    if (!Array.isArray(s.data)) {
+                        console.error(`❌ CRITICAL: Candlestick series ${i} data is not an array!`);
+                        hasValidationErrors = true;
+                    } else {
+                        // Check each OHLC array
+                        const nullOrInvalidCount = s.data.filter(item => {
+                            if (!Array.isArray(item)) {
+                                console.error(`❌ CRITICAL: Candlestick data item is not an array:`, item);
+                                return true;
+                            }
+                            if (item.length !== 4) {
+                                console.error(`❌ CRITICAL: Candlestick data item does not have 4 values (OHLC):`, item);
+                                return true;
+                            }
+                            if (item.some(val => val === null || val === undefined || isNaN(val))) {
+                                console.error(`❌ CRITICAL: Candlestick data item contains null/undefined/NaN:`, item);
+                                return true;
+                            }
+                            return false;
+                        }).length;
+                        
+                        if (nullOrInvalidCount > 0) {
+                            console.error(`❌ FOUND ${nullOrInvalidCount} INVALID CANDLESTICK DATA ITEMS`);
+                            hasValidationErrors = true;
+                            
+                            // EMERGENCY FIX: Filter out invalid items
+                            console.log('🚑 EMERGENCY: Filtering invalid candlestick data...');
+                            s.data = s.data.filter(item => {
+                                return Array.isArray(item) && 
+                                       item.length === 4 && 
+                                       !item.some(val => val === null || val === undefined || isNaN(val));
+                            });
+                            console.log(`✅ EMERGENCY FIX: Filtered to ${s.data.length} valid candlestick items`);
+                            hasValidationErrors = false; // We fixed it
+                        } else {
+                            console.log(`✅ All ${s.data.length} candlestick data items are valid`);
+                        }
+                    }
+                } else if (s.data) {
+                    // Validate other series types
+                    const nullCount = s.data.filter(d => d === null || d === undefined).length;
+                    if (nullCount > 0) {
+                        console.log(`ℹ️ Series ${i} has ${nullCount} null values (normal for line charts with gaps)`);
+                    }
+                }
+            });
+        }
+        
+        // Check X-axis data alignment for candlestick
+        if (chartType === 'candlestick' && option.series.length > 0) {
+            const candlestickSeries = option.series.find(s => s.type === 'candlestick');
+            const xAxisLength = option.xAxis.data?.length;
+            const seriesLength = candlestickSeries?.data?.length;
+            
+            console.log(`🔍 X-AXIS ALIGNMENT CHECK:`, {
+                xAxisLength: xAxisLength,
+                candlestickDataLength: seriesLength,
+                aligned: xAxisLength === seriesLength
+            });
+            
+            if (xAxisLength !== seriesLength) {
+                console.warn(`⚠️ X-axis/data length mismatch: xAxis(${xAxisLength}) vs candlestick(${seriesLength})`);
+                // This is actually OK for candlestick - we use dense arrays now
+            }
+        }
+        
+        if (hasValidationErrors) {
+            console.error('❌ VALIDATION FAILED - Cannot set chart option with invalid data');
+            // Show error to user
+            if (this.chartInstance) {
+                this.chartInstance.showLoading({
+                    text: 'Chart data validation failed',
+                    color: '#c23531',
+                    textColor: '#c23531',
+                    maskColor: 'rgba(255, 255, 255, 0.8)'
+                });
+            }
+            return; // Don't proceed with setOption
+        }
+        
+        console.log('✅ PRE-SETOPTION VALIDATION PASSED');
+        
         // Clear and re-initialize chart for candlestick mode to ensure proper rendering
         if (chartType === 'candlestick') {
+            console.log('🔄 Clearing chart for candlestick mode...');
             this.chartInstance.clear();
         }
         
-        this.chartInstance.setOption(option, true);
+        // SAFE SETOPTION WITH ERROR HANDLING
+        try {
+            console.log('🎯 Setting chart option...');
+            this.chartInstance.setOption(option, true);
+            console.log('✅ Chart option set successfully');
+            
+            // Hide any existing loading indicators
+            this.chartInstance.hideLoading();
+            
+        } catch (error) {
+            console.error('❌ CRITICAL ERROR in setOption:', error);
+            console.error('Error stack:', error.stack);
+            console.error('Option that caused error:', JSON.stringify(option, null, 2));
+            
+            // Show error to user
+            if (this.chartInstance) {
+                this.chartInstance.showLoading({
+                    text: `Chart rendering failed: ${error.message}`,
+                    color: '#c23531',
+                    textColor: '#c23531',
+                    maskColor: 'rgba(255, 255, 255, 0.8)'
+                });
+            }
+            
+            // Try to recover with a basic chart
+            console.log('🚑 ATTEMPTING EMERGENCY RECOVERY...');
+            try {
+                const emergencyOption = {
+                    title: { text: 'Chart Recovery Mode', left: 'center' },
+                    xAxis: { type: 'category', data: ['Recovery'] },
+                    yAxis: { type: 'value' },
+                    series: [{
+                        type: 'line',
+                        data: [0],
+                        name: 'Recovery Mode'
+                    }]
+                };
+                this.chartInstance.clear();
+                this.chartInstance.setOption(emergencyOption, true);
+                console.log('✅ Emergency recovery successful');
+            } catch (recoveryError) {
+                console.error('❌ Emergency recovery also failed:', recoveryError);
+            }
+        }
     }
     
     updateIndividualMarketCharts(data) {
@@ -1813,12 +2045,137 @@ class GlobalMarketTracker {
             series: allSeries
         };
         
+        // CRITICAL VALIDATION: Check for data integrity before setting option
+        console.log('🔍 PRE-SETOPTION VALIDATION (Individual Markets):');
+        let hasValidationErrors = false;
+        
+        if (option.series && option.series.length > 0) {
+            option.series.forEach((s, i) => {
+                console.log(`📊 Validating series ${i}: ${s.name} (${s.type})`);
+                
+                if (s.type === 'candlestick') {
+                    // COMPREHENSIVE CANDLESTICK VALIDATION
+                    console.log(`🕯️ Candlestick data validation for series ${i}:`, {
+                        dataLength: s.data?.length,
+                        dataType: typeof s.data,
+                        isArray: Array.isArray(s.data),
+                        sample: s.data?.slice(0, 2)
+                    });
+                    
+                    if (!Array.isArray(s.data)) {
+                        console.error(`❌ CRITICAL: Candlestick series ${i} data is not an array!`);
+                        hasValidationErrors = true;
+                    } else {
+                        // Check each OHLC array
+                        const nullOrInvalidCount = s.data.filter(item => {
+                            if (!Array.isArray(item)) {
+                                console.error(`❌ CRITICAL: Candlestick data item is not an array:`, item);
+                                return true;
+                            }
+                            if (item.length !== 4) {
+                                console.error(`❌ CRITICAL: Candlestick data item does not have 4 values (OHLC):`, item);
+                                return true;
+                            }
+                            if (item.some(val => val === null || val === undefined || isNaN(val))) {
+                                console.error(`❌ CRITICAL: Candlestick data item contains null/undefined/NaN:`, item);
+                                return true;
+                            }
+                            return false;
+                        }).length;
+                        
+                        if (nullOrInvalidCount > 0) {
+                            console.error(`❌ FOUND ${nullOrInvalidCount} INVALID CANDLESTICK DATA ITEMS`);
+                            hasValidationErrors = true;
+                            
+                            // EMERGENCY FIX: Filter out invalid items
+                            console.log('🚑 EMERGENCY: Filtering invalid candlestick data...');
+                            s.data = s.data.filter(item => {
+                                return Array.isArray(item) && 
+                                       item.length === 4 && 
+                                       !item.some(val => val === null || val === undefined || isNaN(val));
+                            });
+                            console.log(`✅ EMERGENCY FIX: Filtered to ${s.data.length} valid candlestick items`);
+                            hasValidationErrors = false; // We fixed it
+                        } else {
+                            console.log(`✅ All ${s.data.length} candlestick data items are valid`);
+                        }
+                    }
+                } else if (s.data) {
+                    // Validate other series types
+                    const nullCount = s.data.filter(d => d === null || d === undefined).length;
+                    if (nullCount > 0) {
+                        console.log(`ℹ️ Series ${i} has ${nullCount} null values (normal for line charts with gaps)`);
+                    }
+                }
+            });
+        }
+        
+        if (hasValidationErrors) {
+            console.error('❌ VALIDATION FAILED - Cannot set chart option with invalid data');
+            // Show error to user
+            if (this.chartInstance) {
+                this.chartInstance.showLoading({
+                    text: 'Chart data validation failed',
+                    color: '#c23531',
+                    textColor: '#c23531',
+                    maskColor: 'rgba(255, 255, 255, 0.8)'
+                });
+            }
+            return; // Don't proceed with setOption
+        }
+        
+        console.log('✅ PRE-SETOPTION VALIDATION PASSED');
+        
         // Clear and re-initialize chart for candlestick mode to ensure proper rendering
         if (chartType === 'candlestick') {
+            console.log('🔄 Clearing chart for candlestick mode...');
             this.chartInstance.clear();
         }
         
-        this.chartInstance.setOption(option, true);
+        // SAFE SETOPTION WITH ERROR HANDLING
+        try {
+            console.log('🎯 Setting chart option...');
+            this.chartInstance.setOption(option, true);
+            console.log('✅ Chart option set successfully');
+            
+            // Hide any existing loading indicators
+            this.chartInstance.hideLoading();
+            
+        } catch (error) {
+            console.error('❌ CRITICAL ERROR in setOption:', error);
+            console.error('Error stack:', error.stack);
+            console.error('Option that caused error:', JSON.stringify(option, null, 2));
+            
+            // Show error to user
+            if (this.chartInstance) {
+                this.chartInstance.showLoading({
+                    text: `Chart rendering failed: ${error.message}`,
+                    color: '#c23531',
+                    textColor: '#c23531',
+                    maskColor: 'rgba(255, 255, 255, 0.8)'
+                });
+            }
+            
+            // Try to recover with a basic chart
+            console.log('🚑 ATTEMPTING EMERGENCY RECOVERY...');
+            try {
+                const emergencyOption = {
+                    title: { text: 'Chart Recovery Mode - Individual Markets', left: 'center' },
+                    xAxis: { type: 'category', data: ['Recovery'] },
+                    yAxis: { type: 'value' },
+                    series: [{
+                        type: 'line',
+                        data: [0],
+                        name: 'Recovery Mode'
+                    }]
+                };
+                this.chartInstance.clear();
+                this.chartInstance.setOption(emergencyOption, true);
+                console.log('✅ Emergency recovery successful');
+            } catch (recoveryError) {
+                console.error('❌ Emergency recovery also failed:', recoveryError);
+            }
+        }
     }
 
     getMarketColors(market) {
