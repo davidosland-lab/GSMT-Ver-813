@@ -409,8 +409,10 @@
                 this.showStatus(`Fetching data for ${symbol}...`);
                 
                 try {
+                    // Get the base URL dynamically for cross-origin compatibility
+                    const baseUrl = window.location.origin;
                     // Fetch candlestick data from our API with dynamic interval
-                    const response = await fetch(`/api/candlestick-data/${symbol}?period=${period}&interval=${this.currentInterval}`);
+                    const response = await fetch(`${baseUrl}/api/candlestick-data/${symbol}?period=${period}&interval=${this.currentInterval}`);
                     
                     if (!response.ok) {
                         throw new Error(`API Error: ${response.status} - ${await response.text()}`);
