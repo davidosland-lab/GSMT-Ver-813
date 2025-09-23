@@ -8310,6 +8310,7 @@ except ImportError as e:
 @app.get("/api/phase4-gnn-prediction/{symbol}")
 async def get_phase4_gnn_prediction(
     symbol: str,
+    timeframe: str = Query("5d", description="Prediction timeframe: 1h, 1d, or 5d"),
     related_symbols: List[str] = Query(default=[], description="Related symbols for graph analysis"),
     max_relationships: int = Query(15, description="Maximum number of related symbols to analyze", ge=1, le=50),
     include_graph_analysis: bool = Query(True, description="Include detailed graph relationship analysis")
@@ -8368,6 +8369,7 @@ async def get_phase4_gnn_prediction(
         # Generate GNN prediction
         gnn_result = await gnn_predictor.generate_gnn_enhanced_prediction(
             symbol=symbol,
+            timeframe=timeframe,
             related_symbols=related_symbols,
             include_graph_analysis=include_graph_analysis
         )
@@ -8378,6 +8380,7 @@ async def get_phase4_gnn_prediction(
         response = {
             "prediction_type": "PHASE4_GNN_MARKET_RELATIONSHIP_PREDICTION",
             "symbol": gnn_result.symbol,
+            "timeframe": timeframe,
             "timestamp": gnn_result.prediction_timestamp.isoformat(),
             
             # Core prediction results

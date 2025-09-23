@@ -930,9 +930,49 @@ class GNNEnhancedPredictor:
         
         self.logger.info("GNN Enhanced Predictor initialized")
     
+    def _get_timeframe_config(self, timeframe: str) -> dict:
+        """
+        Get configuration parameters based on timeframe.
+        
+        Args:
+            timeframe: Prediction timeframe (1h, 1d, 5d)
+            
+        Returns:
+            Dictionary with timeframe-specific configuration
+        """
+        config_map = {
+            '1h': {
+                'prediction_horizon': 1,  # 1 hour ahead
+                'data_window': '1d',      # Use 1 day of data
+                'update_frequency': 'high',
+                'volatility_weight': 1.2,  # Higher weight for short-term volatility
+                'relationship_depth': 2,   # Fewer relationship layers for speed
+                'confidence_threshold': 0.6
+            },
+            '1d': {
+                'prediction_horizon': 24, # 1 day ahead  
+                'data_window': '5d',      # Use 5 days of data
+                'update_frequency': 'medium',
+                'volatility_weight': 1.0,  # Standard volatility weight
+                'relationship_depth': 3,   # Standard relationship depth
+                'confidence_threshold': 0.7
+            },
+            '5d': {
+                'prediction_horizon': 120, # 5 days ahead (hours)
+                'data_window': '30d',      # Use 30 days of data
+                'update_frequency': 'low',
+                'volatility_weight': 0.8,  # Lower weight for longer-term trends
+                'relationship_depth': 4,   # Deeper analysis for long-term
+                'confidence_threshold': 0.8
+            }
+        }
+        
+        return config_map.get(timeframe, config_map['5d'])  # Default to 5d
+    
     async def generate_gnn_enhanced_prediction(
         self,
         symbol: str,
+        timeframe: str = "5d",
         related_symbols: List[str] = None,
         include_graph_analysis: bool = True
     ) -> GNNPredictionResult:
@@ -941,6 +981,7 @@ class GNNEnhancedPredictor:
         
         Args:
             symbol: Target symbol for prediction
+            timeframe: Prediction timeframe (1h, 1d, 5d)
             related_symbols: Related symbols to include in graph analysis
             include_graph_analysis: Whether to include detailed graph analysis
         
@@ -948,7 +989,10 @@ class GNNEnhancedPredictor:
             GNNPredictionResult with market relationship insights
         """
         try:
-            self.logger.info(f"Generating GNN-enhanced prediction for {symbol}")
+            self.logger.info(f"Generating GNN-enhanced prediction for {symbol} (timeframe: {timeframe})")
+            
+            # Configure prediction based on timeframe
+            prediction_config = self._get_timeframe_config(timeframe)
             
             # Build graph for prediction
             await self.gnn.build_graph_for_prediction(symbol, related_symbols)
@@ -960,6 +1004,7 @@ class GNNEnhancedPredictor:
             self.prediction_history.append({
                 'timestamp': result.prediction_timestamp,
                 'symbol': symbol,
+                'timeframe': timeframe,
                 'confidence': result.confidence_score,
                 'node_importance': result.node_importance,
                 'graph_centrality': result.graph_centrality
@@ -970,7 +1015,7 @@ class GNNEnhancedPredictor:
                 self.prediction_history = self.prediction_history[-100:]
             
             self.logger.info(
-                f"GNN prediction completed for {symbol}: "
+                f"GNN prediction completed for {symbol} ({timeframe}): "
                 f"importance={result.node_importance:.3f}, "
                 f"centrality={result.graph_centrality:.3f}, "
                 f"relationships={len(result.key_relationships)}"

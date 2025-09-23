@@ -575,10 +575,16 @@
                             90 Days
                         </button>
                     </div>
-                    <!-- Phase 4 GNN Prediction (no timeframes needed) -->
+                    <!-- Phase 4 GNN Prediction with multiple timeframes -->
                     <div id="phase4-timeframes" style="display: none;">
+                        <button class="prediction-btn" onclick="generatePrediction('1h')" data-timeframe="1h">
+                            ⚡ 1 Hour
+                        </button>
+                        <button class="prediction-btn" onclick="generatePrediction('1d')" data-timeframe="1d">
+                            📈 1 Day
+                        </button>
                         <button class="prediction-btn" onclick="generatePrediction('5d')" data-timeframe="5d">
-                            🧠 GNN Market Analysis (5 Days)
+                            🧠 5 Days
                         </button>
                         <span style="color: #64748b; font-size: 0.85em; margin-left: 10px;">
                             Graph Neural Networks analyze market relationships
@@ -1297,7 +1303,7 @@
                 let apiEndpoint;
                 const cacheBuster = `&_t=${Date.now()}`; // Force fresh data
                 if (selectedModel === 'phase4-gnn') {
-                    apiEndpoint = `${API_BASE_URL}/api/phase4-gnn-prediction/${currentSymbol}?_t=${Date.now()}`;
+                    apiEndpoint = `${API_BASE_URL}/api/phase4-gnn-prediction/${currentSymbol}?timeframe=${timeframe}&_t=${Date.now()}`;
                 } else {
                     // Default to Phase 3 Extended
                     apiEndpoint = `${API_BASE_URL}/api/extended-phase3-prediction/${currentSymbol}?timeframe=${timeframe}&enable_advanced_features=true&enable_rl_optimization=true&enable_risk_management=true&include_all_domains=true${cacheBuster}`;
