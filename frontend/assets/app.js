@@ -175,10 +175,11 @@ class GlobalMarketTracker {
     }
 
     initializeChart() {
-        console.log('📊 Initializing chart...');
+        console.log('📊 Initializing hybrid chart system...');
         const chartElement = document.getElementById('main-chart');
         console.log('📊 Chart element found:', !!chartElement, chartElement);
-        console.log('📊 ECharts available:', typeof echarts !== 'undefined', typeof echarts);
+        console.log('📊 ECharts available:', typeof echarts !== 'undefined');
+        console.log('📊 KLineChart available:', typeof klinecharts !== 'undefined');
         
         if (!chartElement) {
             console.error('❌ Chart element #main-chart not found!');
@@ -190,13 +191,22 @@ class GlobalMarketTracker {
             return;
         }
         
+        if (typeof klinecharts === 'undefined') {
+            console.error('❌ KLineChart library not loaded!');
+            return;
+        }
+        
         try {
+            // Initialize ECharts for line/percentage charts
             this.chartInstance = echarts.init(chartElement);
-            console.log('📊 Chart instance created:', !!this.chartInstance);
+            console.log('📊 ECharts instance created:', !!this.chartInstance);
+            
+            // KLineChart will be initialized on-demand when candlestick is selected
+            this.klineChartInstance = null;
             
             // Set initial empty state
             this.updateChart([]);
-            console.log('📊 Chart initialization complete');
+            console.log('📊 Hybrid chart initialization complete');
         } catch (error) {
             console.error('❌ Chart initialization failed:', error);
         }
@@ -546,16 +556,152 @@ class GlobalMarketTracker {
     updateChart(data) {
         console.log('📊 updateChart called with data:', data);
         const noDataMessage = document.getElementById('no-data-message');
+        const chartType = document.getElementById('chart-type').value;
         
         if (!data || !data.data || Object.keys(data.data).length === 0) {
             console.log('📊 No data available, showing no-data message');
             if (noDataMessage) noDataMessage.classList.remove('hidden');
             if (this.chartInstance) this.chartInstance.clear();
+            if (this.klineChartInstance) this.klineChartInstance.dispose();
             return;
         }
         
         noDataMessage.classList.add('hidden');
         
+        // Route to appropriate chart library based on chart type
+        if (chartType === 'candlestick') {
+            console.log('📊 Rendering candlestick charts with KLineChart...');
+            this.renderKLineCharts(data);
+        } else {
+            console.log('📊 Rendering line/percentage charts with ECharts...');
+            this.renderECharts(data);
+        }
+    }
+    
+    renderKLineCharts(data) {
+        console.log('🕯️ Setting up KLineChart for candlestick rendering...');
+        
+        // Clear any existing ECharts instance
+        if (this.chartInstance) {
+            this.chartInstance.clear();
+        }
+        
+        // Get chart container
+        const chartElement = document.getElementById('main-chart');
+        
+        // Dispose existing KLineChart if it exists
+        if (this.klineChartInstance) {
+            this.klineChartInstance.dispose();
+        }
+        
+        try {
+            // Initialize KLineChart
+            this.klineChartInstance = klinecharts.init(chartElement);
+            console.log('🕯️ KLineChart instance created:', !!this.klineChartInstance);
+            
+            // Convert our data format to KLineChart format
+            const klineData = this.convertToKLineData(data);
+            console.log('🕯️ Converted data for KLineChart:', klineData.length, 'data points');
+            
+            // Apply the data to KLineChart
+            this.klineChartInstance.applyNewData(klineData);
+            
+            // Configure the chart
+            this.configureKLineChart();
+            
+            console.log('🕯️ KLineChart rendering complete');
+            
+        } catch (error) {
+            console.error('❌ KLineChart rendering failed:', error);
+            // Fallback to ECharts if KLineChart fails
+            console.log('🔄 Falling back to ECharts for candlestick...');
+            this.renderECharts(data);
+        }
+    }
+    
+    convertToKLineData(data) {
+        console.log('🔄 Converting data to KLineChart format...');
+        const klineData = [];
+        
+        // Use the first symbol's data for now (we can enhance this later for multi-symbol)
+        const firstSymbol = Object.keys(data.data)[0];
+        const points = data.data[firstSymbol];
+        const symbolInfo = data.metadata[firstSymbol];
+        
+        console.log(`🔄 Processing ${points.length} points for symbol ${firstSymbol}`);
+        
+        points.forEach((point, index) => {
+            // Only include market open periods with complete OHLC data
+            if (point.market_open && point.open !== null && point.high !== null && 
+                point.low !== null && point.close !== null) {
+                
+                // KLineChart expects: { timestamp, open, high, low, close, volume }
+                const klinePoint = {
+                    timestamp: new Date(point.timestamp).getTime(),
+                    open: point.open,
+                    high: point.high,
+                    low: point.low,
+                    close: point.close,
+                    volume: point.volume || 0
+                };
+                
+                klineData.push(klinePoint);
+                
+                if (index < 5) {
+                    console.log(`🔄 Sample KLine point ${index}:`, klinePoint);
+                }
+            }
+        });
+        
+        console.log(`🔄 Converted ${klineData.length} valid points from ${points.length} total points`);
+        return klineData;
+    }
+    
+    configureKLineChart() {
+        if (!this.klineChartInstance) return;
+        
+        console.log('⚙️ Configuring KLineChart styles and options...');
+        
+        // Set basic chart options
+        this.klineChartInstance.setStyles({
+            grid: {
+                horizontal: {
+                    color: '#e0e0e0',
+                    size: 1
+                },
+                vertical: {
+                    color: '#e0e0e0', 
+                    size: 1
+                }
+            },
+            candle: {
+                type: 'candle_solid',
+                bar: {
+                    upColor: '#26a69a',    // Bull color (green)
+                    downColor: '#ef5350',  // Bear color (red)
+                    noChangeColor: '#888888'
+                },
+                tooltip: {
+                    showRule: 'always',
+                    showType: 'standard'
+                }
+            },
+            xAxis: {
+                axisLine: {
+                    color: '#888888'
+                }
+            },
+            yAxis: {
+                axisLine: {
+                    color: '#888888'
+                }
+            }
+        });
+        
+        console.log('⚙️ KLineChart configuration complete');
+    }
+    
+    renderECharts(data) {
         // Check plot mode selection
         const plotMode = document.getElementById('plot-mode').value;
         
