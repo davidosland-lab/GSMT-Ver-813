@@ -168,6 +168,69 @@
             </div>
         </div>
 
+        <!-- Custom Code Section -->
+        <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">
+                <i class="fas fa-code mr-2"></i>Custom Analysis Code
+            </h2>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Code Editor -->
+                <div>
+                    <label for="custom-code" class="block text-sm font-medium text-gray-700 mb-2">
+                        JavaScript Code (Access current data via 'window.currentStockData')
+                    </label>
+                    <textarea 
+                        id="custom-code" 
+                        class="w-full h-64 border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono bg-gray-50"
+                        placeholder="// Example: Calculate custom indicator
+// const data = window.currentStockData;
+// if (data && data.data) {
+//     const closes = data.data.map(d => d.close);
+//     const sma20 = calculateSMA(closes, 20);
+//     console.log('SMA(20):', sma20[sma20.length - 1]);
+// }
+//
+// function calculateSMA(data, period) {
+//     const result = [];
+//     for (let i = period - 1; i < data.length; i++) {
+//         const sum = data.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0);
+//         result.push(sum / period);
+//     }
+//     return result;
+// }"
+                    ></textarea>
+                    <div class="flex gap-2 mt-2">
+                        <button id="run-custom-code" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
+                            <i class="fas fa-play mr-2"></i>Run Code
+                        </button>
+                        <button id="clear-custom-code" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors">
+                            <i class="fas fa-trash mr-2"></i>Clear
+                        </button>
+                        <button id="save-custom-code" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                            <i class="fas fa-save mr-2"></i>Save
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Code Output -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Output</label>
+                    <div id="custom-output" class="w-full h-64 border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono bg-black text-green-400 overflow-y-auto">
+                        <div class="text-gray-400">// Code output will appear here...</div>
+                    </div>
+                    <div class="flex gap-2 mt-2">
+                        <button id="clear-output" class="bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700 transition-colors">
+                            <i class="fas fa-broom mr-1"></i>Clear Output
+                        </button>
+                        <div class="text-xs text-gray-600 flex items-center">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Use console.log() to see output here
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Charts Grid -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             
@@ -225,6 +288,7 @@
                 this.rsiChart = null;
                 this.macdChart = null;
                 this.currentData = null;
+                this.currentInterval = '1d'; // Default interval
                 
                 this.initializeCharts();
                 this.bindEvents();
@@ -252,6 +316,32 @@
                 document.getElementById('symbol-select').addEventListener('change', () => {
                     this.performAnalysis();
                 });
+                
+                // Auto-adjust interval when period changes
+                document.getElementById('time-period').addEventListener('change', (e) => {
+                    this.adjustIntervalForPeriod(e.target.value);
+                    this.performAnalysis();
+                });
+                
+                // Custom code functionality
+                document.getElementById('run-custom-code').addEventListener('click', () => {
+                    this.runCustomCode();
+                });
+                
+                document.getElementById('clear-custom-code').addEventListener('click', () => {
+                    document.getElementById('custom-code').value = '';
+                });
+                
+                document.getElementById('save-custom-code').addEventListener('click', () => {
+                    this.saveCustomCode();
+                });
+                
+                document.getElementById('clear-output').addEventListener('click', () => {
+                    document.getElementById('custom-output').innerHTML = '<div class="text-gray-400">// Code output will appear here...</div>';
+                });
+                
+                // Load saved custom code
+                this.loadSavedCustomCode();
                 
                 // Auto-analyze default symbol on page load
                 setTimeout(() => {
@@ -293,17 +383,34 @@
                 this.macdChart.setOption(emptyOption);
             }
 
+            adjustIntervalForPeriod(period) {
+                // Automatically set interval to 5 minutes when 1 day is selected
+                if (period === '1d') {
+                    console.log('📅 1 day selected - setting interval to 5 minutes');
+                    // For 1 day period, use 5-minute intervals for more granular data
+                    this.currentInterval = '5m';
+                } else {
+                    // For longer periods, use daily intervals
+                    this.currentInterval = '1d';
+                }
+                
+                console.log(`⏱️ Interval adjusted to: ${this.currentInterval} for period: ${period}`);
+            }
+
             async performAnalysis() {
                 const symbol = document.getElementById('symbol-select').value;
                 const period = document.getElementById('time-period').value;
                 
-                console.log(`🔍 Starting technical analysis for ${symbol} (${period})`);
+                // Adjust interval based on period
+                this.adjustIntervalForPeriod(period);
+                
+                console.log(`🔍 Starting technical analysis for ${symbol} (${period}, ${this.currentInterval})`);
                 
                 this.showStatus(`Fetching data for ${symbol}...`);
                 
                 try {
-                    // Fetch candlestick data from our API
-                    const response = await fetch(`/api/candlestick-data/${symbol}?period=${period}&interval=1d`);
+                    // Fetch candlestick data from our API with dynamic interval
+                    const response = await fetch(`/api/candlestick-data/${symbol}?period=${period}&interval=${this.currentInterval}`);
                     
                     if (!response.ok) {
                         throw new Error(`API Error: ${response.status} - ${await response.text()}`);
@@ -313,6 +420,9 @@
                     console.log(`✅ Received data for ${symbol}:`, data);
                     
                     this.currentData = data;
+                    // Make data globally accessible for custom code
+                    window.currentStockData = data;
+                    
                     this.updateStockInfo(data);
                     this.renderCandlestickChart(data);
                     this.renderVolumeChart(data);
@@ -678,10 +788,12 @@
                 const priceDirection = priceChange >= 0 ? 'bullish' : 'bearish';
                 const priceColor = priceChange >= 0 ? 'text-green-600' : 'text-red-600';
                 
+                const intervalText = this.currentInterval === '5m' ? '(5-minute intervals)' : '(daily intervals)';
+                
                 const summaryHtml = `
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div class="p-4 bg-gray-50 rounded-lg">
-                            <h4 class="font-semibold text-gray-900 mb-2">Price Action</h4>
+                            <h4 class="font-semibold text-gray-900 mb-2">Price Action ${intervalText}</h4>
                             <p class="text-sm">
                                 Latest close: <span class="font-semibold">$${latest.close.toFixed(2)}</span><br/>
                                 Direction: <span class="font-semibold ${priceColor}">${priceDirection.toUpperCase()}</span><br/>
@@ -692,6 +804,7 @@
                             <h4 class="font-semibold text-gray-900 mb-2">Volume Analysis</h4>
                             <p class="text-sm">
                                 Latest volume: <span class="font-semibold">${(latest.volume || 0).toLocaleString()}</span><br/>
+                                Data points: <span class="font-semibold text-blue-600">${data.data.length}</span><br/>
                                 Status: <span class="font-semibold text-blue-600">NORMAL</span>
                             </p>
                         </div>
@@ -702,6 +815,7 @@
                         </h4>
                         <p class="text-sm text-gray-700">
                             Based on the candlestick patterns and recent price action, the stock shows ${priceDirection} momentum. 
+                            ${this.currentInterval === '5m' ? 'Using 5-minute intervals for detailed intraday analysis.' : 'Using daily intervals for broader trend analysis.'}
                             Monitor key support and resistance levels for potential breakouts or reversals.
                         </p>
                     </div>
@@ -709,6 +823,96 @@
                 
                 analysisContent.innerHTML = summaryHtml;
                 summarySection.classList.remove('hidden');
+            }
+
+            runCustomCode() {
+                const code = document.getElementById('custom-code').value.trim();
+                const outputDiv = document.getElementById('custom-output');
+                
+                if (!code) {
+                    this.addToOutput('// No code to execute', 'warning');
+                    return;
+                }
+
+                console.log('🔧 Running custom analysis code...');
+                this.addToOutput('// Running custom code...', 'info');
+                
+                // Override console.log to capture output
+                const originalConsoleLog = console.log;
+                const capturedLogs = [];
+                
+                console.log = function(...args) {
+                    capturedLogs.push(args.map(arg => 
+                        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+                    ).join(' '));
+                    originalConsoleLog.apply(console, arguments);
+                };
+
+                try {
+                    // Execute the custom code
+                    const result = eval(code);
+                    
+                    // Show captured console logs
+                    if (capturedLogs.length > 0) {
+                        capturedLogs.forEach(log => this.addToOutput(log, 'output'));
+                    }
+                    
+                    // Show result if it's not undefined
+                    if (result !== undefined) {
+                        this.addToOutput(`Result: ${typeof result === 'object' ? JSON.stringify(result, null, 2) : result}`, 'result');
+                    }
+                    
+                    this.addToOutput('// Code executed successfully', 'success');
+                    
+                } catch (error) {
+                    this.addToOutput(`Error: ${error.message}`, 'error');
+                    console.error('Custom code execution error:', error);
+                } finally {
+                    // Restore original console.log
+                    console.log = originalConsoleLog;
+                }
+            }
+
+            addToOutput(message, type = 'output') {
+                const outputDiv = document.getElementById('custom-output');
+                const colors = {
+                    'info': 'text-blue-400',
+                    'success': 'text-green-400', 
+                    'warning': 'text-yellow-400',
+                    'error': 'text-red-400',
+                    'output': 'text-white',
+                    'result': 'text-cyan-400'
+                };
+                
+                const colorClass = colors[type] || 'text-white';
+                const timestamp = new Date().toLocaleTimeString();
+                
+                if (outputDiv.innerHTML.includes('// Code output will appear here...')) {
+                    outputDiv.innerHTML = '';
+                }
+                
+                const line = document.createElement('div');
+                line.className = `${colorClass} mb-1`;
+                line.innerHTML = `<span class="text-gray-500 text-xs">[${timestamp}]</span> ${message}`;
+                outputDiv.appendChild(line);
+                
+                // Auto-scroll to bottom
+                outputDiv.scrollTop = outputDiv.scrollHeight;
+            }
+
+            saveCustomCode() {
+                const code = document.getElementById('custom-code').value;
+                localStorage.setItem('technicalAnalysisCustomCode', code);
+                this.addToOutput('// Code saved to local storage', 'success');
+                console.log('💾 Custom code saved to localStorage');
+            }
+
+            loadSavedCustomCode() {
+                const savedCode = localStorage.getItem('technicalAnalysisCustomCode');
+                if (savedCode) {
+                    document.getElementById('custom-code').value = savedCode;
+                    console.log('📥 Loaded saved custom code from localStorage');
+                }
             }
         }
 
