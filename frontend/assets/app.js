@@ -580,6 +580,7 @@ class GlobalMarketTracker {
     
     renderKLineCharts(data) {
         console.log('🕯️ Setting up KLineChart for candlestick rendering...');
+        console.log('🕯️ Input data keys:', Object.keys(data.data));
         
         // Clear any existing ECharts instance
         if (this.chartInstance) {
@@ -591,16 +592,30 @@ class GlobalMarketTracker {
         
         // Dispose existing KLineChart if it exists
         if (this.klineChartInstance) {
-            this.klineChartInstance.dispose();
+            try {
+                this.klineChartInstance.dispose();
+            } catch (e) {
+                console.log('🕯️ Previous KLineChart instance cleanup (expected)');
+            }
         }
         
         try {
+            // Validate we have data
+            if (!data.data || Object.keys(data.data).length === 0) {
+                throw new Error('No data available for KLineChart rendering');
+            }
+            
             // Initialize KLineChart
             this.klineChartInstance = klinecharts.init(chartElement);
             console.log('🕯️ KLineChart instance created:', !!this.klineChartInstance);
             
             // Convert our data format to KLineChart format
             const klineData = this.convertToKLineData(data);
+            
+            if (klineData.length === 0) {
+                throw new Error('No valid candlestick data after conversion');
+            }
+            
             console.log('🕯️ Converted data for KLineChart:', klineData.length, 'data points');
             
             // Apply the data to KLineChart
@@ -609,7 +624,12 @@ class GlobalMarketTracker {
             // Configure the chart
             this.configureKLineChart();
             
-            console.log('🕯️ KLineChart rendering complete');
+            // Add chart title for current symbol
+            const firstSymbol = Object.keys(data.data)[0];
+            const symbolInfo = data.metadata[firstSymbol];
+            const title = symbolInfo?.name || firstSymbol;
+            
+            console.log(`🕯️ KLineChart rendering complete for ${title}`);
             
         } catch (error) {
             console.error('❌ KLineChart rendering failed:', error);
@@ -629,6 +649,7 @@ class GlobalMarketTracker {
         const symbolInfo = data.metadata[firstSymbol];
         
         console.log(`🔄 Processing ${points.length} points for symbol ${firstSymbol}`);
+        console.log(`🔄 Sample input data structure:`, points[0]);
         
         points.forEach((point, index) => {
             // Only include market open periods with complete OHLC data
@@ -636,13 +657,14 @@ class GlobalMarketTracker {
                 point.low !== null && point.close !== null) {
                 
                 // KLineChart expects: { timestamp, open, high, low, close, volume }
+                // Note: If data is in percentage format, we need to convert to price values
                 const klinePoint = {
                     timestamp: new Date(point.timestamp).getTime(),
-                    open: point.open,
-                    high: point.high,
-                    low: point.low,
-                    close: point.close,
-                    volume: point.volume || 0
+                    open: Number(point.open),
+                    high: Number(point.high),
+                    low: Number(point.low),
+                    close: Number(point.close),
+                    volume: Number(point.volume) || 0
                 };
                 
                 klineData.push(klinePoint);
@@ -653,7 +675,13 @@ class GlobalMarketTracker {
             }
         });
         
+        // Sort by timestamp to ensure proper order
+        klineData.sort((a, b) => a.timestamp - b.timestamp);
+        
         console.log(`🔄 Converted ${klineData.length} valid points from ${points.length} total points`);
+        console.log(`🔄 First converted point:`, klineData[0]);
+        console.log(`🔄 Last converted point:`, klineData[klineData.length - 1]);
+        
         return klineData;
     }
     
@@ -1937,8 +1965,12 @@ class GlobalMarketTracker {
     }
 
     handleChartTypeChange() {
+        const chartType = document.getElementById('chart-type').value;
+        console.log(`📊 Chart type changed to: ${chartType}`);
+        
         // Re-fetch data with the new chart type instead of just re-rendering
         if (this.selectedIndices.size > 0) {
+            console.log(`📊 Re-analyzing ${this.selectedIndices.size} indices with new chart type`);
             this.analyzeSelectedIndices();
         }
     }
