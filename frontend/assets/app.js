@@ -70,6 +70,12 @@ class GlobalMarketTracker {
             // Load suggested indices
             await this.loadSuggestedIndices();
             
+            // Load default preset for immediate visual content
+            console.log('🎯 Loading default preset for immediate visual content...');
+            setTimeout(() => {
+                this.loadPreset(['^AORD', '^AXJO', '^GSPC', '^IXIC', '^DJI']); // ASX + Major US indices
+            }, 1000); // Wait for initialization to complete
+            
             // Auto-refresh every 5 minutes
             this.startAutoRefresh();
             
@@ -376,11 +382,18 @@ class GlobalMarketTracker {
     }
 
     loadPreset(symbols) {
+        console.log('🎯 Loading preset with symbols:', symbols);
         this.selectedIndices.clear();
         symbols.forEach(symbol => this.selectedIndices.add(symbol));
         this.updateSelectedMarketsDisplay();
         this.updateAnalyzeButton();
         this.showToast(`Loaded ${symbols.length} markets`, 'success');
+        
+        // Auto-analyze after loading preset for better UX
+        console.log('🎯 Auto-analyzing preset data...');
+        setTimeout(() => {
+            this.analyzeSelectedIndices();
+        }, 500); // Small delay to let UI update
     }
 
     toggleIndex(symbol) {
