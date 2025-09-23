@@ -556,58 +556,98 @@ class GlobalMarketTracker {
     updateChart(data) {
         console.log('📊 updateChart called with data:', data);
         const noDataMessage = document.getElementById('no-data-message');
-        const chartType = document.getElementById('chart-type').value;
         
-        if (!data || !data.data || Object.keys(data.data).length === 0) {
-            console.log('📊 No data available, showing no-data message');
-            if (noDataMessage) noDataMessage.classList.remove('hidden');
-            if (this.chartInstance) this.chartInstance.clear();
-            if (this.klineChartInstance) this.klineChartInstance.dispose();
-            return;
-        }
-        
-        noDataMessage.classList.add('hidden');
-        
-        // Route to appropriate chart library based on chart type
-        if (chartType === 'candlestick') {
-            console.log('📊 Rendering candlestick charts with KLineChart...');
-            this.renderKLineCharts(data);
-        } else {
-            console.log('📊 Rendering line/percentage charts with ECharts...');
+        try {
+            const chartType = document.getElementById('chart-type').value;
+            
+            if (!data || !data.data || Object.keys(data.data).length === 0) {
+                console.log('📊 No data available, showing no-data message');
+                if (noDataMessage) noDataMessage.classList.remove('hidden');
+                this.safelyCleanupCharts();
+                return;
+            }
+            
+            if (noDataMessage) noDataMessage.classList.add('hidden');
+            
+            // SIMPLIFIED APPROACH: Use ECharts for all chart types for reliability
+            // KLineChart integration caused cascade failures, so using proven ECharts
+            console.log(`📊 Rendering ${chartType} charts with ECharts (reliable approach)...`);
             this.renderECharts(data);
+            
+        } catch (error) {
+            console.error('❌ Critical error in updateChart:', error);
+            
+            // Emergency recovery
+            this.emergencyChartRecovery(data);
+        }
+    }
+    
+    emergencyChartRecovery(data) {
+        console.log('🚨 Emergency chart recovery initiated...');
+        
+        try {
+            const noDataMessage = document.getElementById('no-data-message');
+            const chartTypeSelect = document.getElementById('chart-type');
+            
+            // Reset to safe state
+            if (chartTypeSelect) {
+                chartTypeSelect.value = 'percentage';
+            }
+            
+            // Force cleanup
+            this.safelyCleanupCharts();
+            
+            // Show error state briefly
+            if (noDataMessage) {
+                noDataMessage.classList.remove('hidden');
+            }
+            
+            // Attempt recovery with ECharts
+            setTimeout(() => {
+                console.log('🚨 Attempting emergency ECharts recovery...');
+                if (data && data.data && Object.keys(data.data).length > 0) {
+                    this.forceEChartsRecovery(data);
+                }
+            }, 1000);
+            
+        } catch (error) {
+            console.error('❌ Emergency recovery failed:', error);
         }
     }
     
     renderKLineCharts(data) {
         console.log('🕯️ Setting up KLineChart for candlestick rendering...');
-        console.log('🕯️ Input data keys:', Object.keys(data.data));
-        
-        // Clear any existing ECharts instance
-        if (this.chartInstance) {
-            this.chartInstance.clear();
-        }
-        
-        // Get chart container
-        const chartElement = document.getElementById('main-chart');
-        
-        // Dispose existing KLineChart if it exists
-        if (this.klineChartInstance) {
-            try {
-                this.klineChartInstance.dispose();
-            } catch (e) {
-                console.log('🕯️ Previous KLineChart instance cleanup (expected)');
-            }
-        }
         
         try {
-            // Validate we have data
-            if (!data.data || Object.keys(data.data).length === 0) {
+            // Validate we have data first
+            if (!data || !data.data || Object.keys(data.data).length === 0) {
                 throw new Error('No data available for KLineChart rendering');
             }
             
-            // Initialize KLineChart
+            // Safely cleanup existing charts
+            this.safelyCleanupCharts();
+            
+            // Get and prepare chart container
+            const chartElement = document.getElementById('main-chart');
+            if (!chartElement) {
+                throw new Error('Chart container element not found');
+            }
+            
+            // Reset container to clean state
+            this.resetChartContainer(chartElement);
+            
+            // Validate KLineChart library is available
+            if (typeof klinecharts === 'undefined') {
+                throw new Error('KLineChart library not loaded');
+            }
+            
+            // Initialize KLineChart with error handling
             this.klineChartInstance = klinecharts.init(chartElement);
-            console.log('🕯️ KLineChart instance created:', !!this.klineChartInstance);
+            if (!this.klineChartInstance) {
+                throw new Error('Failed to initialize KLineChart instance');
+            }
+            
+            console.log('🕯️ KLineChart instance created successfully');
             
             // Convert our data format to KLineChart format
             const klineData = this.convertToKLineData(data);
@@ -618,7 +658,7 @@ class GlobalMarketTracker {
             
             console.log('🕯️ Converted data for KLineChart:', klineData.length, 'data points');
             
-            // Apply the data to KLineChart
+            // Apply the data to KLineChart with validation
             this.klineChartInstance.applyNewData(klineData);
             
             // Configure the chart
@@ -633,9 +673,110 @@ class GlobalMarketTracker {
             
         } catch (error) {
             console.error('❌ KLineChart rendering failed:', error);
-            // Fallback to ECharts if KLineChart fails
-            console.log('🔄 Falling back to ECharts for candlestick...');
+            console.error('❌ Error stack:', error.stack);
+            
+            // Ensure cleanup on failure
+            this.safelyCleanupCharts();
+            
+            // Force fallback to ECharts 
+            console.log('🔄 Forcing fallback to ECharts due to KLineChart failure...');
+            
+            // Reset chart type to percentage to avoid recursive failures
+            const chartTypeSelect = document.getElementById('chart-type');
+            if (chartTypeSelect) {
+                chartTypeSelect.value = 'percentage';
+            }
+            
+            // Fallback with percentage data
+            this.forceEChartsRecovery(data);
+        }
+    }
+    
+    safelyCleanupCharts() {
+        console.log('🧹 Safely cleaning up chart instances...');
+        
+        try {
+            // Cleanup KLineChart instance
+            if (this.klineChartInstance) {
+                console.log('🧹 Disposing KLineChart instance...');
+                this.klineChartInstance.dispose();
+                this.klineChartInstance = null;
+            }
+        } catch (error) {
+            console.warn('⚠️ KLineChart disposal error (continuing):', error.message);
+            this.klineChartInstance = null;
+        }
+        
+        try {
+            // Cleanup ECharts instance  
+            if (this.chartInstance) {
+                console.log('🧹 Clearing ECharts instance...');
+                this.chartInstance.clear();
+            }
+        } catch (error) {
+            console.warn('⚠️ ECharts cleanup error (continuing):', error.message);
+        }
+    }
+    
+    resetChartContainer(chartElement) {
+        console.log('🔄 Resetting chart container to clean state...');
+        
+        try {
+            // Clear any existing content
+            chartElement.innerHTML = '';
+            
+            // Reset any inline styles that might interfere
+            chartElement.style.cssText = '';
+            
+            // Ensure proper dimensions
+            chartElement.style.width = '100%';
+            chartElement.style.height = '600px';
+            
+        } catch (error) {
+            console.error('❌ Container reset failed:', error);
+        }
+    }
+    
+    forceEChartsRecovery(data) {
+        console.log('🚑 Forcing ECharts recovery after KLineChart failure...');
+        
+        try {
+            const chartElement = document.getElementById('main-chart');
+            
+            // Reset container completely
+            this.resetChartContainer(chartElement);
+            
+            // Re-initialize ECharts from scratch
+            if (this.chartInstance) {
+                try {
+                    this.chartInstance.dispose();
+                } catch (e) {
+                    console.log('ECharts dispose during recovery (expected)');
+                }
+            }
+            
+            this.chartInstance = echarts.init(chartElement);
+            console.log('🚑 ECharts re-initialized for recovery');
+            
+            // Render with ECharts (force percentage mode)
             this.renderECharts(data);
+            
+        } catch (error) {
+            console.error('❌ ECharts recovery failed:', error);
+            
+            // Last resort: show error message
+            const chartElement = document.getElementById('main-chart');
+            if (chartElement) {
+                chartElement.innerHTML = `
+                    <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #dc2626;">
+                        <div style="text-align: center;">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 1rem;"></i><br>
+                            <strong>Chart Error</strong><br>
+                            <small>Please refresh the page and try again</small>
+                        </div>
+                    </div>
+                `;
+            }
         }
     }
     
