@@ -1,45 +1,73 @@
 [build]
   publish = "."
-  
+  command = "echo 'Static HTML deployment - no build required'"
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF ."
+
 [build.environment]
-  NODE_VERSION = "18"
+  # Static deployment - no runtime required
 
+# Enhanced Phase 4 routing
 [[redirects]]
-  from = "/api/*"
-  to = "https://web-production-da6eb1.up.railway.app:splat"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/*"
+  from = "/phase4"
   to = "/index.html"
   status = 200
 
-[build.processing]
-  skip_processing = false
+[[redirects]]
+  from = "/dashboard"
+  to = "/prediction_performance_dashboard.html" 
+  status = 200
 
-[build.processing.css]
-  bundle = true
-  minify = true
+[[redirects]]
+  from = "/prediction-performance-dashboard"
+  to = "/prediction_performance_dashboard.html"
+  status = 200
 
-[build.processing.js]
-  bundle = true
-  minify = true
+[[redirects]]
+  from = "/performance"
+  to = "/prediction_performance_dashboard.html"
+  status = 200
 
-[build.processing.html]
-  pretty_urls = true
+# API proxy to Railway backend - CORRECTED
+[[redirects]]
+  from = "/api/*"
+  to = "https://web-production-68eaf.up.railway.app/api/:splat"
+  status = 200
+  force = true
+
+# Direct health endpoint proxy
+[[redirects]]
+  from = "/health"
+  to = "https://web-production-68eaf.up.railway.app/health"
+  status = 200
+  force = true
+
+# Security and performance headers
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Cache-Control = "public, max-age=3600"
 
 [[headers]]
-  for = "/assets/*"
+  for = "/*.html"
   [headers.values]
-    Cache-Control = "public, max-age=31536000"
+    Cache-Control = "public, max-age=1800"
 
 [[headers]]
-  for = "*.js"
+  for = "/*.js"
   [headers.values]
-    Cache-Control = "public, max-age=31536000"
-    
+    Cache-Control = "public, max-age=86400"
+
 [[headers]]
-  for = "*.css"
+  for = "/*.css"
   [headers.values]
-    Cache-Control = "public, max-age=31536000"
+    Cache-Control = "public, max-age=86400"
+
+# SPA fallback and error handling
+[[redirects]]
+  from = "/*"
+  to = "/404.html"
+  status = 404
