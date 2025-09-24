@@ -6,7 +6,7 @@
 
 [[redirects]]
   from = "/api/*"
-  to = "https://web-production-64bd6.up.railway.app:splat"
+  to = "https://web-production-bd86.up.railway.app:splat"
   status = 200
   force = true
 
