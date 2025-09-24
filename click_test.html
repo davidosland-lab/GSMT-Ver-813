@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Click Test Results</title>
+    <script>
+        // Test script that will be injected to test button clicks
+        window.addEventListener('load', function() {
+            console.log('🧪 Starting comprehensive navigation test...');
+            
+            // Test 1: Check if buttons exist
+            const buttons = {
+                'global-tracker': document.querySelector('button[onclick*="openGlobalStockTracker"]'),
+                'single-stock': document.querySelector('button[onclick*="openStockAnalysis"]'),
+                'cba-analysis': document.querySelector('button[onclick*="openCBAAnalysis"]'),
+                'prediction-centre': document.querySelector('button[onclick*="openPredictionCentre"]'),
+                'document-upload': document.querySelector('button[onclick*="processDocuments"]')
+            };
+            
+            let testResults = [];
+            
+            Object.keys(buttons).forEach(key => {
+                if (buttons[key]) {
+                    console.log(`✅ Button found: ${key}`);
+                    testResults.push(`✅ ${key}: Button exists`);
+                } else {
+                    console.log(`❌ Button missing: ${key}`);
+                    testResults.push(`❌ ${key}: Button not found`);
+                }
+            });
+            
+            // Test 2: Check if functions exist
+            const functions = ['openGlobalStockTracker', 'openStockAnalysis', 'openCBAAnalysis', 'openPredictionCentre', 'processDocuments'];
+            functions.forEach(func => {
+                if (typeof window[func] === 'function') {
+                    console.log(`✅ Function exists: ${func}`);
+                    testResults.push(`✅ ${func}: Function defined`);
+                } else {
+                    console.log(`❌ Function missing: ${func}`);
+                    testResults.push(`❌ ${func}: Function not defined`);
+                }
+            });
+            
+            // Test 3: Test routes
+            const routes = [
+                '/enhanced-global-tracker',
+                '/single-stock-analysis', 
+                '/cba-analysis',
+                '/prediction-centre',
+                '/document-upload'
+            ];
+            
+            let routeTests = [];
+            routes.forEach(route => {
+                fetch(route, {method: 'HEAD'})
+                    .then(response => {
+                        if (response.ok) {
+                            console.log(`✅ Route accessible: ${route}`);
+                            routeTests.push(`✅ ${route}: Route works`);
+                        } else {
+                            console.log(`❌ Route failed: ${route} (${response.status})`);
+                            routeTests.push(`❌ ${route}: Failed (${response.status})`);
+                        }
+                        
+                        if (routeTests.length === routes.length) {
+                            console.log('🏁 All navigation tests completed');
+                            console.log('SUMMARY:', [...testResults, ...routeTests]);
+                        }
+                    })
+                    .catch(error => {
+                        console.log(`❌ Route error: ${route} - ${error}`);
+                        routeTests.push(`❌ ${route}: Error - ${error.message}`);
+                    });
+            });
+        });
+    </script>
+</head>
+<body>
+    <h1>Navigation Test Complete</h1>
+    <p>Check console for results</p>
+</body>
+</html>

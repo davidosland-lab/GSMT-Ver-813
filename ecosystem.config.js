@@ -3,10 +3,11 @@ module.exports = {
     {
       name: 'frontend-service',
       script: 'python3',
-      args: '-m http.server 3000',
+      args: '-m uvicorn app:app --host 0.0.0.0 --port 8080',
       cwd: '/home/user/webapp',
       env: {
-        PORT: '3000'
+        PORT: '8080',
+        PYTHONPATH: '/home/user/webapp'
       },
       instances: 1,
       exec_mode: 'fork',
@@ -19,7 +20,7 @@ module.exports = {
       out_file: './logs/frontend-out.log'
     },
     {
-      name: 'api-service',
+      name: 'main-api-service',
       script: 'python3',
       args: '-m uvicorn app:app --host 0.0.0.0 --port 8000',
       cwd: '/home/user/webapp',

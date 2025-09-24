@@ -64,6 +64,52 @@ class YahooFinanceRealAPI:
         # Convert common symbols to Yahoo format
         yahoo_symbol = self._convert_symbol(symbol)
         
+        # Try yfinance library first as it's more reliable for indices
+        try:
+            import yfinance as yf
+            import pandas as pd
+            
+            ticker = yf.Ticker(yahoo_symbol)
+            data = ticker.history(period='2d', interval=interval)
+            
+            if not data.empty:
+                result = []
+                for index, row in data.iterrows():
+                    # Convert timezone-aware index to UTC
+                    if hasattr(index, 'tz_convert'):
+                        timestamp = index.tz_convert(timezone.utc).to_pydatetime()
+                    else:
+                        # If no timezone info, assume it's already UTC
+                        timestamp = index.to_pydatetime().replace(tzinfo=timezone.utc)
+                    
+                    result.append(RealMarketDataPoint(
+                        timestamp=timestamp,
+                        open=float(row['Open']),
+                        high=float(row['High']),
+                        low=float(row['Low']),
+                        close=float(row['Close']),
+                        volume=int(row['Volume']) if pd.notna(row['Volume']) else 0,
+                        symbol=symbol,
+                        source="yfinance library"
+                    ))
+                
+                if result:
+                    # Debug logging for ^AORD timestamp ranges
+                    if symbol == "^AORD":
+                        logger.info(f"🔍 yfinance {symbol}: Got {len(result)} data points from {result[0].timestamp} to {result[-1].timestamp}")
+                        # Convert to AEST for debugging
+                        aest = timezone(timedelta(hours=11))  # AEST = UTC+11 (assuming DST)
+                        first_aest = result[0].timestamp.astimezone(aest)
+                        last_aest = result[-1].timestamp.astimezone(aest)
+                        logger.info(f"🔍 yfinance {symbol}: AEST times from {first_aest.strftime('%Y-%m-%d %H:%M:%S AEST')} to {last_aest.strftime('%Y-%m-%d %H:%M:%S AEST')}")
+                    
+                    logger.info(f"✅ yfinance: Got {len(result)} real data points for {symbol}")
+                    return result
+        
+        except Exception as e:
+            logger.warning(f"yfinance library failed for {symbol}: {e}")
+        
+        # Fallback to direct API calls if yfinance fails
         for base_url in self.base_urls:
             try:
                 # Try the v8 chart API first
@@ -83,7 +129,7 @@ class YahooFinanceRealAPI:
                             data = await response.json()
                             result = await self._parse_yahoo_response(data, symbol)
                             if result and len(result) > 0:
-                                logger.info(f"✅ Yahoo Finance: Got {len(result)} real data points for {symbol}")
+                                logger.info(f"✅ Yahoo Finance API: Got {len(result)} real data points for {symbol}")
                                 return result
                         else:
                             logger.warning(f"Yahoo Finance {response.status} for {symbol} at {base_url}")
@@ -364,6 +410,10 @@ class RealMarketDataAggregator:
         
         logger.info(f"🌐 Fetching real market data for {symbol}...")
         
+        # Debug logging for ^AORD specifically
+        if symbol == "^AORD":
+            logger.info(f"🔍 DEBUG: Processing ^AORD data with enhanced logging")
+        
         # Try APIs in priority order
         apis = [
             ("Yahoo Finance", self.yahoo_api),
@@ -377,9 +427,19 @@ class RealMarketDataAggregator:
                 data_points = await api.get_real_data(symbol)
                 
                 if data_points and len(data_points) > 0:
-                    # Filter to recent data only (last 24-48 hours)
-                    cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
+                    # Filter to recent data only - extended time window for indices to handle weekends
+                    # Indices (^) get 7 days (168 hours), regular stocks get 48 hours
+                    if symbol.startswith('^'):
+                        cutoff_hours = 168  # 7 days for indices to handle weekend gaps
+                    else:
+                        cutoff_hours = 48   # 48 hours for regular stocks
+                    
+                    cutoff = datetime.now(timezone.utc) - timedelta(hours=cutoff_hours)
                     recent_points = [p for p in data_points if p.timestamp >= cutoff]
+                    
+                    # Debug logging for indices
+                    if symbol.startswith('^'):
+                        logger.info(f"🔍 Index {symbol}: Using {cutoff_hours}h cutoff, found {len(recent_points)} recent points")
                     
                     # CRITICAL FIX: Filter out future data to prevent separate segment plotting
                     current_time = datetime.now(timezone.utc)
@@ -393,7 +453,11 @@ class RealMarketDataAggregator:
                     # Apply smart data quality filtering to remove aberrant data
                     quality_filtered_points = self._filter_aberrant_data(current_and_past_points, symbol)
                     
-                    if len(quality_filtered_points) >= 10:  # Need minimum data points
+                    # Debug logging for ^AORD
+                    if symbol == "^AORD":
+                        logger.info(f"🔍 ^AORD: Raw points: {len(data_points)}, Recent: {len(recent_points)}, Current/Past: {len(current_and_past_points)}, Quality filtered: {len(quality_filtered_points)}")
+                    
+                    if len(quality_filtered_points) >= 3:  # Need minimum data points - more flexible for global markets
                         market_data = RealMarketData(
                             symbol=symbol,
                             data_points=quality_filtered_points,
@@ -429,9 +493,14 @@ class RealMarketDataAggregator:
             is_aberrant = False
             
             # Check for identical OHLC values (indicates stale/bad data)
+            # More lenient for indices during low-activity periods
             if point.open == point.high == point.low == point.close:
-                logger.debug(f"Rejecting {symbol} point {point.timestamp}: Identical OHLC values {point.close}")
-                is_aberrant = True
+                # For indices, identical OHLC during market close is acceptable
+                if symbol.startswith('^'):
+                    logger.debug(f"Index {symbol} point {point.timestamp}: Identical OHLC values {point.close} (keeping for index)")
+                else:
+                    logger.debug(f"Rejecting {symbol} point {point.timestamp}: Identical OHLC values {point.close}")
+                    is_aberrant = True
             
             # Check for zero or negative prices (invalid data)
             if any(price <= 0 for price in [point.open, point.high, point.low, point.close]):

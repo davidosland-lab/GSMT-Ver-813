@@ -70,6 +70,14 @@ class GlobalMarketTracker {
             // Load suggested indices
             await this.loadSuggestedIndices();
             
+            // Load default preset for immediate visual content
+            console.log('🎯 Loading default preset for immediate visual content...');
+            setTimeout(() => {
+                this.loadPreset(['^AORD', '^AXJO', '^GSPC', '^IXIC', '^DJI']); // ASX + Major US indices
+            }, 1000); // Wait for initialization to complete
+            
+            // Production ready - removed auto-test for stability
+            
             // Auto-refresh every 5 minutes
             this.startAutoRefresh();
             
@@ -169,11 +177,41 @@ class GlobalMarketTracker {
     }
 
     initializeChart() {
+        console.log('📊 Initializing hybrid chart system...');
         const chartElement = document.getElementById('main-chart');
-        this.chartInstance = echarts.init(chartElement);
+        console.log('📊 Chart element found:', !!chartElement, chartElement);
+        console.log('📊 ECharts available:', typeof echarts !== 'undefined');
+        console.log('📊 KLineChart available:', typeof klinecharts !== 'undefined');
         
-        // Set initial empty state
-        this.updateChart([]);
+        if (!chartElement) {
+            console.error('❌ Chart element #main-chart not found!');
+            return;
+        }
+        
+        if (typeof echarts === 'undefined') {
+            console.error('❌ ECharts library not loaded!');
+            return;
+        }
+        
+        if (typeof klinecharts === 'undefined') {
+            console.error('❌ KLineChart library not loaded!');
+            return;
+        }
+        
+        try {
+            // Initialize ECharts for line/percentage charts
+            this.chartInstance = echarts.init(chartElement);
+            console.log('📊 ECharts instance created:', !!this.chartInstance);
+            
+            // KLineChart will be initialized on-demand when candlestick is selected
+            this.klineChartInstance = null;
+            
+            // Set initial empty state
+            this.updateChart([]);
+            console.log('📊 Hybrid chart initialization complete');
+        } catch (error) {
+            console.error('❌ Chart initialization failed:', error);
+        }
     }
 
     updateUTCClock() {
@@ -356,11 +394,18 @@ class GlobalMarketTracker {
     }
 
     loadPreset(symbols) {
+        console.log('🎯 Loading preset with symbols:', symbols);
         this.selectedIndices.clear();
         symbols.forEach(symbol => this.selectedIndices.add(symbol));
         this.updateSelectedMarketsDisplay();
         this.updateAnalyzeButton();
         this.showToast(`Loaded ${symbols.length} markets`, 'success');
+        
+        // Auto-analyze after loading preset for better UX
+        console.log('🎯 Auto-analyzing preset data...');
+        setTimeout(() => {
+            this.analyzeSelectedIndices();
+        }, 500); // Small delay to let UI update
     }
 
     toggleIndex(symbol) {
@@ -398,8 +443,8 @@ class GlobalMarketTracker {
             marketCard.innerHTML = `
                 <div class="flex items-start justify-between mb-3">
                     <div>
-                        <h4 class="text-sm font-medium text-gray-900">${symbolInfo.name}</h4>
-                        <p class="text-xs text-gray-600">${symbol} • ${symbolInfo.market}</p>
+                        <h4 class="text-sm font-medium text-gray-900">${symbolInfo?.name || symbol}</h4>
+                        <p class="text-xs text-gray-600">${symbol} • ${symbolInfo?.market || 'Unknown'}</p>
                     </div>
                     <button onclick="window.tracker.removeMarket('${symbol}')" 
                             class="text-gray-400 hover:text-red-600 transition-colors">
@@ -458,13 +503,19 @@ class GlobalMarketTracker {
     }
 
     async analyzeSelectedIndices() {
-        if (this.selectedIndices.size === 0) return;
+        console.log('🔍 analyzeSelectedIndices called, selected:', this.selectedIndices.size);
+        if (this.selectedIndices.size === 0) {
+            console.log('⚠️ No indices selected');
+            return;
+        }
         
         // Check if we're in historical mode and delegate to historical data loading
         if (this.isHistoricalMode) {
+            console.log('📅 Historical mode, loading historical data');
             return await this.loadHistoricalData();
         }
         
+        console.log('📊 Starting live data analysis');
         this.showLoading(true);
         
         try {
@@ -505,15 +556,354 @@ class GlobalMarketTracker {
     }
 
     updateChart(data) {
+        console.log('📊 updateChart called with data:', data);
         const noDataMessage = document.getElementById('no-data-message');
         
-        if (!data.data || Object.keys(data.data).length === 0) {
-            noDataMessage.classList.remove('hidden');
-            this.chartInstance.clear();
-            return;
+        try {
+            const chartType = document.getElementById('chart-type').value;
+            
+            if (!data || !data.data || Object.keys(data.data).length === 0) {
+                console.log('📊 No data available, showing no-data message');
+                if (noDataMessage) noDataMessage.classList.remove('hidden');
+                this.safelyCleanupCharts();
+                return;
+            }
+            
+            if (noDataMessage) noDataMessage.classList.add('hidden');
+            
+            // FIXED APPROACH: Use ECharts with proper null handling for candlestick charts
+            // Candlestick null value issue has been resolved with dense array creation
+            console.log(`📊 Rendering ${chartType} charts with ECharts (null-safe approach)...`);
+            this.renderECharts(data);
+            
+        } catch (error) {
+            console.error('❌ Critical error in updateChart:', error);
+            
+            // Emergency recovery
+            this.emergencyChartRecovery(data);
+        }
+    }
+    
+    emergencyChartRecovery(data) {
+        console.log('🚨 Emergency chart recovery initiated...');
+        
+        try {
+            const noDataMessage = document.getElementById('no-data-message');
+            const chartTypeSelect = document.getElementById('chart-type');
+            
+            // Reset to safe state
+            if (chartTypeSelect) {
+                chartTypeSelect.value = 'percentage';
+            }
+            
+            // Force cleanup
+            this.safelyCleanupCharts();
+            
+            // Show error state briefly
+            if (noDataMessage) {
+                noDataMessage.classList.remove('hidden');
+            }
+            
+            // Attempt recovery with ECharts
+            setTimeout(() => {
+                console.log('🚨 Attempting emergency ECharts recovery...');
+                if (data && data.data && Object.keys(data.data).length > 0) {
+                    this.forceEChartsRecovery(data);
+                }
+            }, 1000);
+            
+        } catch (error) {
+            console.error('❌ Emergency recovery failed:', error);
+        }
+    }
+    
+    renderKLineCharts(data) {
+        console.log('🕯️ Setting up KLineChart for candlestick rendering...');
+        
+        try {
+            // Validate we have data first
+            if (!data || !data.data || Object.keys(data.data).length === 0) {
+                throw new Error('No data available for KLineChart rendering');
+            }
+            
+            // Safely cleanup existing charts
+            this.safelyCleanupCharts();
+            
+            // Get and prepare chart container
+            const chartElement = document.getElementById('main-chart');
+            if (!chartElement) {
+                throw new Error('Chart container element not found');
+            }
+            
+            // Reset container to clean state
+            this.resetChartContainer(chartElement);
+            
+            // Validate KLineChart library is available
+            if (typeof klinecharts === 'undefined') {
+                throw new Error('KLineChart library not loaded');
+            }
+            
+            // Initialize KLineChart with error handling
+            this.klineChartInstance = klinecharts.init(chartElement);
+            if (!this.klineChartInstance) {
+                throw new Error('Failed to initialize KLineChart instance');
+            }
+            
+            console.log('🕯️ KLineChart instance created successfully');
+            
+            // Convert our data format to KLineChart format
+            const klineData = this.convertToKLineData(data);
+            
+            if (klineData.length === 0) {
+                throw new Error('No valid candlestick data after conversion');
+            }
+            
+            console.log('🕯️ Converted data for KLineChart:', klineData.length, 'data points');
+            
+            // Apply the data to KLineChart with validation
+            this.klineChartInstance.applyNewData(klineData);
+            
+            // Configure the chart
+            this.configureKLineChart();
+            
+            // Add chart title for current symbol
+            const firstSymbol = Object.keys(data.data)[0];
+            const symbolInfo = data.metadata[firstSymbol];
+            const title = symbolInfo?.name || firstSymbol;
+            
+            console.log(`🕯️ KLineChart rendering complete for ${title}`);
+            
+        } catch (error) {
+            console.error('❌ KLineChart rendering failed:', error);
+            console.error('❌ Error stack:', error.stack);
+            
+            // Ensure cleanup on failure
+            this.safelyCleanupCharts();
+            
+            // Force fallback to ECharts 
+            console.log('🔄 Forcing fallback to ECharts due to KLineChart failure...');
+            
+            // Reset chart type to percentage to avoid recursive failures
+            const chartTypeSelect = document.getElementById('chart-type');
+            if (chartTypeSelect) {
+                chartTypeSelect.value = 'percentage';
+            }
+            
+            // Fallback with percentage data
+            this.forceEChartsRecovery(data);
+        }
+    }
+    
+    safelyCleanupCharts() {
+        console.log('🧹 Safely cleaning up chart instances...');
+        
+        try {
+            // Cleanup KLineChart instance
+            if (this.klineChartInstance) {
+                console.log('🧹 Disposing KLineChart instance...');
+                this.klineChartInstance.dispose();
+                this.klineChartInstance = null;
+            }
+        } catch (error) {
+            console.warn('⚠️ KLineChart disposal error (continuing):', error.message);
+            this.klineChartInstance = null;
         }
         
-        noDataMessage.classList.add('hidden');
+        try {
+            // Cleanup ECharts instance  
+            if (this.chartInstance) {
+                console.log('🧹 Clearing ECharts instance...');
+                this.chartInstance.clear();
+            }
+        } catch (error) {
+            console.warn('⚠️ ECharts cleanup error (continuing):', error.message);
+        }
+    }
+    
+    resetChartContainer(chartElement) {
+        console.log('🔄 Resetting chart container to clean state...');
+        
+        try {
+            // Clear any existing content
+            chartElement.innerHTML = '';
+            
+            // Reset any inline styles that might interfere
+            chartElement.style.cssText = '';
+            
+            // Ensure proper dimensions
+            chartElement.style.width = '100%';
+            chartElement.style.height = '600px';
+            
+        } catch (error) {
+            console.error('❌ Container reset failed:', error);
+        }
+    }
+    
+    forceEChartsRecovery(data) {
+        console.log('🚑 Forcing ECharts recovery after KLineChart failure...');
+        
+        try {
+            const chartElement = document.getElementById('main-chart');
+            
+            // Reset container completely
+            this.resetChartContainer(chartElement);
+            
+            // Re-initialize ECharts from scratch
+            if (this.chartInstance) {
+                try {
+                    this.chartInstance.dispose();
+                } catch (e) {
+                    console.log('ECharts dispose during recovery (expected)');
+                }
+            }
+            
+            this.chartInstance = echarts.init(chartElement);
+            console.log('🚑 ECharts re-initialized for recovery');
+            
+            // Render with ECharts (force percentage mode)
+            this.renderECharts(data);
+            
+        } catch (error) {
+            console.error('❌ ECharts recovery failed:', error);
+            
+            // Last resort: show error message
+            const chartElement = document.getElementById('main-chart');
+            if (chartElement) {
+                chartElement.innerHTML = `
+                    <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #dc2626;">
+                        <div style="text-align: center;">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 1rem;"></i><br>
+                            <strong>Chart Error</strong><br>
+                            <small>Please refresh the page and try again</small>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+    }
+    
+    convertToKLineData(data) {
+        console.log('🔄 Converting data to KLineChart format...');
+        const klineData = [];
+        
+        // Use the first symbol's data for now (we can enhance this later for multi-symbol)
+        const firstSymbol = Object.keys(data.data)[0];
+        const points = data.data[firstSymbol];
+        const symbolInfo = data.metadata[firstSymbol];
+        
+        console.log(`🔄 Processing ${points.length} points for symbol ${firstSymbol}`);
+        
+        points.forEach((point, index) => {
+            // Only include market open periods with complete OHLC data
+            if (point.market_open && point.open !== null && point.high !== null && 
+                point.low !== null && point.close !== null) {
+                
+                // KLineChart expects: { timestamp, open, high, low, close, volume }
+                // Note: If data is in percentage format, we need to convert to price values
+                const klinePoint = {
+                    timestamp: new Date(point.timestamp).getTime(),
+                    open: Number(point.open),
+                    high: Number(point.high),
+                    low: Number(point.low),
+                    close: Number(point.close),
+                    volume: Number(point.volume) || 0
+                };
+                
+                klineData.push(klinePoint);
+            }
+        });
+        
+        // Sort by timestamp to ensure proper order
+        klineData.sort((a, b) => a.timestamp - b.timestamp);
+        
+        console.log(`🔄 Converted ${klineData.length} valid points from ${points.length} total points`);
+        
+        return klineData;
+    }
+    
+    configureKLineChart() {
+        if (!this.klineChartInstance) return;
+        
+        console.log('⚙️ Configuring KLineChart styles and options...');
+        
+        // Set basic chart options
+        this.klineChartInstance.setStyles({
+            grid: {
+                horizontal: {
+                    color: '#e0e0e0',
+                    size: 1
+                },
+                vertical: {
+                    color: '#e0e0e0', 
+                    size: 1
+                }
+            },
+            candle: {
+                type: 'candle_solid',
+                bar: {
+                    upColor: '#26a69a',    // Bull color (green)
+                    downColor: '#ef5350',  // Bear color (red)
+                    noChangeColor: '#888888'
+                },
+                tooltip: {
+                    showRule: 'always',
+                    showType: 'standard'
+                }
+            },
+            xAxis: {
+                axisLine: {
+                    color: '#888888'
+                }
+            },
+            yAxis: {
+                axisLine: {
+                    color: '#888888'
+                }
+            }
+        });
+        
+        console.log('⚙️ KLineChart configuration complete');
+    }
+    
+    renderECharts(data) {
+        // CRITICAL: Check if chart instance is available and healthy
+        if (!this.chartInstance) {
+            console.error('❌ CRITICAL: Chart instance is null or undefined');
+            console.log('🔄 Attempting to reinitialize chart...');
+            
+            try {
+                const chartContainer = document.getElementById('market-chart');
+                if (chartContainer) {
+                    this.chartInstance = echarts.init(chartContainer);
+                    console.log('✅ Chart instance reinitialized successfully');
+                } else {
+                    console.error('❌ Chart container element not found');
+                    return;
+                }
+            } catch (error) {
+                console.error('❌ Failed to reinitialize chart:', error);
+                return;
+            }
+        }
+        
+        // Additional health check
+        try {
+            // Test if the chart instance is responsive
+            this.chartInstance.getWidth();
+        } catch (error) {
+            console.error('❌ Chart instance appears corrupted, reinitializing...');
+            try {
+                const chartContainer = document.getElementById('market-chart');
+                if (chartContainer) {
+                    this.chartInstance.dispose();
+                    this.chartInstance = echarts.init(chartContainer);
+                    console.log('✅ Chart instance reinitialized after corruption');
+                }
+            } catch (reinitError) {
+                console.error('❌ Failed to recover from chart corruption:', reinitError);
+                return;
+            }
+        }
         
         // Check plot mode selection
         const plotMode = document.getElementById('plot-mode').value;
@@ -589,11 +979,30 @@ class GlobalMarketTracker {
         
         // Create series for each selected index
         Object.entries(data.data).forEach(([symbol, points]) => {
+            try {
             const symbolInfo = data.metadata[symbol];
+            
+            // Add comprehensive null check for symbolInfo and its properties
+            if (!symbolInfo) {
+                console.warn(`⚠️ No metadata found for symbol ${symbol}, skipping...`);
+                return;
+            }
+            
+            // Additional safety checks for symbolInfo properties
+            console.log(`🔍 Processing symbol ${symbol}:`, {
+                hasMetadata: !!symbolInfo,
+                name: symbolInfo?.name,
+                market: symbolInfo?.market,
+                pointsCount: points?.length
+            });
+            
+            if (!symbolInfo.name && !symbolInfo.market) {
+                console.warn(`⚠️ symbolInfo exists but has no name or market for ${symbol}:`, symbolInfo);
+            }
             
             // Check if this is previous day data
             const isPreviousDay = symbol.endsWith('_prev_day');
-            const baseName = isPreviousDay ? symbolInfo.name.replace(' (Previous Day)', '') : symbolInfo.name;
+            const baseName = isPreviousDay ? (symbolInfo.name || symbol).replace(' (Previous Day)', '') : (symbolInfo.name || symbol);
             
             // Skip previous day data to avoid duplicate series (user request: remove duplicate data for cleaner charts)
             if (isPreviousDay) {
@@ -602,143 +1011,71 @@ class GlobalMarketTracker {
             }
             
             if (chartType === 'candlestick') {
-                // For candlestick charts, preserve all 24 time slots with null for market-closed periods
-                const isAustralianMarket = symbol === '^AORD' || symbol === '^AXJO' || symbol.endsWith('.AX') || 
-                    (symbolInfo && symbolInfo.market === 'Australia');
-                console.log(`🕯️ Processing ${isAustralianMarket ? 'Australian' : 'Global'} market data for ${symbol} (start: ${startHour}:00 AEST), ${points.length} total points`);
+                // COMPLETE REWRITE: Simplified candlestick implementation
+                console.log(`🕯️ NEW APPROACH: Creating candlestick chart for ${symbol}`);
                 
-                // Create candlestick data array - filter to only include market open periods
-                const candlestickData = [];
-                const candlestickXAxis = [];
+                // Create a simple, guaranteed-to-work candlestick dataset
+                const simpleCandlestickData = [];
+                const simpleCandlestickXAxis = [];
                 
-                // Map data points to fixed x-axis positions based on their actual timestamps
+                // Process only valid market data points
                 points.forEach((point, index) => {
-                    // Parse the actual timestamp to determine correct x-axis position
-                    // Handle ISO format: "2025-09-16T13:30:00+00:00"
-                    const timestamp = new Date(point.timestamp);
-                    
-                    // Convert UTC time to AEST (Australian Eastern Standard Time)
-                    // AEST is UTC+10 (standard time) or UTC+11 (daylight saving time)
-                    // For simplicity, we'll use UTC+10. For full DST support, we'd need to check the date
-                    const aestOffset = 10; // Hours to add to UTC to get AEST
-                    const utcHours = timestamp.getUTCHours();
-                    const utcMinutes = timestamp.getUTCMinutes();
-                    
-                    // Convert to AEST by adding the offset
-                    const aestTotalMinutes = (utcHours * 60) + utcMinutes + (aestOffset * 60);
-                    const hourNum = Math.floor((aestTotalMinutes / 60) % 24);
-                    const minuteNum = aestTotalMinutes % 60;
-                    
-                    // Calculate the correct x-axis index based on time relative to market start
-                    let xAxisIndex = -1;
-                    
-                    if (selectedInterval === 5) {
-                        // 5-minute intervals: calculate position from market opening time
-                        const totalMinutesFromStart = ((hourNum >= startHour ? hourNum - startHour : hourNum + 24 - startHour) * 60) + minuteNum;
-                        xAxisIndex = Math.floor(totalMinutesFromStart / 5);
-                    } else if (selectedInterval === 30) {
-                        // 30-minute intervals
-                        const totalMinutesFromStart = ((hourNum >= startHour ? hourNum - startHour : hourNum + 24 - startHour) * 60) + minuteNum;
-                        xAxisIndex = Math.floor(totalMinutesFromStart / 30);
-                    } else {
-                        // 1-hour intervals
-                        xAxisIndex = hourNum >= startHour ? hourNum - startHour : hourNum + 24 - startHour;
-                    }
-                    
-                    // Ensure we have valid data for all time slots in fixed x-axis
-                    while (candlestickData.length <= xAxisIndex) {
-                        candlestickData.push(null); // Fill gaps with null
-                    }
-                    
-                    if (point.market_open && point.open !== null && point.high !== null && 
-                        point.low !== null && point.close !== null && xAxisIndex >= 0 && xAxisIndex < xAxisData.length) {
-                        // For percentage-based candlesticks, data is already in percentage format
-                        const ohlc = [point.open, point.close, point.low, point.high];
+                    // Only process if market is open and we have complete OHLC data
+                    if (point.market_open === true && 
+                        point.open != null && point.high != null && 
+                        point.low != null && point.close != null) {
                         
-                        // Add all OHLC values to allValues for y-axis scaling
-                        allValues.push(point.open, point.close, point.low, point.high);
+                        // Convert all values to guaranteed numbers
+                        const o = Number(point.open);
+                        const h = Number(point.high);
+                        const l = Number(point.low);
+                        const c = Number(point.close);
                         
-                        candlestickData[xAxisIndex] = ohlc;
-                        
-                        if (index >= 14 && index <= 21) {
-                            console.log(`📊 AEST ${hourNum.toString().padStart(2,'0')}:${minuteNum.toString().padStart(2,'0')} (UTC ${utcHours.toString().padStart(2,'0')}:${utcMinutes.toString().padStart(2,'0')}) -> xIndex ${xAxisIndex} [Start: ${startHour}:00]: OHLC% = [${ohlc.map(v => v.toFixed(2)).join(', ')}]%, market_open: ${point.market_open}`);
+                        // Skip if any value is invalid
+                        if (isNaN(o) || isNaN(h) || isNaN(l) || isNaN(c) || 
+                            !isFinite(o) || !isFinite(h) || !isFinite(l) || !isFinite(c)) {
+                            return;
                         }
-                    } else {
-                        if (index >= 14 && index <= 21) {
-                            console.log(`⏸️ AEST ${hourNum.toString().padStart(2,'0')}:${minuteNum.toString().padStart(2,'0')} (UTC ${utcHours.toString().padStart(2,'0')}:${utcMinutes.toString().padStart(2,'0')}) -> xIndex ${xAxisIndex} [Start: ${startHour}:00]: Market closed or null data, market_open: ${point.market_open}`);
-                        }
+                        
+                        // Create simple time label
+                        const timestamp = new Date(point.timestamp);
+                        const hours = ((timestamp.getUTCHours() + 10) % 24).toString().padStart(2, '0');
+                        const minutes = timestamp.getUTCMinutes().toString().padStart(2, '0');
+                        const timeLabel = `${hours}:${minutes}`;
+                        
+                        // Add to arrays - ECharts format: [open, close, low, high]
+                        simpleCandlestickData.push([o, c, l, h]);
+                        simpleCandlestickXAxis.push(timeLabel);
+                        
+                        // Add to values for y-axis scaling
+                        allValues.push(o, h, l, c);
                     }
                 });
                 
-                // Ensure candlestick data array matches the x-axis length
-                while (candlestickData.length < xAxisData.length) {
-                    candlestickData.push(null);
-                }
+                console.log(`🕯️ NEW APPROACH: Processed ${simpleCandlestickData.length} valid candlestick points for ${symbol}`);
                 
-                console.log(`🕯️ Candlestick data for ${symbol}: ${candlestickData.length} valid out of ${points.length} total points`);
-                console.log(`🔍 Sample candlestick data:`, candlestickData.slice(0, 3));
-                
-                if (candlestickData.length === 0) {
-                    console.warn(`⚠️ No valid candlestick data for ${symbol} - all market closed or null OHLC values`);
-                } else {
-                    // Use the filtered x-axis data that matches candlestick data points
-                    if (!window.candlestickXAxisData) {
-                        window.candlestickXAxisData = candlestickXAxis;
-                    }
+                // Only create series if we have valid data
+                if (simpleCandlestickData.length > 0) {
+                    // Set global x-axis for candlestick
+                    window.candlestickXAxisData = simpleCandlestickXAxis;
                     
-                    // Enhanced candlestick series with market-specific colors
-                    const marketColors = this.getMarketColors(symbolInfo.market);
-                    
-                    // Adjust styling for previous day data
-                    const seriesName = isPreviousDay ? 
-                        `${baseName} (${symbolInfo.market}) - Previous Day` : 
-                        `${symbolInfo.name} (${symbolInfo.market})`;
-                    
+                    // Create simple candlestick series
                     const candlestickSeries = {
-                        name: seriesName,
+                        name: `${symbolInfo?.name || symbol} Candlestick`,
                         type: 'candlestick',
-                        data: candlestickData,
-                        itemStyle: isPreviousDay ? {
-                            // Previous day styling - more transparent/faded
-                            color: this.addAlpha(marketColors.bull, 0.4),      // Faded bull candle
-                            color0: this.addAlpha(marketColors.bear, 0.4),     // Faded bear candle
-                            borderColor: this.addAlpha(marketColors.bull, 0.6), // Faded bull border
-                            borderColor0: this.addAlpha(marketColors.bear, 0.6) // Faded bear border
-                        } : {
-                            color: marketColors.bull,      // Bull candle color
-                            color0: marketColors.bear,     // Bear candle color  
-                            borderColor: marketColors.bull, // Bull border
-                            borderColor0: marketColors.bear // Bear border
-                        },
-                        tooltip: {
-                            formatter: function(param) {
-                                const [open, close, low, high] = param.value;
-                                const change = (close - open).toFixed(2);
-                                const changeColor = close >= open ? marketColors.bull : marketColors.bear;
-                                return `
-                                    <div style="margin: 0px 0 0; line-height:1;">
-                                        <div style="margin: 0px 0 0; line-height:1;">
-                                            ${param.marker}<strong>${param.seriesName}</strong><br/>
-                                            <span style="display:inline-block;margin-right:5px;border-radius:10px;width:9px;height:9px;background-color:#333;"></span>
-                                            Open: ${open.toFixed(3)}%<br/>
-                                            <span style="display:inline-block;margin-right:5px;border-radius:10px;width:9px;height:9px;background-color:#333;"></span>
-                                            Close: ${close.toFixed(3)}%<br/>
-                                            <span style="display:inline-block;margin-right:5px;border-radius:10px;width:9px;height:9px;background-color:#333;"></span>
-                                            High: ${high.toFixed(3)}%<br/>
-                                            <span style="display:inline-block;margin-right:5px;border-radius:10px;width:9px;height:9px;background-color:#333;"></span>
-                                            Low: ${low.toFixed(3)}%<br/>
-                                            <span style="display:inline-block;margin-right:5px;border-radius:10px;width:9px;height:9px;background-color:${changeColor};"></span>
-                                            Change: <span style="color:${changeColor}">${change}%</span>
-                                        </div>
-                                    </div>
-                                `;
-                            }
+                        data: simpleCandlestickData,
+                        itemStyle: {
+                            color: '#00da3c',        // Bull color
+                            color0: '#ec0000',       // Bear color  
+                            borderColor: '#00da3c',  // Bull border
+                            borderColor0: '#ec0000'  // Bear border
                         }
                     };
                     
-                    console.log(`📊 Adding percentage candlestick series for ${symbol}: ${candlestickData.length} total points (${candlestickData.filter(d => d !== null).length} with data)`);
-                    console.log(`🕯️ Candlestick series configuration:`, candlestickSeries);
+                    console.log(`✅ NEW APPROACH: Adding candlestick series with ${simpleCandlestickData.length} points`);
                     series.push(candlestickSeries);
+                } else {
+                    console.warn(`⚠️ NEW APPROACH: No valid candlestick data for ${symbol}`);
                 }
             } else {
                 // Handle line charts (percentage and price) - map to fixed x-axis positions
@@ -804,7 +1141,7 @@ class GlobalMarketTracker {
                 });
                 
                 series.push({
-                    name: isPreviousDay ? `${baseName} (Previous Day)` : symbolInfo.name,
+                    name: isPreviousDay ? `${baseName} (Previous Day)` : (symbolInfo?.name || symbol),
                     type: 'line',
                     data: values,
                     smooth: true,
@@ -877,7 +1214,7 @@ class GlobalMarketTracker {
             };
             
             // Calculate exact market open position based on timeline
-            if (marketOpenTimes[symbolInfo.market]) {
+            if (symbolInfo?.market && marketOpenTimes[symbolInfo.market]) {
                 const targetOpen = marketOpenTimes[symbolInfo.market];
                 
                 // Calculate the expected timeline position for market open
@@ -909,7 +1246,7 @@ class GlobalMarketTracker {
             }
             
             // Calculate exact market close position based on timeline
-            if (marketCloseTimes[symbolInfo.market]) {
+            if (symbolInfo?.market && marketCloseTimes[symbolInfo.market]) {
                 const targetClose = marketCloseTimes[symbolInfo.market];
                 
                 // Calculate the expected timeline position for market close
@@ -940,13 +1277,13 @@ class GlobalMarketTracker {
                 const labelOffset = symbolIndex * 20; // 20px offset per symbol
                 
                 markLines.push({
-                    name: `${symbolInfo.market} Open`,
+                    name: `${symbolInfo?.market || "Market"} Open`,
                     xAxis: xAxisData[marketOpenStart],
                     lineStyle: { color: '#10b981', type: 'dashed', width: 2 },
                     label: { 
                         show: true, 
                         position: 'start',
-                        formatter: `${symbolInfo.market}\nOpen`,
+                        formatter: `${symbolInfo?.market || 'Market'}\nOpen`,
                         color: '#10b981',
                         fontSize: 10,
                         offset: [5, labelOffset], // Horizontal and vertical offset
@@ -963,13 +1300,13 @@ class GlobalMarketTracker {
                 const labelOffset = symbolIndex * 20; // 20px offset per symbol
                 
                 markLines.push({
-                    name: `${symbolInfo.market} Close`, 
+                    name: `${symbolInfo?.market || "Market"} Close`, 
                     xAxis: xAxisData[marketCloseEnd],
                     lineStyle: { color: '#ef4444', type: 'dashed', width: 2 },
                     label: { 
                         show: true, 
                         position: 'end',
-                        formatter: `${symbolInfo.market}\nClose`,
+                        formatter: `${symbolInfo?.market || 'Market'}\nClose`,
                         color: '#ef4444',
                         fontSize: 10,
                         offset: [-5, labelOffset], // Horizontal and vertical offset
@@ -978,6 +1315,10 @@ class GlobalMarketTracker {
                         borderRadius: 4
                     }
                 });
+            }
+            } catch (error) {
+                console.error(`❌ Error processing symbol ${symbol}:`, error);
+                console.error(`❌ Error details - symbolInfo:`, symbolInfo, `points:`, points);
             }
         });
         
@@ -1136,12 +1477,155 @@ class GlobalMarketTracker {
                 }])
         };
         
+        // CRITICAL VALIDATION: Check for data integrity before setting option
+        console.log('🔍 PRE-SETOPTION VALIDATION (Combined Chart):');
+        let hasValidationErrors = false;
+        
+        if (option.series && option.series.length > 0) {
+            option.series.forEach((s, i) => {
+                console.log(`📊 Validating series ${i}: ${s.name} (${s.type})`);
+                
+                if (s.type === 'candlestick') {
+                    // COMPREHENSIVE CANDLESTICK VALIDATION
+                    console.log(`🕯️ Candlestick data validation for series ${i}:`, {
+                        dataLength: s.data?.length,
+                        dataType: typeof s.data,
+                        isArray: Array.isArray(s.data),
+                        sample: s.data?.slice(0, 2)
+                    });
+                    
+                    if (!Array.isArray(s.data)) {
+                        console.error(`❌ CRITICAL: Candlestick series ${i} data is not an array!`);
+                        hasValidationErrors = true;
+                    } else {
+                        // Check each OHLC array
+                        const nullOrInvalidCount = s.data.filter(item => {
+                            if (!Array.isArray(item)) {
+                                console.error(`❌ CRITICAL: Candlestick data item is not an array:`, item);
+                                return true;
+                            }
+                            if (item.length !== 4) {
+                                console.error(`❌ CRITICAL: Candlestick data item does not have 4 values (OHLC):`, item);
+                                return true;
+                            }
+                            if (item.some(val => val === null || val === undefined || isNaN(val))) {
+                                console.error(`❌ CRITICAL: Candlestick data item contains null/undefined/NaN:`, item);
+                                return true;
+                            }
+                            return false;
+                        }).length;
+                        
+                        if (nullOrInvalidCount > 0) {
+                            console.error(`❌ FOUND ${nullOrInvalidCount} INVALID CANDLESTICK DATA ITEMS`);
+                            hasValidationErrors = true;
+                            
+                            // EMERGENCY FIX: Filter out invalid items
+                            console.log('🚑 EMERGENCY: Filtering invalid candlestick data...');
+                            s.data = s.data.filter(item => {
+                                return Array.isArray(item) && 
+                                       item.length === 4 && 
+                                       !item.some(val => val === null || val === undefined || isNaN(val));
+                            });
+                            console.log(`✅ EMERGENCY FIX: Filtered to ${s.data.length} valid candlestick items`);
+                            hasValidationErrors = false; // We fixed it
+                        } else {
+                            console.log(`✅ All ${s.data.length} candlestick data items are valid`);
+                        }
+                    }
+                } else if (s.data) {
+                    // Validate other series types
+                    const nullCount = s.data.filter(d => d === null || d === undefined).length;
+                    if (nullCount > 0) {
+                        console.log(`ℹ️ Series ${i} has ${nullCount} null values (normal for line charts with gaps)`);
+                    }
+                }
+            });
+        }
+        
+        // Check X-axis data alignment for candlestick
+        if (chartType === 'candlestick' && option.series.length > 0) {
+            const candlestickSeries = option.series.find(s => s.type === 'candlestick');
+            const xAxisLength = option.xAxis.data?.length;
+            const seriesLength = candlestickSeries?.data?.length;
+            
+            console.log(`🔍 X-AXIS ALIGNMENT CHECK:`, {
+                xAxisLength: xAxisLength,
+                candlestickDataLength: seriesLength,
+                aligned: xAxisLength === seriesLength
+            });
+            
+            if (xAxisLength !== seriesLength) {
+                console.warn(`⚠️ X-axis/data length mismatch: xAxis(${xAxisLength}) vs candlestick(${seriesLength})`);
+                // This is actually OK for candlestick - we use dense arrays now
+            }
+        }
+        
+        if (hasValidationErrors) {
+            console.error('❌ VALIDATION FAILED - Cannot set chart option with invalid data');
+            // Show error to user
+            if (this.chartInstance) {
+                this.chartInstance.showLoading({
+                    text: 'Chart data validation failed',
+                    color: '#c23531',
+                    textColor: '#c23531',
+                    maskColor: 'rgba(255, 255, 255, 0.8)'
+                });
+            }
+            return; // Don't proceed with setOption
+        }
+        
+        console.log('✅ PRE-SETOPTION VALIDATION PASSED');
+        
         // Clear and re-initialize chart for candlestick mode to ensure proper rendering
         if (chartType === 'candlestick') {
+            console.log('🔄 Clearing chart for candlestick mode...');
             this.chartInstance.clear();
         }
         
-        this.chartInstance.setOption(option, true);
+        // SAFE SETOPTION WITH ERROR HANDLING
+        try {
+            console.log('🎯 Setting chart option...');
+            this.chartInstance.setOption(option, true);
+            console.log('✅ Chart option set successfully');
+            
+            // Hide any existing loading indicators
+            this.chartInstance.hideLoading();
+            
+        } catch (error) {
+            console.error('❌ CRITICAL ERROR in setOption:', error);
+            console.error('Error stack:', error.stack);
+            console.error('Option that caused error:', JSON.stringify(option, null, 2));
+            
+            // Show error to user
+            if (this.chartInstance) {
+                this.chartInstance.showLoading({
+                    text: `Chart rendering failed: ${error.message}`,
+                    color: '#c23531',
+                    textColor: '#c23531',
+                    maskColor: 'rgba(255, 255, 255, 0.8)'
+                });
+            }
+            
+            // Try to recover with a basic chart
+            console.log('🚑 ATTEMPTING EMERGENCY RECOVERY...');
+            try {
+                const emergencyOption = {
+                    title: { text: 'Chart Recovery Mode', left: 'center' },
+                    xAxis: { type: 'category', data: ['Recovery'] },
+                    yAxis: { type: 'value' },
+                    series: [{
+                        type: 'line',
+                        data: [0],
+                        name: 'Recovery Mode'
+                    }]
+                };
+                this.chartInstance.clear();
+                this.chartInstance.setOption(emergencyOption, true);
+                console.log('✅ Emergency recovery successful');
+            } catch (recoveryError) {
+                console.error('❌ Emergency recovery also failed:', recoveryError);
+            }
+        }
     }
     
     updateIndividualMarketCharts(data) {
@@ -1216,6 +1700,12 @@ class GlobalMarketTracker {
             Object.entries(marketSymbols).forEach(([symbol, points]) => {
                 const symbolInfo = data.metadata[symbol];
                 
+                // Add null check for symbolInfo
+                if (!symbolInfo) {
+                    console.warn(`⚠️ No metadata found for symbol ${symbol} in market chart, skipping...`);
+                    return;
+                }
+                
                 // Skip previous day data to avoid duplicate series (user request: remove duplicate data for cleaner charts)
                 if (symbol.endsWith('_prev_day')) {
                     console.log(`⏭️ Skipping previous day data for ${symbol} in market chart to avoid duplicate series`);
@@ -1223,58 +1713,65 @@ class GlobalMarketTracker {
                 }
                 
                 if (chartType === 'candlestick') {
-                    const candlestickData = new Array(marketXAxisData.length).fill(null);
+                    // FIXED: Create dense candlestick data for individual market charts
+                    const rawMarketCandlestickData = [];
+                    const marketCandlestickXAxis = [];
                     
+                    // First pass: collect valid candlestick data points
                     points.forEach((point, index) => {
-                        // Parse timestamp to determine correct x-axis position
-                        // Handle ISO format: "2025-09-16T13:30:00+00:00"
-                        const timestamp = new Date(point.timestamp);
-                        
-                        // Convert UTC time to AEST (Australian Eastern Standard Time)
-                        const aestOffset = 10; // Hours to add to UTC to get AEST
-                        const utcHours = timestamp.getUTCHours();
-                        const utcMinutes = timestamp.getUTCMinutes();
-                        
-                        // Convert to AEST by adding the offset
-                        const aestTotalMinutes = (utcHours * 60) + utcMinutes + (aestOffset * 60);
-                        const hourNum = Math.floor((aestTotalMinutes / 60) % 24);
-                        const minuteNum = aestTotalMinutes % 60;
-                        
-                        // Calculate x-axis index based on market start time
-                        let xAxisIndex = -1;
-                        if (selectedInterval === 5) {
-                            const totalMinutesFromStart = ((hourNum >= startHour ? hourNum - startHour : hourNum + 24 - startHour) * 60) + minuteNum;
-                            xAxisIndex = Math.floor(totalMinutesFromStart / 5);
-                        } else if (selectedInterval === 30) {
-                            const totalMinutesFromStart = ((hourNum >= startHour ? hourNum - startHour : hourNum + 24 - startHour) * 60) + minuteNum;
-                            xAxisIndex = Math.floor(totalMinutesFromStart / 30);
-                        } else {
-                            xAxisIndex = hourNum >= startHour ? hourNum - startHour : hourNum + 24 - startHour;
-                        }
-                        
-                        if (xAxisIndex >= 0 && xAxisIndex < marketXAxisData.length &&
-                            point.market_open && point.open !== null && point.high !== null && 
+                        if (point.market_open && point.open !== null && point.high !== null && 
                             point.low !== null && point.close !== null) {
+                            
+                            // Parse timestamp to determine correct position
+                            const timestamp = new Date(point.timestamp);
+                            
+                            // Convert UTC time to AEST
+                            const aestOffset = 10;
+                            const utcHours = timestamp.getUTCHours();
+                            const utcMinutes = timestamp.getUTCMinutes();
+                            
+                            const aestTotalMinutes = (utcHours * 60) + utcMinutes + (aestOffset * 60);
+                            const hourNum = Math.floor((aestTotalMinutes / 60) % 24);
+                            const minuteNum = aestTotalMinutes % 60;
+                            
+                            const timeLabel = `${hourNum.toString().padStart(2,'0')}:${minuteNum.toString().padStart(2,'0')}`;
                             const ohlc = [point.open, point.close, point.low, point.high];
+                            
                             allValues.push(point.open, point.close, point.low, point.high);
-                            candlestickData[xAxisIndex] = ohlc;
+                            
+                            rawMarketCandlestickData.push({
+                                timeLabel: timeLabel,
+                                ohlc: ohlc,
+                                timestamp: timestamp.getTime()
+                            });
                         }
                     });
                     
-                    const marketColors = this.getMarketColors(market);
-                    marketSeries.push({
-                        name: `${symbolInfo.name}`,
-                        type: 'candlestick',
-                        data: candlestickData,
-                        xAxisIndex: marketIndex,
-                        yAxisIndex: marketIndex,
-                        itemStyle: {
-                            color: marketColors.bull,
-                            color0: marketColors.bear,
-                            borderColor: marketColors.bull,
-                            borderColor0: marketColors.bear
-                        }
+                    // Sort and create dense arrays
+                    rawMarketCandlestickData.sort((a, b) => a.timestamp - b.timestamp);
+                    const candlestickData = rawMarketCandlestickData.map(item => item.ohlc);
+                    rawMarketCandlestickData.forEach(item => {
+                        marketCandlestickXAxis.push(item.timeLabel);
                     });
+                    
+                    if (candlestickData.length > 0) {
+                        const marketColors = this.getMarketColors(market);
+                        marketSeries.push({
+                            name: `${symbolInfo?.name || symbol}`,
+                            type: 'candlestick',
+                            data: candlestickData,
+                            xAxisIndex: marketIndex,
+                            yAxisIndex: marketIndex,
+                            itemStyle: {
+                                color: marketColors.bull,
+                                color0: marketColors.bear,
+                                borderColor: marketColors.bull,
+                                borderColor0: marketColors.bear
+                            }
+                        });
+                        
+                        console.log(`📊 FIXED: Market ${market} - ${symbol}: Created dense candlestick series with ${candlestickData.length} points`);
+                    }
                 } else {
                     // Line charts - map to fixed x-axis positions
                     const values = new Array(marketXAxisData.length).fill(null);
@@ -1321,7 +1818,7 @@ class GlobalMarketTracker {
                     });
                     
                     marketSeries.push({
-                        name: symbolInfo.name,
+                        name: symbolInfo?.name || symbol,
                         type: 'line',
                         data: values,
                         xAxisIndex: marketIndex,
@@ -1343,10 +1840,14 @@ class GlobalMarketTracker {
                 textStyle: { fontSize: 14, fontWeight: 'bold' }
             });
             
-            // Add x-axis for this market
+            // Add x-axis for this market (use candlestick-specific axis if available)
+            const xAxisData = (chartType === 'candlestick' && marketCandlestickXAxis && marketCandlestickXAxis.length > 0) 
+                ? marketCandlestickXAxis 
+                : marketXAxisData;
+                
             allXAxes.push({
                 type: 'category',
-                data: marketXAxisData,
+                data: xAxisData,
                 gridIndex: marketIndex,
                 name: 'AEST Time',
                 nameLocation: 'middle',
@@ -1421,12 +1922,137 @@ class GlobalMarketTracker {
             series: allSeries
         };
         
+        // CRITICAL VALIDATION: Check for data integrity before setting option
+        console.log('🔍 PRE-SETOPTION VALIDATION (Individual Markets):');
+        let hasValidationErrors = false;
+        
+        if (option.series && option.series.length > 0) {
+            option.series.forEach((s, i) => {
+                console.log(`📊 Validating series ${i}: ${s.name} (${s.type})`);
+                
+                if (s.type === 'candlestick') {
+                    // COMPREHENSIVE CANDLESTICK VALIDATION
+                    console.log(`🕯️ Candlestick data validation for series ${i}:`, {
+                        dataLength: s.data?.length,
+                        dataType: typeof s.data,
+                        isArray: Array.isArray(s.data),
+                        sample: s.data?.slice(0, 2)
+                    });
+                    
+                    if (!Array.isArray(s.data)) {
+                        console.error(`❌ CRITICAL: Candlestick series ${i} data is not an array!`);
+                        hasValidationErrors = true;
+                    } else {
+                        // Check each OHLC array
+                        const nullOrInvalidCount = s.data.filter(item => {
+                            if (!Array.isArray(item)) {
+                                console.error(`❌ CRITICAL: Candlestick data item is not an array:`, item);
+                                return true;
+                            }
+                            if (item.length !== 4) {
+                                console.error(`❌ CRITICAL: Candlestick data item does not have 4 values (OHLC):`, item);
+                                return true;
+                            }
+                            if (item.some(val => val === null || val === undefined || isNaN(val))) {
+                                console.error(`❌ CRITICAL: Candlestick data item contains null/undefined/NaN:`, item);
+                                return true;
+                            }
+                            return false;
+                        }).length;
+                        
+                        if (nullOrInvalidCount > 0) {
+                            console.error(`❌ FOUND ${nullOrInvalidCount} INVALID CANDLESTICK DATA ITEMS`);
+                            hasValidationErrors = true;
+                            
+                            // EMERGENCY FIX: Filter out invalid items
+                            console.log('🚑 EMERGENCY: Filtering invalid candlestick data...');
+                            s.data = s.data.filter(item => {
+                                return Array.isArray(item) && 
+                                       item.length === 4 && 
+                                       !item.some(val => val === null || val === undefined || isNaN(val));
+                            });
+                            console.log(`✅ EMERGENCY FIX: Filtered to ${s.data.length} valid candlestick items`);
+                            hasValidationErrors = false; // We fixed it
+                        } else {
+                            console.log(`✅ All ${s.data.length} candlestick data items are valid`);
+                        }
+                    }
+                } else if (s.data) {
+                    // Validate other series types
+                    const nullCount = s.data.filter(d => d === null || d === undefined).length;
+                    if (nullCount > 0) {
+                        console.log(`ℹ️ Series ${i} has ${nullCount} null values (normal for line charts with gaps)`);
+                    }
+                }
+            });
+        }
+        
+        if (hasValidationErrors) {
+            console.error('❌ VALIDATION FAILED - Cannot set chart option with invalid data');
+            // Show error to user
+            if (this.chartInstance) {
+                this.chartInstance.showLoading({
+                    text: 'Chart data validation failed',
+                    color: '#c23531',
+                    textColor: '#c23531',
+                    maskColor: 'rgba(255, 255, 255, 0.8)'
+                });
+            }
+            return; // Don't proceed with setOption
+        }
+        
+        console.log('✅ PRE-SETOPTION VALIDATION PASSED');
+        
         // Clear and re-initialize chart for candlestick mode to ensure proper rendering
         if (chartType === 'candlestick') {
+            console.log('🔄 Clearing chart for candlestick mode...');
             this.chartInstance.clear();
         }
         
-        this.chartInstance.setOption(option, true);
+        // SAFE SETOPTION WITH ERROR HANDLING
+        try {
+            console.log('🎯 Setting chart option...');
+            this.chartInstance.setOption(option, true);
+            console.log('✅ Chart option set successfully');
+            
+            // Hide any existing loading indicators
+            this.chartInstance.hideLoading();
+            
+        } catch (error) {
+            console.error('❌ CRITICAL ERROR in setOption:', error);
+            console.error('Error stack:', error.stack);
+            console.error('Option that caused error:', JSON.stringify(option, null, 2));
+            
+            // Show error to user
+            if (this.chartInstance) {
+                this.chartInstance.showLoading({
+                    text: `Chart rendering failed: ${error.message}`,
+                    color: '#c23531',
+                    textColor: '#c23531',
+                    maskColor: 'rgba(255, 255, 255, 0.8)'
+                });
+            }
+            
+            // Try to recover with a basic chart
+            console.log('🚑 ATTEMPTING EMERGENCY RECOVERY...');
+            try {
+                const emergencyOption = {
+                    title: { text: 'Chart Recovery Mode - Individual Markets', left: 'center' },
+                    xAxis: { type: 'category', data: ['Recovery'] },
+                    yAxis: { type: 'value' },
+                    series: [{
+                        type: 'line',
+                        data: [0],
+                        name: 'Recovery Mode'
+                    }]
+                };
+                this.chartInstance.clear();
+                this.chartInstance.setOption(emergencyOption, true);
+                console.log('✅ Emergency recovery successful');
+            } catch (recoveryError) {
+                console.error('❌ Emergency recovery also failed:', recoveryError);
+            }
+        }
     }
 
     getMarketColors(market) {
@@ -1697,8 +2323,12 @@ class GlobalMarketTracker {
     }
 
     handleChartTypeChange() {
+        const chartType = document.getElementById('chart-type').value;
+        console.log(`📊 Chart type changed to: ${chartType}`);
+        
         // Re-fetch data with the new chart type instead of just re-rendering
         if (this.selectedIndices.size > 0) {
+            console.log(`📊 Re-analyzing ${this.selectedIndices.size} indices with new chart type`);
             this.analyzeSelectedIndices();
         }
     }
